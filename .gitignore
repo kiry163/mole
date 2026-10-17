@@ -1,0 +1,61 @@
+# Binaries
+# Go build artifacts
+bin/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/mole
+/mole-test
+cmd/**/workspace
+
+# Mole specific
+
+# Mole
+.mole/
+config.json
+sessions/
+build/
+
+# Coverage
+
+# Secrets & Config (keep templates, ignore actual secrets)
+.env
+config/config.json
+
+# Test
+coverage.txt
+coverage.html
+
+# OS
+.DS_Store
+
+# Plans
+docs/superpowers/
+
+# Editors
+.vscode/
+.idea/
+
+dist/
+*.vite/
+
+# Windows Application Icon/Resource
+*.syso
+.cache/
+
+# Keep embedded console SPA dist directory placeholder in VCS
+!pkg/dashboard/dist/
+pkg/dashboard/dist/*
+!pkg/dashboard/dist/.gitkeep
+
+.claude/
+
+.omc/
+.worktrees/
+
+# Agent execution records (local working notes)
+.superpowers/

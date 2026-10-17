@@ -1,0 +1,347 @@
+{
+  "version": 3,
+  "dashboard": {
+    "token": "$DASHBOARD_TOKEN"
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "~/.mole/workspace",
+      "restrict_to_workspace": true,
+      "model_name": "gpt-5.4",
+      "max_tokens": 8192,
+      "context_window": 131072,
+      "temperature": 0.7,
+      "max_tool_iterations": 20,
+      "summarize_message_threshold": 20,
+      "summarize_token_percent": 75,
+      "split_on_marker": false,
+      "max_llm_retries": 2,
+      "llm_retry_backoff_secs": 2,
+      "tool_feedback": {
+        "enabled": false,
+        "max_args_length": 300,
+        "separate_messages": false
+      }
+    }
+  },
+  "model_list": [
+    {
+      "model_name": "gpt-5.4",
+      "model": "openai/gpt-5.4",
+      "api_keys": ["sk-your-openai-key"],
+      "api_base": "https://api.openai.com/v1"
+    },
+    {
+      "model_name": "claude-sonnet-4.6",
+      "model": "anthropic/claude-sonnet-4.6",
+      "api_keys": ["sk-ant-your-key"],
+      "api_base": "https://api.anthropic.com/v1",
+      "thinking_level": "high"
+    },
+    {
+      "model_name": "claude-opus-4-6",
+      "model": "anthropic-messages/claude-opus-4-6",
+      "api_keys": ["sk-ant-your-key"],
+      "api_base": "https://api.anthropic.com"
+    },
+    {
+      "model_name": "deepseek",
+      "model": "deepseek/deepseek-chat",
+      "api_keys": ["$DEEPSEEK_API_KEY"],
+      "api_base": "$DEEPSEEK_BASE_URL"
+    },
+    {
+      "model_name": "venice-uncensored",
+      "model": "venice/venice-uncensored",
+      "api_keys": ["your-venice-api-key"]
+    },
+    {
+      "model_name": "nearai-glm",
+      "model": "nearai/zai-org/GLM-5.1-FP8",
+      "api_keys": ["your-nearai-api-key"]
+    },
+    {
+      "model_name": "lmstudio-local",
+      "model": "lmstudio/openai/gpt-oss-20b"
+    },
+    {
+      "model_name": "longcat",
+      "model": "longcat/LongCat-Flash-Thinking",
+      "api_keys": ["your-longcat-api-key"]
+    },
+    {
+      "model_name": "modelscope-qwen",
+      "model": "modelscope/Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "api_keys": ["your-modelscope-access-token"],
+      "api_base": "https://api-inference.modelscope.cn/v1"
+    },
+    {
+      "model_name": "loadbalanced-gpt-5.4",
+      "model": "openai/gpt-5.4",
+      "api_keys": ["sk-key1"],
+      "api_base": "https://api1.example.com/v1"
+    },
+    {
+      "model_name": "loadbalanced-gpt-5.4",
+      "model": "openai/gpt-5.4",
+      "api_keys": ["sk-key2"],
+      "api_base": "https://api2.example.com/v1"
+    }
+  ],
+  "channel_list": {
+    "telegram": {
+      "enabled": false,
+      "type": "telegram",
+      "allow_from": ["YOUR_USER_ID"],
+      "reasoning_channel_id": "",
+      "settings": {
+        "token": "$TELEGRAM_TOKEN",
+        "base_url": "",
+        "proxy": "",
+        "use_markdown_v2": false,
+        "streaming": {
+          "enabled": true
+        }
+      }
+    },
+    "qq": {
+      "enabled": false,
+      "type": "qq",
+      "allow_from": [],
+      "reasoning_channel_id": "",
+      "settings": {
+        "app_id": "YOUR_QQ_APP_ID",
+        "app_secret": "YOUR_QQ_APP_SECRET"
+      }
+    },
+    "feishu": {
+      "enabled": false,
+      "type": "feishu",
+      "allow_from": [],
+      "reasoning_channel_id": "",
+      "placeholder": {
+        "enabled": true,
+        "text": ["Thinking...", "Processing...", "Typing..."]
+      },
+      "settings": {
+        "app_id": "",
+        "app_secret": "",
+        "encrypt_key": "",
+        "verification_token": "",
+        "random_reaction_emoji": [],
+        "is_lark": false
+      }
+    },
+    "weixin": {
+      "enabled": false,
+      "type": "weixin",
+      "allow_from": [],
+      "reasoning_channel_id": "",
+      "settings": {
+        "token": "YOUR_WEIXIN_TOKEN",
+        "base_url": "https://ilinkai.weixin.qq.com/",
+        "cdn_base_url": "https://novac2c.cdn.weixin.qq.com/c2c",
+        "proxy": ""
+      }
+    },
+    "webchat": {
+      "enabled": false,
+      "type": "webchat",
+      "allow_from": [],
+      "settings": {
+        "token": "YOUR_WEBCHAT_TOKEN",
+        "allow_token_query": false,
+        "allow_origins": [],
+        "ping_interval": 30,
+        "read_timeout": 60,
+        "max_connections": 100
+      }
+    }
+  },
+  "tools": {
+    "allow_read_paths": null,
+    "allow_write_paths": null,
+    "approval": {
+      "rules": [
+        { "category": "write", "action": "require" },
+        { "tool": "exec", "action": "require" }
+      ],
+      "always_allow": []
+    },
+    "web": {
+      "enabled": true,
+      "prefer_native": true,
+      "format": "plaintext",
+      "provider": "auto",
+      "tavily": {
+        "enabled": false,
+        "api_keys": ["$TAVILY_API_KEY"],
+        "base_url": "",
+        "max_results": 5
+      },
+      "sogou": {
+        "enabled": true,
+        "max_results": 5
+      },
+      "fetch_limit_bytes": 10485760,
+      "private_host_whitelist": []
+    },
+    "mcp": {
+      "enabled": false,
+      "discovery": {
+        "enabled": false,
+        "ttl": 5,
+        "max_search_results": 5,
+        "use_bm25": true,
+        "use_regex": false
+      },
+      "servers": {
+        "context7": {
+          "enabled": false,
+          "type": "http",
+          "url": "https://mcp.context7.com/mcp",
+          "headers": {
+            "CONTEXT7_API_KEY": "ctx7sk-xx"
+          }
+        },
+        "filesystem": {
+          "enabled": false,
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+        },
+        "github": {
+          "enabled": false,
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-github"],
+          "env": {
+            "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_TOKEN"
+          }
+        },
+        "brave-search": {
+          "enabled": false,
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+          "env": {
+            "BRAVE_API_KEY": "YOUR_BRAVE_API_KEY"
+          }
+        },
+        "postgres": {
+          "enabled": false,
+          "command": "npx",
+          "args": [
+            "-y",
+            "@modelcontextprotocol/server-postgres",
+            "postgresql://user:password@localhost/dbname"
+          ]
+        },
+        "slack": {
+          "enabled": false,
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-slack"],
+          "env": {
+            "SLACK_BOT_TOKEN": "YOUR_SLACK_BOT_TOKEN",
+            "SLACK_TEAM_ID": "YOUR_SLACK_TEAM_ID"
+          }
+        }
+      }
+    },
+    "exec": {
+      "enabled": true,
+      "enable_deny_patterns": true,
+      "custom_deny_patterns": null,
+      "custom_allow_patterns": null
+    },
+    "skills": {
+      "enabled": true,
+      "registries": {
+        "clawhub": {
+          "enabled": true,
+          "base_url": "https://clawhub.ai",
+          "auth_token": "",
+          "search_path": "",
+          "skills_path": "",
+          "download_path": "",
+          "timeout": 0,
+          "max_zip_size": 0,
+          "max_response_size": 0
+        },
+        "github": {
+          "enabled": true,
+          "base_url": "https://github.com",
+          "auth_token": "",
+          "proxy": "http://127.0.0.1:7891"
+        }
+      },
+      "max_concurrent_searches": 2,
+      "search_cache": {
+        "max_size": 50,
+        "ttl_seconds": 300
+      }
+    },
+    "media_cleanup": {
+      "enabled": true,
+      "max_age_minutes": 30,
+      "interval_minutes": 5
+    },
+    "append_file": {
+      "enabled": true
+    },
+    "edit_file": {
+      "enabled": true
+    },
+    "find_skills": {
+      "enabled": true
+    },
+    "install_skill": {
+      "enabled": true
+    },
+    "list_dir": {
+      "enabled": true
+    },
+    "message": {
+      "enabled": true
+    },
+    "read_file": {
+      "enabled": true,
+      "mode": "bytes"
+    },
+    "spawn": {
+      "enabled": true
+    },
+    "subagent": {
+      "enabled": true
+    },
+    "web_fetch": {
+      "enabled": true
+    },
+    "write_file": {
+      "enabled": true
+    }
+  },
+  "hooks": {
+    "enabled": true,
+    "defaults": {
+      "observer_timeout_ms": 500,
+      "interceptor_timeout_ms": 5000,
+      "approval_timeout_ms": 60000
+    },
+    "builtins": {
+      "webui_approval": { "enabled": true }
+    }
+  },
+  "events": {
+    "logging": {
+      "enabled": true,
+      "include": ["agent.*"],
+      "exclude": [],
+      "min_severity": "info",
+      "include_payload": false
+    }
+  },
+  "gateway": {
+    "host": "localhost",
+    "port": 18790,
+    "hot_reload": false,
+    "log_level": "fatal"
+  }
+}

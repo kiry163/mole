@@ -7,12 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
-import {
-  type ModelProviderOption,
-  addModel,
-  getCatalogs,
-  setDefaultModel,
-} from "@/api/models"
+import { addModel, setDefaultModel } from "@/api/models"
 import { ConfigChangeNotice } from "@/components/config-change-notice"
 import { maskedSecretPlaceholder } from "@/components/secret-placeholder"
 import {
@@ -36,29 +31,16 @@ import { Textarea } from "@/components/ui/textarea"
 import { refreshGatewayState } from "@/store/gateway"
 
 import { FetchModelsDialog } from "./fetch-models-dialog"
-import {
-  getEffectiveAPIBase,
-  getSubmittedAPIBase,
-  normalizeApiBase,
-} from "./model-provider-form-shared"
 import { type FieldValidation, validateModelField } from "./model-validation"
 import { ProviderCombobox } from "./provider-combobox"
-import {
-  getCanonicalProviderKey,
-  getProviderCatalogEntry,
-  getProviderCatalogMap,
-  getProviderDefaultAPIBase,
-  providerSupportsFetch,
-} from "./provider-registry"
 import { TestModelDialog } from "./test-model-dialog"
 
 interface AddForm {
   modelName: string
   provider: string
-  model: string
   apiBase: string
   apiKey: string
-  proxy: string
+  model: string
   rpm: string
   maxTokensField: string
   requestTimeout: string
@@ -72,10 +54,9 @@ interface AddForm {
 const EMPTY_ADD_FORM: AddForm = {
   modelName: "",
   provider: "",
-  model: "",
   apiBase: "",
   apiKey: "",
-  proxy: "",
+  model: "",
   rpm: "",
   maxTokensField: "",
   requestTimeout: "",
@@ -93,7 +74,7 @@ interface AddModelSheetProps {
   onMutationStarted?: () => void
   onMutationSettled?: () => void
   existingModelNames: string[]
-  providerOptions?: ModelProviderOption[]
+  existingProviders: string[]
 }
 
 export function AddModelSheet({
@@ -103,7 +84,7 @@ export function AddModelSheet({
   onMutationStarted,
   onMutationSettled,
   existingModelNames,
-  providerOptions,
+  existingProviders,
 }: AddModelSheetProps) {
   const { t } = useTranslation()
   const [form, setForm] = useState<AddForm>(EMPTY_ADD_FORM)
@@ -118,10 +99,8 @@ export function AddModelSheet({
   const [fetchOpen, setFetchOpen] = useState(false)
   const [testOpen, setTestOpen] = useState(false)
   const [fetchedModels, setFetchedModels] = useState<string[]>([])
-  const [catalogModels, setCatalogModels] = useState<string[]>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const providerMap = getProviderCatalogMap(providerOptions)
 
   const apiKeyPlaceholder = maskedSecretPlaceholder(
     form.apiKey,
@@ -138,40 +117,8 @@ export function AddModelSheet({
       setServerError("")
       setModelValidation(null)
       setFetchedModels([])
-      setCatalogModels([])
     }
   }, [open])
-
-  // Load catalog models when provider or apiBase changes
-  useEffect(() => {
-    const providerKey = getCanonicalProviderKey(form.provider, providerOptions)
-    const apiBase = getEffectiveAPIBase(
-      form.provider,
-      form.apiBase,
-      providerOptions,
-    )
-    if (!form.provider.trim()) {
-      setCatalogModels([])
-      return
-    }
-    let cancelled = false
-    getCatalogs()
-      .then((res) => {
-        if (cancelled) return
-        const matched = (res.entries || []).filter((e) => {
-          const ep = getCanonicalProviderKey(e.provider, providerOptions)
-          const eb = (e.api_base ?? "").trim().replace(/\/+$/, "")
-          return ep === providerKey && eb === apiBase
-        })
-        const ids = matched.flatMap((e) => e.models.map((m) => m.id))
-        const unique = [...new Set(ids)]
-        setCatalogModels(unique)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [form.provider, form.apiBase, providerOptions])
 
   const validate = (): boolean => {
     const errors: Partial<Record<keyof AddForm, string>> = {}
@@ -181,9 +128,8 @@ export function AddModelSheet({
     } else if (existingModelNames.some((name) => name.trim() === modelName)) {
       errors.modelName = t("models.add.errorDuplicateModelName")
     }
-    if (!providerDef) {
-      errors.provider = t("models.field.providerInvalid")
-    }
+    if (!form.provider.trim()) errors.provider = t("models.add.errorRequired")
+    if (!form.apiBase.trim()) errors.apiBase = t("models.add.errorRequired")
     if (!form.model.trim()) errors.model = t("models.add.errorRequired")
     if (modelValidation?.level === "error") {
       errors.model = t(
@@ -204,20 +150,12 @@ export function AddModelSheet({
       }
     }
 
-  const debouncedValidateModel = useCallback(
-    (value: string, provider: string) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      debounceRef.current = setTimeout(() => {
-        const result = validateModelField(
-          value,
-          provider || undefined,
-          providerOptions,
-        )
-        setModelValidation(result)
-      }, 300)
-    },
-    [providerOptions],
-  )
+  const debouncedValidateModel = useCallback((value: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setModelValidation(validateModelField(value))
+    }, 300)
+  }, [])
 
   const handleModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
@@ -225,47 +163,7 @@ export function AddModelSheet({
     if (fieldErrors.model) {
       setFieldErrors((prev) => ({ ...prev, model: undefined }))
     }
-    debouncedValidateModel(value, form.provider)
-  }
-
-  const handleProviderChange = (provider: string) => {
-    setForm((f) => {
-      const previousDefaultBase = normalizeApiBase(
-        getProviderDefaultAPIBase(f.provider, providerOptions),
-      )
-      const nextDefaultBase = normalizeApiBase(
-        getProviderDefaultAPIBase(provider, providerOptions),
-      )
-      const currentApiBase = normalizeApiBase(f.apiBase)
-      let apiBase = f.apiBase
-      if (
-        currentApiBase &&
-        previousDefaultBase &&
-        currentApiBase === previousDefaultBase &&
-        currentApiBase !== nextDefaultBase
-      ) {
-        apiBase = ""
-      }
-      return {
-        ...f,
-        provider: getCanonicalProviderKey(provider, providerOptions),
-        apiBase,
-      }
-    })
-    // Re-validate model with new provider context
-    if (form.model) {
-      debouncedValidateModel(form.model, provider)
-    }
-    // Clear setAsDefault if the new provider doesn't support being default
-    const allowed =
-      getProviderCatalogEntry(provider, providerOptions)?.defaultModelAllowed ??
-      false
-    if (!allowed) {
-      setSetAsDefault(false)
-    }
-    if (fieldErrors.provider) {
-      setFieldErrors((prev) => ({ ...prev, provider: undefined }))
-    }
+    debouncedValidateModel(value)
   }
 
   const applyFix = () => {
@@ -275,7 +173,7 @@ export function AddModelSheet({
     }
   }
 
-  const handleCommonModel = (modelId: string) => {
+  const handleModelPick = (modelId: string) => {
     setForm((f) => ({ ...f, model: modelId }))
     setModelValidation(null)
     if (fieldErrors.model) {
@@ -286,32 +184,9 @@ export function AddModelSheet({
   const handleFetchFill = (models: string[]) => {
     setFetchedModels(models)
     if (models.length >= 1) {
-      setForm((f) => ({ ...f, model: models[0] }))
-      setModelValidation(null)
-      if (fieldErrors.model) {
-        setFieldErrors((prev) => ({ ...prev, model: undefined }))
-      }
+      handleModelPick(models[0])
     }
   }
-
-  const canonicalProvider = getCanonicalProviderKey(
-    form.provider,
-    providerOptions,
-  )
-  const providerDef = canonicalProvider
-    ? providerMap.get(canonicalProvider)
-    : undefined
-  const commonModels = providerDef?.commonModels || []
-  const defaultModelAllowed = providerDef?.defaultModelAllowed === true
-  const apiBasePlaceholder =
-    getProviderDefaultAPIBase(form.provider, providerOptions) ||
-    "https://api.example.com/v1"
-  const effectiveApiBase = getEffectiveAPIBase(
-    form.provider,
-    form.apiBase,
-    providerOptions,
-  )
-  const submittedApiBase = getSubmittedAPIBase(form.apiBase)
 
   const handleSave = async () => {
     if (!validate()) return
@@ -319,11 +194,9 @@ export function AddModelSheet({
     let extraBody: Record<string, unknown> | undefined
     let customHeaders: Record<string, string> | undefined
     try {
-      if (form.extraBody.trim()) {
-        extraBody = JSON.parse(form.extraBody.trim())
-      } else {
-        extraBody = {}
-      }
+      extraBody = form.extraBody.trim()
+        ? JSON.parse(form.extraBody.trim())
+        : {}
     } catch {
       setServerError(
         t("models.field.extraBody") + ": " + t("models.field.invalidJson"),
@@ -331,11 +204,9 @@ export function AddModelSheet({
       return
     }
     try {
-      if (form.customHeaders.trim()) {
-        customHeaders = JSON.parse(form.customHeaders.trim())
-      } else {
-        customHeaders = {}
-      }
+      customHeaders = form.customHeaders.trim()
+        ? JSON.parse(form.customHeaders.trim())
+        : {}
     } catch {
       setServerError(
         t("models.field.customHeaders") + ": " + t("models.field.invalidJson"),
@@ -348,15 +219,12 @@ export function AddModelSheet({
     setServerError("")
     try {
       const modelName = form.modelName.trim()
-      const provider = canonicalProvider
-      const modelId = form.model.trim()
       await addModel({
         model_name: modelName,
-        provider: provider || undefined,
-        model: modelId,
-        api_base: submittedApiBase,
+        provider: form.provider.trim(),
+        model: form.model.trim(),
+        api_base: form.apiBase.trim().replace(/\/+$/, ""),
         api_key: form.apiKey.trim() || undefined,
-        proxy: form.proxy.trim() || undefined,
         rpm: form.rpm ? Number(form.rpm) : undefined,
         max_tokens_field: form.maxTokensField.trim() || undefined,
         request_timeout: form.requestTimeout
@@ -407,6 +275,7 @@ export function AddModelSheet({
               <Field
                 label={t("models.add.modelName")}
                 hint={t("models.add.modelNameHint")}
+                required
               >
                 <Input
                   value={form.modelName}
@@ -429,26 +298,46 @@ export function AddModelSheet({
               >
                 <ProviderCombobox
                   value={form.provider}
-                  onChange={handleProviderChange}
+                  onChange={(provider) =>
+                    setForm((f) => ({ ...f, provider }))
+                  }
                   placeholder={t("models.field.providerPlaceholder")}
-                  backendOptions={providerOptions}
-                  filterCreateAllowed
-                  containerRef={scrollContainerRef}
+                  suggestions={existingProviders}
+                />
+              </Field>
+
+              <Field
+                label={t("models.field.apiBase")}
+                hint={t("models.field.apiBaseHint")}
+                error={fieldErrors.apiBase}
+                required
+              >
+                <Input
+                  value={form.apiBase}
+                  onChange={setField("apiBase")}
+                  placeholder="https://api.example.com/v1"
+                  className="font-mono text-sm"
+                />
+              </Field>
+
+              <Field label={t("models.field.apiKey")}>
+                <KeyInput
+                  value={form.apiKey}
+                  onChange={(v) => setForm((f) => ({ ...f, apiKey: v }))}
+                  placeholder={apiKeyPlaceholder}
                 />
               </Field>
 
               <Field
                 label={t("models.add.modelId")}
                 hint={t("models.add.modelIdHint")}
+                error={fieldErrors.model}
+                required
               >
                 <Input
                   value={form.model}
                   onChange={handleModelChange}
-                  placeholder={
-                    providerDef
-                      ? `${commonModels[0] || "model-name"}`
-                      : t("models.add.modelIdPlaceholder")
-                  }
+                  placeholder={t("models.add.modelIdPlaceholder")}
                   className="font-mono text-sm"
                   aria-invalid={
                     !!fieldErrors.model || modelValidation?.level === "error"
@@ -459,9 +348,7 @@ export function AddModelSheet({
                     className={`flex items-center gap-2 text-xs ${
                       modelValidation.level === "error"
                         ? "text-destructive"
-                        : modelValidation.level === "warning"
-                          ? "text-yellow-600 dark:text-yellow-500"
-                          : "text-green-600 dark:text-green-500"
+                        : "text-yellow-600 dark:text-yellow-500"
                     }`}
                   >
                     <span>
@@ -481,39 +368,6 @@ export function AddModelSheet({
                     )}
                   </div>
                 )}
-                {fieldErrors.model && !modelValidation && (
-                  <p className="text-destructive text-xs">
-                    {fieldErrors.model}
-                  </p>
-                )}
-                {commonModels.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {commonModels.map((m) => (
-                      <Badge
-                        key={m}
-                        variant="secondary"
-                        className="hover:bg-secondary/80 cursor-pointer font-mono text-xs"
-                        onClick={() => handleCommonModel(m)}
-                      >
-                        {m}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                {catalogModels.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {catalogModels.map((m) => (
-                      <Badge
-                        key={m}
-                        variant={form.model === m ? "default" : "outline"}
-                        className="cursor-pointer font-mono text-xs"
-                        onClick={() => handleCommonModel(m)}
-                      >
-                        {m}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
                 {fetchedModels.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {fetchedModels.map((m) => (
@@ -521,47 +375,23 @@ export function AddModelSheet({
                         key={m}
                         variant={form.model === m ? "default" : "outline"}
                         className="cursor-pointer font-mono text-xs"
-                        onClick={() => handleCommonModel(m)}
+                        onClick={() => handleModelPick(m)}
                       >
                         {m}
                       </Badge>
                     ))}
                   </div>
                 )}
-                <div className="flex items-center gap-2">
-                  {providerSupportsFetch(form.provider, providerOptions) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setFetchOpen(true)}
-                    >
-                      <IconDownload className="size-3" />
-                      {t("models.fetch.title")}
-                    </Button>
-                  )}
-                  {!form.provider && (
-                    <span className="text-muted-foreground text-xs">
-                      {t("models.field.selectProviderFirst")}
-                    </span>
-                  )}
-                </div>
-              </Field>
-
-              <Field label={t("models.field.apiKey")}>
-                <KeyInput
-                  value={form.apiKey}
-                  onChange={(v) => setForm((f) => ({ ...f, apiKey: v }))}
-                  placeholder={apiKeyPlaceholder}
-                />
-              </Field>
-
-              <Field label={t("models.field.apiBase")}>
-                <Input
-                  value={form.apiBase}
-                  onChange={setField("apiBase")}
-                  placeholder={apiBasePlaceholder}
-                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={!form.apiBase.trim()}
+                  onClick={() => setFetchOpen(true)}
+                >
+                  <IconDownload className="size-3" />
+                  {t("models.fetch.title")}
+                </Button>
               </Field>
 
               <div className="flex items-center gap-2">
@@ -569,7 +399,7 @@ export function AddModelSheet({
                   variant="outline"
                   size="sm"
                   onClick={() => setTestOpen(true)}
-                  disabled={!form.provider || !form.model}
+                  disabled={!form.apiBase.trim() || !form.model.trim()}
                 >
                   <IconPlugConnected className="size-4" />
                   {t("models.test.testConnection")}
@@ -578,28 +408,12 @@ export function AddModelSheet({
 
               <SwitchCardField
                 label={t("models.defaultOnSave.label")}
-                hint={
-                  !defaultModelAllowed && form.provider
-                    ? t("models.defaultOnSave.unsupportedProvider")
-                    : t("models.defaultOnSave.description")
-                }
+                hint={t("models.defaultOnSave.description")}
                 checked={setAsDefault}
                 onCheckedChange={setSetAsDefault}
-                disabled={!defaultModelAllowed}
               />
 
               <AdvancedSection>
-                <Field
-                  label={t("models.field.proxy")}
-                  hint={t("models.field.proxyHint")}
-                >
-                  <Input
-                    value={form.proxy}
-                    onChange={setField("proxy")}
-                    placeholder="http://127.0.0.1:7890"
-                  />
-                </Field>
-
                 <Field
                   label={t("models.field.requestTimeout")}
                   hint={t("models.field.requestTimeoutHint")}
@@ -729,10 +543,9 @@ export function AddModelSheet({
           open={fetchOpen}
           onClose={() => setFetchOpen(false)}
           onFill={handleFetchFill}
-          provider={canonicalProvider}
+          provider={form.provider}
           apiKey={form.apiKey}
-          apiBase={effectiveApiBase}
-          backendOptions={providerOptions}
+          apiBase={form.apiBase}
         />
 
         <TestModelDialog
@@ -740,9 +553,9 @@ export function AddModelSheet({
           open={testOpen}
           onClose={() => setTestOpen(false)}
           inlineParams={{
-            provider: canonicalProvider,
+            provider: form.provider,
             model: form.model,
-            apiBase: effectiveApiBase,
+            apiBase: form.apiBase,
             apiKey: form.apiKey,
           }}
         />

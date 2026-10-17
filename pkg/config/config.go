@@ -21,7 +21,7 @@ import (
 var rrCounter atomic.Uint64
 
 // CurrentVersion is the latest config schema version
-const CurrentVersion = 3
+const CurrentVersion = 4
 
 func init() {
 	initChannel()
@@ -124,7 +124,7 @@ type AgentsConfig struct {
 
 // AgentModelConfig supports both string and structured model config.
 // String format: "gpt-4" (just primary, no fallbacks)
-// Object format: {"primary": "gpt-4", "fallbacks": ["claude-haiku"]}
+// Object format: {"primary": "gpt-4", "fallbacks": ["gpt-4-mini"]}
 type AgentModelConfig struct {
 	Primary   string   `json:"primary,omitempty"`
 	Fallbacks []string `json:"fallbacks,omitempty"`
@@ -254,7 +254,6 @@ type AgentDefaults struct {
 	Workspace                 string             `json:"workspace"`
 	RestrictToWorkspace       bool               `json:"restrict_to_workspace"`
 	AllowReadOutsideWorkspace bool               `json:"allow_read_outside_workspace"`
-	Provider                  string             `json:"provider"`
 	ModelName                 string             `json:"model_name"`
 	ModelFallbacks            []string           `json:"model_fallbacks,omitempty"`
 	ImageModel                string             `json:"image_model,omitempty"`
@@ -425,22 +424,17 @@ func (c ModelStreamingConfig) IsZero() bool {
 	return !c.Enabled
 }
 
-// ModelConfig represents a model-centric provider configuration.
-// It allows adding new providers (especially OpenAI-compatible ones) via configuration only.
-// The Model field may be either a plain model identifier or a provider-prefixed
-// identifier such as "openai/gpt-5.4" or "nvidia/z-ai/glm-5.1".
-// Supported providers are the OpenAI-compatible families (openai, deepseek,
-// openrouter, groq, moonshot, modelscope, novita, nvidia, and similar) plus
-// the native anthropic and anthropic-messages protocols.
+// ModelConfig represents one OpenAI-compatible model endpoint.
+// Provider is a free-form label used for grouping and diagnostics; Model is the
+// upstream model identifier and is sent verbatim.
 type ModelConfig struct {
 	// Required fields
 	ModelName string `json:"model_name"` // User-facing alias for the model
-	Provider  string `json:"provider"`   // Provider name for routing and selection. When empty, provider resolution infers it from Model.
-	Model     string `json:"model"`      // Model identifier, optionally provider-prefixed.
+	Provider  string `json:"provider"`   // Free-form provider label used for grouping and diagnostics.
+	Model     string `json:"model"`      // Upstream model identifier, passed through verbatim.
 
-	// HTTP-based providers
+	// OpenAI-compatible endpoint
 	APIBase   string   `json:"api_base,omitempty"`  // API endpoint URL
-	Proxy     string   `json:"proxy,omitempty"`     // HTTP proxy URL
 	Fallbacks []string `json:"fallbacks,omitempty"` // Fallback model names for failover
 
 	// Optional optimizations
@@ -1053,7 +1047,6 @@ func expandMultiKeyModels(models []*ModelConfig) []*ModelConfig {
 				Model:               m.Model,
 				APIBase:             m.APIBase,
 				APIKeys:             SimpleSecureStrings(keys[i]),
-				Proxy:               m.Proxy,
 				RPM:                 m.RPM,
 				MaxTokensField:      m.MaxTokensField,
 				RequestTimeout:      m.RequestTimeout,
@@ -1075,7 +1068,6 @@ func expandMultiKeyModels(models []*ModelConfig) []*ModelConfig {
 			Provider:            m.Provider,
 			Model:               m.Model,
 			APIBase:             m.APIBase,
-			Proxy:               m.Proxy,
 			RPM:                 m.RPM,
 			MaxTokensField:      m.MaxTokensField,
 			RequestTimeout:      m.RequestTimeout,

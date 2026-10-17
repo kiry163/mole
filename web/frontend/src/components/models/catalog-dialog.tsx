@@ -11,7 +11,6 @@ import { toast } from "sonner"
 import {
   type CatalogEntry,
   type CatalogModel,
-  type ModelProviderOption,
   addModel,
   deleteCatalog,
   getCatalogs,
@@ -28,18 +27,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { refreshGatewayState } from "@/store/gateway"
 
-import {
-  getCanonicalProviderKey,
-  getProviderCatalogMap,
-} from "./provider-registry"
-
 interface CatalogDialogProps {
   open: boolean
   onClose: () => void
   onModelAdded: () => void
   onMutationStarted?: () => void
   onMutationSettled?: () => void
-  providerOptions?: ModelProviderOption[]
 }
 
 export function CatalogDialog({
@@ -48,10 +41,8 @@ export function CatalogDialog({
   onModelAdded,
   onMutationStarted,
   onMutationSettled,
-  providerOptions,
 }: CatalogDialogProps) {
   const { t } = useTranslation()
-  const providerMap = getProviderCatalogMap(providerOptions)
   const [loading, setLoading] = useState(false)
   const [entries, setEntries] = useState<CatalogEntry[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -205,11 +196,6 @@ export function CatalogDialog({
               const isExpanded = expandedId === entry.id
               const entrySelected = selected.get(entry.id) || new Set()
               const filteredModels = getFilteredModels(entry.models)
-              const providerKey = getCanonicalProviderKey(
-                entry.provider,
-                providerOptions,
-              )
-              const providerDef = providerMap.get(providerKey)
 
               return (
                 <div
@@ -228,7 +214,7 @@ export function CatalogDialog({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium">
-                          {providerDef?.label || providerKey}
+                          {entry.provider}
                         </span>
                         <span className="text-muted-foreground font-mono text-xs">
                           {entry.api_key_mask}
@@ -312,11 +298,6 @@ export function CatalogDialog({
                       </div>
                       {entrySelected.size > 0 && (
                         <div className="mt-2 space-y-2">
-                          {providerDef?.requiresApiKey !== false && (
-                            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-xs text-yellow-700 dark:text-yellow-400">
-                              {t("models.catalog.needApiKey")}
-                            </div>
-                          )}
                           <div className="flex justify-end">
                             <Button
                               size="sm"

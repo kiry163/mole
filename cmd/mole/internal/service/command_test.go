@@ -319,7 +319,7 @@ func TestWaitUntilReadyLoadsEnv(t *testing.T) {
 	home := t.TempDir()
 	configPath := filepath.Join(home, "config.json")
 	configJSON := fmt.Sprintf(`{
-	  "version": 3,
+	  "version": 4,
 	  "gateway": {"host": %q, "port": %d},
 	  "model_list": [{
 	    "model_name": "m",

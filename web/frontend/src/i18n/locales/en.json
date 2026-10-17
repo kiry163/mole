@@ -146,7 +146,6 @@
     "restartHint": "Model configuration changes take effect after the gateway restarts.",
     "loadError": "Failed to load models",
     "retry": "Retry",
-    "providerCatalogUnavailable": "The backend provider catalog is unavailable. New provider selections are disabled until the Models API loads successfully.",
     "noDefaultHintPrefix": "No default model set yet. Click",
     "noDefaultHintSuffix": "to set one.",
     "status": {
@@ -167,8 +166,7 @@
       "setDefaultDisabled": {
         "unavailable": "Cannot set unavailable model as default",
         "isDefault": "Already the default model",
-        "isVirtual": "Cannot set virtual model as default",
-        "unsupportedProvider": "This provider cannot be used as the default chat model."
+        "isVirtual": "Cannot set virtual model as default"
       },
       "addToFallbackDisabled": {
         "isDefault": "Default model cannot be added to the fallback chain"
@@ -199,19 +197,18 @@
     },
     "defaultOnSave": {
       "label": "Default Model",
-      "description": "Automatically set this model as default after saving.",
-      "unsupportedProvider": "This provider can be saved in the model list but cannot be used as the default chat model."
+      "description": "Automatically set this model as default after saving."
     },
     "add": {
       "button": "Add Model",
       "title": "Add Custom Model",
-      "description": "Add an OpenAI-compatible or native model endpoint.",
+      "description": "Add an OpenAI-compatible model endpoint.",
       "modelName": "Model Alias",
       "modelNamePlaceholder": "e.g. my-gpt4",
       "modelNameHint": "A short name used to identify this model in conversations.",
       "modelId": "Model Identifier",
-      "modelIdPlaceholder": "e.g. gpt-4o or openai/gpt-4o",
-      "modelIdHint": "This field is treated as the canonical model ID for the selected provider. If the identifier itself contains a slash (for example openai/gpt-5.4), it is preserved as-is and not split again.",
+      "modelIdPlaceholder": "e.g. gpt-4o or deepseek/deepseek-chat",
+      "modelIdHint": "The identifier is sent to the upstream endpoint verbatim; slashes are preserved.",
       "errorRequired": "This field is required.",
       "errorDuplicateModelName": "Model alias already exists. Please use a different name.",
       "saveError": "Failed to add model",
@@ -228,16 +225,12 @@
     },
     "field": {
       "provider": "Provider",
-      "providerPlaceholder": "Select a provider",
-      "providerHint": "Choose a provider from the backend catalog; Model Identifier will be interpreted as that provider's canonical model ID.",
-      "providerInvalid": "The current provider is invalid. Please choose a supported provider.",
-      "selectProviderFirst": "Select a provider first",
+      "providerPlaceholder": "e.g. openai",
+      "providerHint": "Free-form label used for grouping and diagnostics. Suggestions come from providers already used by configured models.",
       "apiBase": "API Base URL",
       "apiKey": "API Key",
       "apiKeyPlaceholder": "Enter your API key",
       "apiKeyPlaceholderSet": "Leave blank to keep existing key",
-      "proxy": "HTTP Proxy",
-      "proxyHint": "Optional. e.g. http://127.0.0.1:7890",
       "requestTimeout": "Request Timeout (s)",
       "requestTimeoutHint": "Maximum seconds to wait for a response. 0 = use default.",
       "rpm": "Rate Limit (RPM)",
@@ -255,7 +248,8 @@
       "extraBodyHint": "Additional JSON fields to inject into the request body, e.g. {\"reasoning_split\": true}.",
       "customHeaders": "Custom Headers",
       "customHeadersHint": "Additional HTTP headers to inject into every request, e.g. {\"X-Source\": \"coding-plan\"}.",
-      "invalidJson": "Invalid JSON format"
+      "invalidJson": "Invalid JSON format",
+      "apiBaseHint": "OpenAI-compatible base URL, e.g. https://api.example.com/v1"
     },
     "edit": {
       "title": "Configure {{name}}",
@@ -265,9 +259,7 @@
     },
     "fetch": {
       "title": "Fetch Available Models",
-      "description": "Fetch model list from the upstream provider.",
-      "providerLabel": "Provider:",
-      "needApiKey": "Please enter an API Key first to fetch models.",
+      "description": "Fetch the upstream model list from the configured Base URL with the API key.",
       "fetching": "Fetching models...",
       "retry": "Retry",
       "filterPlaceholder": "Filter models...",
@@ -296,8 +288,7 @@
       "selectAll": "Select All",
       "deselectAll": "Deselect All",
       "addSelected": "Add {{count}} Selected",
-      "addSuccess": "Added {{count}} model(s) to configuration.",
-      "needApiKey": "These models require an API key. You'll need to configure credentials after import."
+      "addSuccess": "Added {{count}} model(s) to configuration."
     },
     "test": {
       "title": "Test Model Connectivity",
@@ -317,21 +308,7 @@
     "validation": {
       "whitespace": "Model identifier cannot contain whitespace",
       "leadingSlash": "Should not start with /",
-      "consecutiveSlash": "Should not contain consecutive /",
-      "useProvider": "Will use \"{{provider}}\" as provider",
-      "defaultToOpenAI": "No provider specified, defaults to OpenAI",
-      "emptyModel": "Model name cannot be empty",
-      "shouldUse": "\"{{provider}}\" should use \"{{alias}}\"",
-      "didYouMean": "Did you mean \"{{closest}}\"?",
-      "unknownProvider": "Unknown provider \"{{provider}}\"",
-      "parsed": "provider={{provider}}, model={{model}}"
-    },
-    "combobox": {
-      "selectProvider": "Select provider...",
-      "searchProvider": "Search provider...",
-      "noProvider": "No provider found.",
-      "noCatalog": "Provider catalog unavailable.",
-      "local": "local"
+      "consecutiveSlash": "Should not contain consecutive /"
     }
   },
   "channels": {

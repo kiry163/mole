@@ -297,7 +297,7 @@ func (al *AgentLoop) buildCommandsRuntime(
 			modelMu := agent.modelStateMutex()
 			modelMu.RLock()
 			defer modelMu.RUnlock()
-			return agent.Model, resolvedCandidateProvider(agent.Candidates, cfg.Agents.Defaults.Provider)
+			return agent.Model, resolvedCandidateProvider(agent.Candidates, "")
 		}
 		rt.SwitchModel = func(value string) (string, error) {
 			value = strings.TrimSpace(value)
@@ -315,7 +315,7 @@ func (al *AgentLoop) buildCommandsRuntime(
 				return "", fmt.Errorf("model %q not found in model_list or providers", value)
 			}
 
-			nextCandidates := resolveModelCandidates(cfg, cfg.Agents.Defaults.Provider, value, agent.Fallbacks)
+			nextCandidates := resolveModelCandidates(cfg, value, agent.Fallbacks)
 			if len(nextCandidates) == 0 {
 				return "", fmt.Errorf("model %q did not resolve to any provider candidates", value)
 			}

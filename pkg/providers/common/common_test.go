@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -14,40 +13,16 @@ import (
 // --- NewHTTPClient tests ---
 
 func TestNewHTTPClient_DefaultTimeout(t *testing.T) {
-	client := NewHTTPClient("")
+	client := NewHTTPClient()
 	if client.Timeout != DefaultRequestTimeout {
 		t.Errorf("timeout = %v, want %v", client.Timeout, DefaultRequestTimeout)
 	}
 }
 
-func TestNewHTTPClient_WithProxy(t *testing.T) {
-	client := NewHTTPClient("http://127.0.0.1:8080")
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok || transport == nil {
-		t.Fatalf("expected http.Transport with proxy, got %T", client.Transport)
-	}
-	req := &http.Request{URL: &url.URL{Scheme: "https", Host: "api.example.com"}}
-	gotProxy, err := transport.Proxy(req)
-	if err != nil {
-		t.Fatalf("proxy function error: %v", err)
-	}
-	if gotProxy == nil || gotProxy.String() != "http://127.0.0.1:8080" {
-		t.Errorf("proxy = %v, want http://127.0.0.1:8080", gotProxy)
-	}
-}
-
-func TestNewHTTPClient_NoProxy(t *testing.T) {
-	client := NewHTTPClient("")
+func TestNewHTTPClient_DefaultTransport(t *testing.T) {
+	client := NewHTTPClient()
 	if client.Transport != nil {
-		t.Errorf("expected nil transport without proxy, got %T", client.Transport)
-	}
-}
-
-func TestNewHTTPClient_InvalidProxy(t *testing.T) {
-	// Should not panic, just log and return client without proxy
-	client := NewHTTPClient("://bad-url")
-	if client == nil {
-		t.Fatal("expected non-nil client even with invalid proxy")
+		t.Errorf("expected nil transport, got %T", client.Transport)
 	}
 }
 

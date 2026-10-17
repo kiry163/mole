@@ -237,7 +237,6 @@ func (p *Pipeline) CallLLM(
 				p.Cfg,
 				[]providers.FallbackCandidate{candidate},
 				candidate.Model,
-				p.Cfg.Agents.Defaults.Provider,
 			)
 			candidateThinking := thinkingSettingsFromModelConfig(candidateCfg)
 			applyThinkingOption(callOpts, candidateProvider, candidateThinking, true, ts.agent.ID)
@@ -735,16 +734,17 @@ func (p *Pipeline) applyBeforeLLMModelRewrite(ts *turnState, exec *turnExecution
 		return nil
 	}
 
-	defaultProvider := "openai"
-	if p.Cfg != nil {
-		if provider := strings.TrimSpace(p.Cfg.Agents.Defaults.Provider); provider != "" {
-			defaultProvider = provider
-		}
-	}
-	defaultProvider = effectiveDefaultProvider(defaultProvider)
-	candidates := resolveModelCandidates(p.Cfg, defaultProvider, rawModel, nil)
+	candidates := resolveModelCandidates(p.Cfg, rawModel, nil)
 	if len(candidates) == 0 {
-		return fmt.Errorf("hook-selected model %q could not be resolved", rawModel)
+		// Hooks may select a raw upstream model that is not in model_list.
+		// Continue on the active provider with that identifier.
+		if exec.activeProvider == nil {
+			return fmt.Errorf("hook-selected model %q could not be resolved", rawModel)
+		}
+		exec.activeModel = rawModel
+		exec.llmModel = rawModel
+		exec.activeModelConfig = nil
+		return nil
 	}
 	candidate := candidates[0]
 	provider := ts.agent.CandidateProviders[candidateProviderKey(candidate)]
@@ -784,7 +784,7 @@ func (p *Pipeline) applyBeforeLLMModelRewrite(ts *turnState, exec *turnExecution
 	exec.activeProvider = provider
 	exec.activeModel = resolvedCandidateModel(candidates, rawModel)
 	exec.llmModel = exec.activeModel
-	exec.activeModelConfig = resolveActiveModelConfig(p.Cfg, candidates, rawModel, defaultProvider)
+	exec.activeModelConfig = resolveActiveModelConfig(p.Cfg, candidates, rawModel)
 	return nil
 }
 

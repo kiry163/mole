@@ -1,3 +1,8 @@
+// Mole - Ultra-lightweight personal AI agent
+// License: MIT
+//
+// Copyright (c) 2026 Mole contributors
+
 package providers
 
 import (
@@ -6,180 +11,73 @@ import (
 	"github.com/kiry163/mole/pkg/config"
 )
 
-func TestCreateProviderReturnsHTTPProviderForOpenRouter(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.Agents.Defaults.ModelName = "test-openrouter"
-	modelCfg := &config.ModelConfig{
-		ModelName: "test-openrouter",
-		Model:     "openrouter/auto",
-		APIBase:   "https://openrouter.ai/api/v1",
-	}
-	modelCfg.SetAPIKey("sk-or-test")
-	cfg.ModelList = []*config.ModelConfig{modelCfg}
-
-	provider, _, err := CreateProvider(cfg)
-	if err != nil {
-		t.Fatalf("CreateProvider() error = %v", err)
-	}
-
-	if _, ok := provider.(*HTTPProvider); !ok {
-		t.Fatalf("provider type = %T, want *HTTPProvider", provider)
+func testConfig(models ...*config.ModelConfig) *config.Config {
+	return &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{ModelName: models[0].ModelName},
+		},
+		ModelList: models,
 	}
 }
 
-func TestCreateProviderResolvesRawDefaultFromProviderTemplate(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.Agents.Defaults.ModelName = "openrouter/deepseek/deepseek-v3.2"
-	modelCfg := &config.ModelConfig{
-		ModelName:     "openrouter-template",
-		Model:         "openrouter/auto",
-		APIBase:       "https://openrouter.ai/api/v1",
-		ThinkingLevel: "off",
-	}
-	modelCfg.SetAPIKey("sk-or-test")
-	cfg.ModelList = []*config.ModelConfig{modelCfg}
+func TestCreateProviderUsesConfiguredModel(t *testing.T) {
+	cfg := testConfig(&config.ModelConfig{
+		ModelName: "primary",
+		Provider:  "custom",
+		Model:     "model-a",
+		APIBase:   "https://example.com/v1",
+	})
+	cfg.ModelList[0].SetAPIKey("key")
 
 	provider, modelID, err := CreateProvider(cfg)
 	if err != nil {
 		t.Fatalf("CreateProvider() error = %v", err)
 	}
-	if _, ok := provider.(*HTTPProvider); !ok {
-		t.Fatalf("provider type = %T, want *HTTPProvider", provider)
+	if provider == nil {
+		t.Fatal("CreateProvider() returned nil provider")
 	}
-	if modelID != "deepseek/deepseek-v3.2" {
-		t.Fatalf("model ID = %q, want %q", modelID, "deepseek/deepseek-v3.2")
-	}
-	if modelCfg.Model != "openrouter/auto" {
-		t.Fatalf("template model mutated to %q", modelCfg.Model)
-	}
-	resolved, err := ResolveModelConfig(cfg, cfg.Agents.Defaults.ModelName)
-	if err != nil {
-		t.Fatalf("ResolveModelConfig() error = %v", err)
-	}
-	if resolved.ThinkingLevel != "" {
-		t.Fatalf("raw model inherited template thinking level %q", resolved.ThinkingLevel)
+	if modelID != "model-a" {
+		t.Fatalf("modelID = %q, want model-a", modelID)
 	}
 }
 
-func TestResolveModelConfigPrefersConfiguredProviderTemplate(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.ModelList = []*config.ModelConfig{
-		{ModelName: "unconfigured", Model: "openrouter/auto"},
-		{
-			ModelName: "configured",
-			Model:     "openrouter/other",
-			APIBase:   "https://openrouter.ai/api/v1",
-			APIKeys:   config.SimpleSecureStrings("sk-or-test"),
-		},
-	}
-
-	resolved, err := ResolveModelConfig(cfg, "openrouter/new-model")
-	if err != nil {
-		t.Fatalf("ResolveModelConfig() error = %v", err)
-	}
-	if resolved.APIBase != "https://openrouter.ai/api/v1" || resolved.APIKey() != "sk-or-test" {
-		t.Fatalf("resolved template = %#v, want configured OpenRouter entry", resolved)
+func TestCreateProviderRequiresConfiguredModels(t *testing.T) {
+	cfg := &config.Config{}
+	if _, _, err := CreateProvider(cfg); err == nil {
+		t.Fatal("expected error with empty model_list")
 	}
 }
 
-func TestResolveModelConfigPrefersConfiguredExactRawMatch(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.ModelList = []*config.ModelConfig{
-		{ModelName: "unconfigured", Provider: "openrouter", Model: "openrouter/target"},
-		{
-			ModelName: "configured",
-			Provider:  "openrouter",
-			Model:     "openrouter/target",
-			APIKeys:   config.SimpleSecureStrings("sk-or-test"),
-		},
+func TestResolveModelConfigExactAlias(t *testing.T) {
+	model := &config.ModelConfig{
+		ModelName: "alias",
+		Provider:  "custom",
+		Model:     "upstream-id",
+		APIBase:   "https://example.com/v1",
 	}
+	cfg := testConfig(model)
 
-	resolved, err := ResolveModelConfig(cfg, "openrouter/target")
+	resolved, err := ResolveModelConfig(cfg, "alias")
 	if err != nil {
 		t.Fatalf("ResolveModelConfig() error = %v", err)
 	}
-	if resolved.ModelName != "configured" {
-		t.Fatalf("ModelName = %q, want configured", resolved.ModelName)
+	if resolved.Model != "upstream-id" {
+		t.Fatalf("resolved model = %q, want upstream-id", resolved.Model)
+	}
+	if resolved == model {
+		t.Fatal("expected a clone, got the stored config entry")
 	}
 }
 
-func TestResolveModelConfigUsesDefaultProviderForBareTemplate(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.Agents.Defaults.Provider = "openrouter"
-	cfg.ModelList = []*config.ModelConfig{{
-		ModelName: "bare-template",
-		Model:     "auto",
-		APIKeys:   config.SimpleSecureStrings("sk-or-test"),
-	}}
+func TestResolveModelConfigRejectsProviderRefs(t *testing.T) {
+	cfg := testConfig(&config.ModelConfig{
+		ModelName: "alias",
+		Provider:  "custom",
+		Model:     "upstream-id",
+		APIBase:   "https://example.com/v1",
+	})
 
-	resolved, err := ResolveModelConfig(cfg, "openrouter/new-model")
-	if err != nil {
-		t.Fatalf("ResolveModelConfig() error = %v", err)
-	}
-	if resolved.APIKey() != "sk-or-test" {
-		t.Fatalf("APIKey() = %q, want provider template key", resolved.APIKey())
-	}
-}
-
-func TestResolveModelConfigPreservesLegacyExactModelProvider(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.Agents.Defaults.Provider = "openrouter"
-	cfg.ModelList = []*config.ModelConfig{{
-		ModelName: "legacy-template",
-		Provider:  "openrouter",
-		Model:     "openai/gpt-4o",
-		APIKeys:   config.SimpleSecureStrings("sk-or-test"),
-	}}
-
-	resolved, err := ResolveModelConfig(cfg, "openai/gpt-4o")
-	if err != nil {
-		t.Fatalf("ResolveModelConfig() error = %v", err)
-	}
-	if resolved.Provider != "openrouter" {
-		t.Fatalf("Provider = %q, want openrouter", resolved.Provider)
-	}
-}
-
-func TestResolveModelConfigSetsDefaultProviderOnBareEntry(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.Agents.Defaults.Provider = "openrouter"
-	cfg.ModelList = []*config.ModelConfig{{
-		ModelName: "bare",
-		Model:     "gpt-4o",
-		APIKeys:   config.SimpleSecureStrings("sk-or-test"),
-	}}
-
-	resolved, err := ResolveModelConfig(cfg, "bare")
-	if err != nil {
-		t.Fatalf("ResolveModelConfig() error = %v", err)
-	}
-	if resolved.Provider != "openrouter" || resolved.Model != "gpt-4o" {
-		t.Fatalf("resolved provider/model = %q/%q, want openrouter/gpt-4o", resolved.Provider, resolved.Model)
-	}
-}
-
-func TestResolveModelConfigPrefersCustomAPIBaseTemplate(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.ModelList = []*config.ModelConfig{
-		{
-			ModelName: "default-base",
-			Provider:  "openai",
-			Model:     "gpt-4o",
-			APIBase:   DefaultAPIBaseForProtocol("openai"),
-		},
-		{
-			ModelName: "custom-base",
-			Provider:  "openai",
-			Model:     "gpt-4.1",
-			APIBase:   "https://proxy.example.test/v1",
-		},
-	}
-
-	resolved, err := ResolveModelConfig(cfg, "openai/new-model")
-	if err != nil {
-		t.Fatalf("ResolveModelConfig() error = %v", err)
-	}
-	if resolved.APIBase != "https://proxy.example.test/v1" {
-		t.Fatalf("APIBase = %q, want custom provider template", resolved.APIBase)
+	if _, err := ResolveModelConfig(cfg, "custom/upstream-id"); err == nil {
+		t.Fatal("expected provider-prefixed reference to be rejected")
 	}
 }

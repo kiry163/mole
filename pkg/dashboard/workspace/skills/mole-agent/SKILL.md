@@ -286,82 +286,29 @@ Credential patterns in Mole are:
 - an API key on the `model_list` entry (`api_keys`), for every hosted API
 - `api_base` plus an optional key for local or self-hosted endpoints
 
-A `model_list` entry names the provider explicitly with `provider`, or relies on the default
-protocol when `provider` is empty:
+A `model_list` entry declares a free-form provider label and an OpenAI-compatible endpoint:
 
 ```json
 {
   "model_name": "my-model",
   "provider": "deepseek",
   "model": "deepseek-chat",
+  "api_base": "https://api.deepseek.com/v1",
   "api_keys": ["sk-..."],
   "enabled": true
 }
 ```
 
-- With `provider` set, Mole sends `model` to that provider unchanged.
-- Without `provider`, a `provider/model` string is split only when the prefix is a known provider
-  id; otherwise the whole string is treated as the model id and the `openai` protocol applies.
+- `provider` is a label used for grouping and diagnostics; it is not validated against a catalog.
+- `model` is sent to the endpoint verbatim. Slashes are part of the model id and are never split.
+- `api_base` is required. `api_keys` is optional for local endpoints without authentication.
 - `api_keys` is a list, so a model entry can fail over between several keys.
 
-### Protocol Families
+## Protocol
 
-`pkg/providers/factory_provider.go` builds every **chat** provider from one of these protocol
-families:
-
-| Protocol family | Values accepted in `provider` |
-| --- | --- |
-| OpenAI-compatible HTTP | `openai`, `litellm`, `lmstudio`, `gpt4free`, `openrouter`, `groq`, `zhipu`, `nvidia`, `venice`, `nearai`, `ollama`, `moonshot`, `shengsuanyun`, `siliconflow`, `deepseek`, `cerebras`, `vivgrid`, `volcengine`, `vllm`, `qwen-portal`, `qwen-intl`, `qwen-us`, `mistral`, `avian`, `longcat`, `modelscope`, `novita`, `alibaba-coding`, `zai`, `mimo` |
-| Anthropic HTTP | `anthropic` |
-| Anthropic native Messages API | `anthropic-messages`, `alibaba-coding-anthropic` |
-
-Anything else fails with `unknown protocol "<name>"`. `ollama`, `vllm`, `lmstudio` and `gpt4free`
-are the protocols allowed to run without an API key.
-
-### Provider Catalog
-
-This is the full catalog the console offers (`pkg/providers/provider_metadata.go`); every entry is
-configured the same way — `provider`, `model`, and an API key (in `api_keys` as a `$VAR` reference into `.env`):
-
-| `provider` | Notes |
-| --- | --- |
-| `openai` | OpenAI API; default protocol when `provider` is omitted |
-| `anthropic` | Anthropic over the OpenAI-compatible HTTP path |
-| `anthropic-messages` | Anthropic's native Messages API |
-| `deepseek` | DeepSeek |
-| `openrouter` | OpenRouter |
-| `qwen-portal` | Qwen / DashScope (China portal) |
-| `qwen-intl` | Qwen international endpoint |
-| `qwen-us` | Qwen US endpoint |
-| `moonshot` | Moonshot / Kimi |
-| `volcengine` | VolcEngine / Doubao |
-| `zhipu` | Zhipu / GLM |
-| `groq` | Groq |
-| `mistral` | Mistral |
-| `nvidia` | NVIDIA NIM |
-| `cerebras` | Cerebras |
-| `novita` | Novita AI |
-| `shengsuanyun` | ShengsuanYun |
-| `siliconflow` | SiliconFlow |
-| `venice` | Venice AI |
-| `nearai` | NEAR AI Cloud |
-| `vivgrid` | Vivgrid |
-| `longcat` | LongCat |
-| `modelscope` | ModelScope |
-| `avian` | Avian |
-| `zai` | Z.ai |
-| `alibaba-coding` | Alibaba Coding Plan |
-| `alibaba-coding-anthropic` | Alibaba Coding Plan over the Anthropic protocol |
-| `mimo` | Xiaomi MiMo |
-| `gpt4free` | GPT4Free; no key required |
-| `ollama` | Local Ollama, default `http://localhost:11434/v1`; no key required |
-| `vllm` | Local vLLM, default `http://localhost:8000/v1`; no key required |
-| `lmstudio` | Local LM Studio, default `http://localhost:1234/v1`; key optional |
-| `litellm` | LiteLLM proxy; the proxy decides which credential model applies |
-
-There is no `gemini`, `azure`, `bedrock`, `antigravity`, `github-copilot`, `claude-cli` or
-`codex-cli` provider in this fork: Gemini and Azure-style endpoints are reached by pointing an
-OpenAI-compatible entry at their `api_base`, and the local CLI-provider path has been removed.
+Mole speaks the OpenAI Chat Completions protocol only. Any OpenAI-compatible endpoint works;
+there is no native Anthropic Messages, Gemini, Azure, Bedrock, or CLI-provider path in this fork.
+Model-level HTTP proxy configuration is not supported.
 
 ## Built-in Tool Families
 
@@ -788,7 +735,7 @@ When contributing code, these paths matter most:
 - `pkg/dashboard/` — embedded console: HTTP server, REST API, SPA bundle, token login
 - `pkg/gateway/` — process lifecycle, channel manager and log files
 - `pkg/channels/` — channel implementations (`webchat`, `telegram`, `feishu`, `weixin`, `qq`)
-- `pkg/providers/` — provider catalog, protocol factory, failover and rate limiting
+- `pkg/providers/` — OpenAI-compatible factory, failover and rate limiting
 - `pkg/tools/` — runtime tool implementations
 - `pkg/commands/` — shared slash command registry
 - `pkg/agent/` — prompt assembly, sessions, routing, tool execution, sub-turns, hooks
@@ -908,7 +855,7 @@ record. Read these only when the task needs them:
 - `config/config.example.json` for a full annotated config
 - `pkg/service/` for service naming, kardianos config templates, lifecycle, status, logs and env refresh
 - `pkg/commands/*.go` for slash command names, usage strings and semantics
-- `pkg/providers/provider_metadata.go` + `pkg/providers/factory_provider.go` for providers and protocols
+- `pkg/providers/factory_provider.go` for the OpenAI-compatible provider factory
 - `pkg/channels/README.md` for the channel layer
 - `pkg/dashboard/` for the console server, routes and token login
 - `AGENT.md`, `SOUL.md`, `USER.md` in this workspace for what the agent itself is told

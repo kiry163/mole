@@ -44,7 +44,7 @@ func TestProviderChat_UsesMaxCompletionTokensForGLM(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	_, err := p.Chat(
 		t.Context(),
 		[]Message{{Role: "user", Content: "hi"}},
@@ -65,7 +65,7 @@ func TestProviderChat_UsesMaxCompletionTokensForGLM(t *testing.T) {
 }
 
 func TestBuildRequestBody_DisablesDoubaoThinkingWhenThinkingLevelOff(t *testing.T) {
-	p := NewProvider("key", "https://ark.cn-beijing.volces.com/api/v3", "")
+	p := NewProvider("key", "https://ark.cn-beijing.volces.com/api/v3")
 	p.SetProviderName("openai")
 
 	body := p.buildRequestBody(
@@ -85,7 +85,7 @@ func TestBuildRequestBody_DisablesDoubaoThinkingWhenThinkingLevelOff(t *testing.
 }
 
 func TestBuildRequestBody_DisablesModelDependentQwenThinkingWhenThinkingLevelOff(t *testing.T) {
-	p := NewProvider("key", "https://api-inference.modelscope.cn/v1", "")
+	p := NewProvider("key", "https://api-inference.modelscope.cn/v1")
 	p.SetProviderName("modelscope")
 
 	body := p.buildRequestBody(
@@ -101,7 +101,7 @@ func TestBuildRequestBody_DisablesModelDependentQwenThinkingWhenThinkingLevelOff
 }
 
 func TestBuildRequestBody_PreservesDoubaoRequestWhenThinkingLevelIsNotOff(t *testing.T) {
-	p := NewProvider("key", "https://ark.cn-beijing.volces.com/api/v3", "")
+	p := NewProvider("key", "https://ark.cn-beijing.volces.com/api/v3")
 	p.SetProviderName("openai")
 
 	for _, level := range []string{"low", "adaptive", "unexpected"} {
@@ -128,7 +128,7 @@ func TestBuildRequestBody_PreservesDoubaoRequestWhenThinkingLevelIsNotOff(t *tes
 }
 
 func TestBuildRequestBody_MapsDeepSeekThinkingLevels(t *testing.T) {
-	p := NewProvider("key", "https://api.deepseek.com/v1", "")
+	p := NewProvider("key", "https://api.deepseek.com/v1")
 	p.SetProviderName("deepseek")
 
 	tests := []struct {
@@ -180,7 +180,7 @@ func TestBuildRequestBody_MapsDeepSeekThinkingLevels(t *testing.T) {
 }
 
 func TestBuildRequestBody_MapsDeepSeekThinkingLevelsByHost(t *testing.T) {
-	p := NewProvider("key", "https://api.deepseek.com/v1", "")
+	p := NewProvider("key", "https://api.deepseek.com/v1")
 
 	body := p.buildRequestBody(
 		[]Message{{Role: "user", Content: "hi"}},
@@ -206,7 +206,7 @@ func TestBuildRequestBody_DeepSeekExtraBodyStillOverridesThinkingFields(t *testi
 		"thinking":         map[string]any{"type": "disabled"},
 		"reasoning_effort": "max",
 	}
-	p := NewProvider("key", "https://api.deepseek.com/v1", "", WithExtraBody(extraBody))
+	p := NewProvider("key", "https://api.deepseek.com/v1", WithExtraBody(extraBody))
 	p.SetProviderName("deepseek")
 
 	body := p.buildRequestBody(
@@ -240,7 +240,7 @@ func TestBuildRequestBody_WarnsForUnsupportedDeepSeekAdaptiveThinkingLevel(t *te
 		logger.SetLevel(prevLevel)
 	}()
 
-	p := NewProvider("key", "https://api.deepseek.com/v1", "")
+	p := NewProvider("key", "https://api.deepseek.com/v1")
 	p.SetProviderName("deepseek")
 
 	body := p.buildRequestBody(
@@ -299,7 +299,7 @@ func TestProviderChat_ParsesToolCalls(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	out, err := p.Chat(t.Context(), []Message{{Role: "user", Content: "hi"}}, nil, "gpt-4o", nil)
 	if err != nil {
 		t.Fatalf("Chat() error = %v", err)
@@ -345,7 +345,7 @@ func TestProviderChat_ParsesToolCallsWithObjectArguments(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	out, err := p.Chat(t.Context(), []Message{{Role: "user", Content: "hi"}}, nil, "gpt-4o", nil)
 	if err != nil {
 		t.Fatalf("Chat() error = %v", err)
@@ -392,7 +392,7 @@ func TestProviderChat_ParsesReasoningContent(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	out, err := p.Chat(t.Context(), []Message{{Role: "user", Content: "1+1=?"}}, nil, "kimi-k2.5", nil)
 	if err != nil {
 		t.Fatalf("Chat() error = %v", err)
@@ -429,7 +429,7 @@ func TestProviderChat_StripsReasoningContentForNonDeepSeekHistory(t *testing.T) 
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 
 	messages := []Message{
 		{Role: "user", Content: "What is 1+1?"},
@@ -486,7 +486,7 @@ func runCapturedChat(
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	if providerName != "" {
 		p.SetProviderName(providerName)
 	}
@@ -638,7 +638,7 @@ func TestProviderChat_DeepSeekPreservesReasoningContentForToolTurnHistory(t *tes
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	p.SetProviderName("deepseek")
 
 	messages := []Message{
@@ -768,7 +768,7 @@ func TestProviderChat_HistoryCanonicalizationMatrix(t *testing.T) {
 		}))
 		defer server.Close()
 
-		p := NewProvider("key", server.URL, "")
+		p := NewProvider("key", server.URL)
 		if providerName != "" {
 			p.SetProviderName(providerName)
 		}
@@ -901,7 +901,7 @@ func TestProviderChat_HTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	_, err := p.Chat(t.Context(), []Message{{Role: "user", Content: "hi"}}, nil, "gpt-4o", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -916,7 +916,7 @@ func TestProviderChat_JSONHTTPErrorDoesNotReportHTML(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	_, err := p.Chat(t.Context(), []Message{{Role: "user", Content: "hi"}}, nil, "gpt-4o", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -965,7 +965,7 @@ func TestProviderChat_HTMLResponsesReturnHelpfulError(t *testing.T) {
 			}))
 			defer server.Close()
 
-			p := NewProvider("key", server.URL, "")
+			p := NewProvider("key", server.URL)
 			_, err := p.Chat(t.Context(), []Message{{Role: "user", Content: "hi"}}, nil, "gpt-4o", nil)
 			if err == nil {
 				t.Fatal("expected error, got nil")
@@ -976,7 +976,7 @@ func TestProviderChat_HTMLResponsesReturnHelpfulError(t *testing.T) {
 			if !strings.Contains(err.Error(), "returned HTML instead of JSON") {
 				t.Fatalf("expected helpful HTML error, got %v", err)
 			}
-			if !strings.Contains(err.Error(), "check api_base or proxy configuration") {
+			if !strings.Contains(err.Error(), "check api_base configuration") {
 				t.Fatalf("expected configuration hint, got %v", err)
 			}
 		})
@@ -987,7 +987,7 @@ func TestProviderChat_SuccessResponseUsesStreamingDecoder(t *testing.T) {
 	content := strings.Repeat("a", 1024)
 	body := `{"choices":[{"message":{"content":"` + content + `"},"finish_reason":"stop"}]}`
 
-	p := NewProvider("key", "https://example.com/v1", "")
+	p := NewProvider("key", "https://example.com/v1")
 	p.httpClient = &http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
@@ -1021,7 +1021,7 @@ func TestProviderChat_LargeHTMLResponsePreviewIsTruncated(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	_, err := p.Chat(t.Context(), []Message{{Role: "user", Content: "hi"}}, nil, "gpt-4o", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -1055,7 +1055,7 @@ func TestProviderChat_StripsMoonshotPrefixAndNormalizesKimiTemperature(t *testin
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	_, err := p.Chat(
 		t.Context(),
 		[]Message{{Role: "user", Content: "hi"}},
@@ -1096,7 +1096,7 @@ func TestProviderChat_StripsKnownProviderPrefixes(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	tests := []struct {
 		name      string
 		input     string
@@ -1173,25 +1173,6 @@ func TestProviderChat_StripsKnownProviderPrefixes(t *testing.T) {
 	}
 }
 
-func TestProvider_ProxyConfigured(t *testing.T) {
-	proxyURL := "http://127.0.0.1:8080"
-	p := NewProvider("key", "https://example.com", proxyURL)
-
-	transport, ok := p.httpClient.Transport.(*http.Transport)
-	if !ok || transport == nil {
-		t.Fatalf("expected http transport with proxy, got %T", p.httpClient.Transport)
-	}
-
-	req := &http.Request{URL: &url.URL{Scheme: "https", Host: "api.example.com"}}
-	gotProxy, err := transport.Proxy(req)
-	if err != nil {
-		t.Fatalf("proxy function returned error: %v", err)
-	}
-	if gotProxy == nil || gotProxy.String() != proxyURL {
-		t.Fatalf("proxy = %v, want %s", gotProxy, proxyURL)
-	}
-}
-
 func TestProviderChat_AcceptsNumericOptionTypes(t *testing.T) {
 	var requestBody map[string]any
 
@@ -1213,7 +1194,7 @@ func TestProviderChat_AcceptsNumericOptionTypes(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	_, err := p.Chat(
 		t.Context(),
 		[]Message{{Role: "user", Content: "hi"}},
@@ -1271,14 +1252,14 @@ func TestNormalizeModel_UsesAPIBase(t *testing.T) {
 }
 
 func TestProvider_RequestTimeoutDefault(t *testing.T) {
-	p := NewProviderWithMaxTokensFieldAndTimeout("key", "https://example.com/v1", "", "", 0)
+	p := NewProvider("key", "https://example.com/v1", WithMaxTokensField(""))
 	if p.httpClient.Timeout != defaultRequestTimeout {
 		t.Fatalf("http timeout = %v, want %v", p.httpClient.Timeout, defaultRequestTimeout)
 	}
 }
 
 func TestProvider_RequestTimeoutOverride(t *testing.T) {
-	p := NewProviderWithMaxTokensFieldAndTimeout("key", "https://example.com/v1", "", "", 300)
+	p := NewProvider("key", "https://example.com/v1", WithMaxTokensField(""), WithRequestTimeout(300*time.Second))
 	if p.httpClient.Timeout != 300*time.Second {
 		t.Fatalf("http timeout = %v, want %v", p.httpClient.Timeout, 300*time.Second)
 	}
@@ -1306,7 +1287,7 @@ func TestProviderChat_ExtraBodyInjected(t *testing.T) {
 	defer server.Close()
 
 	extraBody := map[string]any{"reasoning_split": true, "custom_field": "test"}
-	p := NewProvider("key", server.URL, "", WithExtraBody(extraBody))
+	p := NewProvider("key", server.URL, WithExtraBody(extraBody))
 
 	_, err := p.Chat(
 		t.Context(),
@@ -1349,7 +1330,7 @@ func TestProviderChat_ExtraBodyOverridesOptions(t *testing.T) {
 	defer server.Close()
 
 	extraBody := map[string]any{"temperature": 0.9}
-	p := NewProvider("key", server.URL, "", WithExtraBody(extraBody))
+	p := NewProvider("key", server.URL, WithExtraBody(extraBody))
 
 	_, err := p.Chat(
 		t.Context(),
@@ -1391,7 +1372,6 @@ func TestProviderChat_CustomHeadersInjected(t *testing.T) {
 	p := NewProvider(
 		"key",
 		server.URL,
-		"",
 		WithUserAgent("Mole/Test"),
 		WithCustomHeaders(map[string]string{
 			"X-Source":      "coding-plan",
@@ -1439,7 +1419,6 @@ func TestProviderChatStream_CustomHeadersInjected(t *testing.T) {
 	p := NewProvider(
 		"key",
 		server.URL,
-		"",
 		WithUserAgent("Mole/Test"),
 		WithCustomHeaders(map[string]string{
 			"X-Source":      "coding-plan",
@@ -1486,7 +1465,7 @@ func TestProviderChatStream_ParsesReasoningContent(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	out, err := p.ChatStream(
 		t.Context(),
 		[]Message{{Role: "user", Content: "weather?"}},
@@ -1534,7 +1513,7 @@ func TestProviderChatStreamEvents_EmitsReasoningBeforeContentFromSameEvent(t *te
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	events := make([]string, 0)
 	out, err := p.ChatStreamEvents(
 		t.Context(),
@@ -1584,7 +1563,7 @@ func TestProviderChatStream_ParsesMultilineSSEEvent(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	out, err := p.ChatStream(
 		t.Context(),
 		[]Message{{Role: "user", Content: "say hello"}},
@@ -1632,7 +1611,7 @@ func TestProviderChatStream_ParsesReasoningVariants(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	out, err := p.ChatStream(
 		t.Context(),
 		[]Message{{Role: "user", Content: "think"}},
@@ -1665,7 +1644,7 @@ func TestProviderChatStream_InvalidEventReturnsError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	_, err := p.ChatStream(
 		t.Context(),
 		[]Message{{Role: "user", Content: "hi"}},
@@ -1751,21 +1730,21 @@ func TestStreamingReadIdleTimeoutClosesStalledBody(t *testing.T) {
 }
 
 func TestProvider_FunctionalOptionMaxTokensField(t *testing.T) {
-	p := NewProvider("key", "https://example.com/v1", "", WithMaxTokensField("max_completion_tokens"))
+	p := NewProvider("key", "https://example.com/v1", WithMaxTokensField("max_completion_tokens"))
 	if p.maxTokensField != "max_completion_tokens" {
 		t.Fatalf("maxTokensField = %q, want %q", p.maxTokensField, "max_completion_tokens")
 	}
 }
 
 func TestProvider_FunctionalOptionRequestTimeout(t *testing.T) {
-	p := NewProvider("key", "https://example.com/v1", "", WithRequestTimeout(45*time.Second))
+	p := NewProvider("key", "https://example.com/v1", WithRequestTimeout(45*time.Second))
 	if p.httpClient.Timeout != 45*time.Second {
 		t.Fatalf("http timeout = %v, want %v", p.httpClient.Timeout, 45*time.Second)
 	}
 }
 
 func TestProvider_FunctionalOptionRequestTimeoutNonPositive(t *testing.T) {
-	p := NewProvider("key", "https://example.com/v1", "", WithRequestTimeout(-1*time.Second))
+	p := NewProvider("key", "https://example.com/v1", WithRequestTimeout(-1*time.Second))
 	if p.httpClient.Timeout != defaultRequestTimeout {
 		t.Fatalf("http timeout = %v, want %v", p.httpClient.Timeout, defaultRequestTimeout)
 	}
@@ -1870,7 +1849,7 @@ func chatWithCacheKey(t *testing.T, apiBase string) map[string]any {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	p.apiBase = apiBase
 	p.httpClient = &http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
@@ -2015,14 +1994,14 @@ func TestIsNativeSearchHost(t *testing.T) {
 }
 
 func TestSupportsNativeSearch_OpenAI(t *testing.T) {
-	p := NewProvider("key", "https://api.openai.com/v1", "")
+	p := NewProvider("key", "https://api.openai.com/v1")
 	if !p.SupportsNativeSearch() {
 		t.Fatal("OpenAI provider should support native search")
 	}
 }
 
 func TestSupportsNativeSearch_NonOpenAI(t *testing.T) {
-	p := NewProvider("key", "https://api.deepseek.com/v1", "")
+	p := NewProvider("key", "https://api.deepseek.com/v1")
 	if p.SupportsNativeSearch() {
 		t.Fatal("DeepSeek provider should not support native search")
 	}
@@ -2049,7 +2028,7 @@ func TestProviderChat_NativeSearchToolInjected(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	p.apiBase = "https://api.openai.com/v1"
 	p.httpClient = &http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
@@ -2109,7 +2088,7 @@ func TestProviderChat_NativeSearchNotInjectedWithoutOption(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	tools := []ToolDefinition{
 		{Type: "function", Function: ToolFunctionDefinition{Name: "web_search", Description: "search"}},
 	}
@@ -2158,7 +2137,7 @@ func TestProviderChat_NativeSearchIgnoredOnNonOpenAI(t *testing.T) {
 	defer server.Close()
 
 	// Use server.URL so host is not api.openai.com — simulates DeepSeek/other provider
-	p := NewProvider("key", server.URL, "")
+	p := NewProvider("key", server.URL)
 	_, err := p.Chat(
 		t.Context(),
 		[]Message{{Role: "user", Content: "hi"}},

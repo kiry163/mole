@@ -65,14 +65,6 @@ const (
 	PromptSourceInterrupt      PromptSourceID = "turn:interrupt"
 )
 
-type PromptCachePolicy string
-
-const (
-	PromptCacheDefault   PromptCachePolicy = ""
-	PromptCacheEphemeral PromptCachePolicy = "ephemeral"
-	PromptCacheNone      PromptCachePolicy = "none"
-)
-
 type PromptPlacement struct {
 	Layer PromptLayer
 	Slot  PromptSlot
@@ -100,7 +92,6 @@ type PromptPart struct {
 	Title   string
 	Content string
 	Stable  bool
-	Cache   PromptCachePolicy
 }
 
 type PromptBuildRequest struct {

@@ -226,7 +226,7 @@ func NewAgentInstance(
 	}
 
 	// Resolve fallback candidates
-	candidates := resolveModelCandidates(cfg, defaults.Provider, model, fallbacks)
+	candidates := resolveModelCandidates(cfg, model, fallbacks)
 	usesInjectedPrimary := provider != nil &&
 		strings.TrimSpace(model) == strings.TrimSpace(defaults.GetModelName())
 	if !usesInjectedPrimary && len(candidates) > 0 {
@@ -241,7 +241,6 @@ func NewAgentInstance(
 	}
 	imageCandidates := resolveModelCandidates(
 		cfg,
-		defaults.Provider,
 		defaults.ImageModel,
 		defaults.ImageModelFallbacks,
 	)
@@ -276,7 +275,7 @@ func NewAgentInstance(
 	var lightCandidates []providers.FallbackCandidate
 	var lightProvider providers.LLMProvider
 	if rc := defaults.Routing; rc != nil && rc.Enabled && rc.LightModel != "" {
-		resolved := resolveModelCandidates(cfg, defaults.Provider, rc.LightModel, nil)
+		resolved := resolveModelCandidates(cfg, rc.LightModel, nil)
 		if len(resolved) > 0 {
 			lightModelCfg, err := resolvedCandidateModelConfig(cfg, resolved[0])
 			if err != nil {
@@ -354,7 +353,7 @@ func populateCandidateProvidersFromNames(
 		return
 	}
 	for _, name := range names {
-		candidates := resolveModelCandidates(cfg, cfg.Agents.Defaults.Provider, name, nil)
+		candidates := resolveModelCandidates(cfg, name, nil)
 		populateCandidateProvidersFromCandidates(cfg, candidates, out)
 	}
 }
@@ -448,14 +447,14 @@ func resolvedCandidateModelConfig(
 		modelCfg := cfg.ModelList[candidate.ConfigIndex-1]
 		if modelCfg != nil && !modelCfg.IsVirtual() &&
 			(candidate.ConfigKey == "" ||
-				modelConfigResolutionKey(cfg.Agents.Defaults.Provider, modelCfg) == candidate.ConfigKey) {
+				modelConfigResolutionKey(modelCfg) == candidate.ConfigKey) {
 			return resolvedCandidateModelConfigClone(modelCfg, candidate), nil
 		}
 	}
 	if candidate.ConfigKey != "" {
 		for _, modelCfg := range cfg.ModelList {
 			if modelCfg == nil || modelCfg.IsVirtual() ||
-				modelConfigResolutionKey(cfg.Agents.Defaults.Provider, modelCfg) != candidate.ConfigKey {
+				modelConfigResolutionKey(modelCfg) != candidate.ConfigKey {
 				continue
 			}
 			return resolvedCandidateModelConfigClone(modelCfg, candidate), nil
@@ -469,7 +468,7 @@ func resolvedCandidateModelConfig(
 		if alias != "" && modelCfg.ModelName != alias {
 			continue
 		}
-		provider, modelID := modelProviderAndIDForResolution(cfg.Agents.Defaults.Provider, modelCfg)
+		provider, modelID := providers.ExtractProtocol(modelCfg)
 		if providers.ModelKey(provider, modelID) != providers.ModelKey(candidate.Provider, candidate.Model) {
 			continue
 		}
@@ -480,15 +479,9 @@ func resolvedCandidateModelConfig(
 
 func resolvedCandidateModelConfigClone(
 	modelCfg *config.ModelConfig,
-	candidate providers.FallbackCandidate,
+	_ providers.FallbackCandidate,
 ) *config.ModelConfig {
 	clone := *modelCfg
-	if strings.TrimSpace(clone.Provider) == "" {
-		inferredProvider, _ := providers.SplitModelProviderAndID(clone.Model, "")
-		if inferredProvider == "" {
-			clone.Provider = candidate.Provider
-		}
-	}
 	return &clone
 }
 

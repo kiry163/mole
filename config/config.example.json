@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "dashboard": {
     "token": "$DASHBOARD_TOKEN"
   },
@@ -27,72 +27,36 @@
   "model_list": [
     {
       "model_name": "gpt-5.4",
-      "model": "openai/gpt-5.4",
-      "api_keys": ["sk-your-openai-key"],
+      "provider": "openai",
+      "model": "gpt-5.4",
+      "api_keys": [
+        "$OPENAI_API_KEY"
+      ],
       "api_base": "https://api.openai.com/v1"
     },
     {
-      "model_name": "claude-sonnet-4.6",
-      "model": "anthropic/claude-sonnet-4.6",
-      "api_keys": ["sk-ant-your-key"],
-      "api_base": "https://api.anthropic.com/v1",
-      "thinking_level": "high"
-    },
-    {
-      "model_name": "claude-opus-4-6",
-      "model": "anthropic-messages/claude-opus-4-6",
-      "api_keys": ["sk-ant-your-key"],
-      "api_base": "https://api.anthropic.com"
-    },
-    {
       "model_name": "deepseek",
-      "model": "deepseek/deepseek-chat",
-      "api_keys": ["$DEEPSEEK_API_KEY"],
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "api_keys": [
+        "$DEEPSEEK_API_KEY"
+      ],
       "api_base": "$DEEPSEEK_BASE_URL"
     },
     {
-      "model_name": "venice-uncensored",
-      "model": "venice/venice-uncensored",
-      "api_keys": ["your-venice-api-key"]
-    },
-    {
-      "model_name": "nearai-glm",
-      "model": "nearai/zai-org/GLM-5.1-FP8",
-      "api_keys": ["your-nearai-api-key"]
-    },
-    {
-      "model_name": "lmstudio-local",
-      "model": "lmstudio/openai/gpt-oss-20b"
-    },
-    {
-      "model_name": "longcat",
-      "model": "longcat/LongCat-Flash-Thinking",
-      "api_keys": ["your-longcat-api-key"]
-    },
-    {
-      "model_name": "modelscope-qwen",
-      "model": "modelscope/Qwen/Qwen3-235B-A22B-Instruct-2507",
-      "api_keys": ["your-modelscope-access-token"],
-      "api_base": "https://api-inference.modelscope.cn/v1"
-    },
-    {
-      "model_name": "loadbalanced-gpt-5.4",
-      "model": "openai/gpt-5.4",
-      "api_keys": ["sk-key1"],
-      "api_base": "https://api1.example.com/v1"
-    },
-    {
-      "model_name": "loadbalanced-gpt-5.4",
-      "model": "openai/gpt-5.4",
-      "api_keys": ["sk-key2"],
-      "api_base": "https://api2.example.com/v1"
+      "model_name": "local-model",
+      "provider": "local",
+      "model": "custom-model",
+      "api_base": "http://localhost:8000/v1"
     }
   ],
   "channel_list": {
     "telegram": {
       "enabled": false,
       "type": "telegram",
-      "allow_from": ["YOUR_USER_ID"],
+      "allow_from": [
+        "YOUR_USER_ID"
+      ],
       "reasoning_channel_id": "",
       "settings": {
         "token": "$TELEGRAM_TOKEN",
@@ -121,7 +85,11 @@
       "reasoning_channel_id": "",
       "placeholder": {
         "enabled": true,
-        "text": ["Thinking...", "Processing...", "Typing..."]
+        "text": [
+          "Thinking...",
+          "Processing...",
+          "Typing..."
+        ]
       },
       "settings": {
         "app_id": "",
@@ -163,8 +131,14 @@
     "allow_write_paths": null,
     "approval": {
       "rules": [
-        { "category": "write", "action": "require" },
-        { "tool": "exec", "action": "require" }
+        {
+          "category": "write",
+          "action": "require"
+        },
+        {
+          "tool": "exec",
+          "action": "require"
+        }
       ],
       "always_allow": []
     },
@@ -175,7 +149,9 @@
       "provider": "auto",
       "tavily": {
         "enabled": false,
-        "api_keys": ["$TAVILY_API_KEY"],
+        "api_keys": [
+          "$TAVILY_API_KEY"
+        ],
         "base_url": "",
         "max_results": 5
       },
@@ -207,12 +183,19 @@
         "filesystem": {
           "enabled": false,
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+          "args": [
+            "-y",
+            "@modelcontextprotocol/server-filesystem",
+            "/tmp"
+          ]
         },
         "github": {
           "enabled": false,
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-github"],
+          "args": [
+            "-y",
+            "@modelcontextprotocol/server-github"
+          ],
           "env": {
             "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_TOKEN"
           }
@@ -220,7 +203,10 @@
         "brave-search": {
           "enabled": false,
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+          "args": [
+            "-y",
+            "@modelcontextprotocol/server-brave-search"
+          ],
           "env": {
             "BRAVE_API_KEY": "YOUR_BRAVE_API_KEY"
           }
@@ -237,7 +223,10 @@
         "slack": {
           "enabled": false,
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-slack"],
+          "args": [
+            "-y",
+            "@modelcontextprotocol/server-slack"
+          ],
           "env": {
             "SLACK_BOT_TOKEN": "YOUR_SLACK_BOT_TOKEN",
             "SLACK_TEAM_ID": "YOUR_SLACK_TEAM_ID"
@@ -326,13 +315,17 @@
       "approval_timeout_ms": 60000
     },
     "builtins": {
-      "webui_approval": { "enabled": true }
+      "webui_approval": {
+        "enabled": true
+      }
     }
   },
   "events": {
     "logging": {
       "enabled": true,
-      "include": ["agent.*"],
+      "include": [
+        "agent.*"
+      ],
       "exclude": [],
       "min_severity": "info",
       "include_payload": false

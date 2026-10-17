@@ -191,7 +191,6 @@ func TestExpandMultiKeyModels_PreservesOtherFields(t *testing.T) {
 		Provider:            "openrouter",
 		Model:               "openai/gpt-4o",
 		APIBase:             "https://api.example.com",
-		Proxy:               "http://proxy:8080",
 		RPM:                 60,
 		MaxTokensField:      "max_completion_tokens",
 		RequestTimeout:      30,
@@ -211,9 +210,6 @@ func TestExpandMultiKeyModels_PreservesOtherFields(t *testing.T) {
 	}
 	if primary.Provider != "openrouter" {
 		t.Errorf("expected provider preserved, got %q", primary.Provider)
-	}
-	if primary.Proxy != "http://proxy:8080" {
-		t.Errorf("expected proxy preserved, got %q", primary.Proxy)
 	}
 	if primary.RPM != 60 {
 		t.Errorf("expected rpm preserved, got %d", primary.RPM)

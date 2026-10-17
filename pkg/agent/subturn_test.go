@@ -955,7 +955,6 @@ func TestGetActiveTurn(t *testing.T) {
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
 				ModelName: "gpt-4o-mini",
-				Provider:  "mock",
 			},
 		},
 	}
@@ -1013,7 +1012,6 @@ func TestGetActiveTurn_WithChildren(t *testing.T) {
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
 				ModelName: "gpt-4o-mini",
-				Provider:  "mock",
 			},
 		},
 	}
@@ -1094,7 +1092,6 @@ func TestInjectFollowUp(t *testing.T) {
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
 				ModelName: "gpt-4o-mini",
-				Provider:  "mock",
 			},
 		},
 	}
@@ -1123,7 +1120,6 @@ func TestAPIAliases(t *testing.T) {
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
 				ModelName: "gpt-4o-mini",
-				Provider:  "mock",
 			},
 		},
 	}
@@ -1302,9 +1298,7 @@ func TestConcurrencySemaphore_Timeout(t *testing.T) {
 
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Provider: "mock",
-			},
+			Defaults: config.AgentDefaults{},
 		},
 	}
 	msgBus := bus.NewMessageBus()
@@ -1402,9 +1396,7 @@ func TestEphemeralSession_AutoTruncate(t *testing.T) {
 func TestContextWrapping_SingleLayer(t *testing.T) {
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Provider: "mock",
-			},
+			Defaults: config.AgentDefaults{},
 		},
 	}
 	msgBus := bus.NewMessageBus()
@@ -1448,9 +1440,7 @@ func TestContextWrapping_SingleLayer(t *testing.T) {
 func TestSyncSubTurn_NoChannelDelivery(t *testing.T) {
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Provider: "mock",
-			},
+			Defaults: config.AgentDefaults{},
 		},
 	}
 	msgBus := bus.NewMessageBus()
@@ -1505,9 +1495,7 @@ func TestSyncSubTurn_NoChannelDelivery(t *testing.T) {
 func TestAsyncSubTurn_ChannelDelivery(t *testing.T) {
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Provider: "mock",
-			},
+			Defaults: config.AgentDefaults{},
 		},
 	}
 	msgBus := bus.NewMessageBus()
@@ -1669,9 +1657,7 @@ func TestNestedSubTurn_GracefulFinishSignalsDirectChildren(t *testing.T) {
 func TestSpawnDuringAbort_RaceCondition(t *testing.T) {
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Provider: "mock",
-			},
+			Defaults: config.AgentDefaults{},
 		},
 	}
 	msgBus := bus.NewMessageBus()
@@ -1768,9 +1754,7 @@ func (m *slowMockProvider) GetDefaultModel() string {
 func TestAsyncSubTurn_ParentFinishesEarly(t *testing.T) {
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Provider: "mock",
-			},
+			Defaults: config.AgentDefaults{},
 		},
 	}
 	msgBus := bus.NewMessageBus()
@@ -1861,9 +1845,7 @@ func TestAsyncSubTurn_ParentFinishesEarly(t *testing.T) {
 func TestAsyncSubTurn_ParentWaitsForChild(t *testing.T) {
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Provider: "mock",
-			},
+			Defaults: config.AgentDefaults{},
 		},
 	}
 	msgBus := bus.NewMessageBus()
@@ -2028,9 +2010,7 @@ func TestFinish_GracefulVsHard(t *testing.T) {
 func TestSubTurn_IndependentContext(t *testing.T) {
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Provider: "mock",
-			},
+			Defaults: config.AgentDefaults{},
 		},
 	}
 	msgBus := bus.NewMessageBus()

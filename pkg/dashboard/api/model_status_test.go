@@ -30,8 +30,9 @@ func TestProbeLocalModelAvailability_OpenAICompatibleIncludesAPIKey(t *testing.T
 	defer srv.Close()
 
 	model := &config.ModelConfig{
-		Model:   "openai/custom-model",
-		APIBase: srv.URL + "/v1",
+		Provider: "openai",
+		Model:    "custom-model",
+		APIBase:  srv.URL + "/v1",
 	}
 	model.SetAPIKey(apiKey)
 
@@ -52,106 +53,6 @@ func TestProbeOpenAICompatibleModel_SupportsBareArrayModels(t *testing.T) {
 
 	if !probeOpenAICompatibleModel(srv.URL+"/v1", "gpt-4o-mini", "") {
 		t.Fatal("probeOpenAICompatibleModel() = false, want true for bare array /models response")
-	}
-}
-
-func TestRequiresRuntimeProbe_LMStudio(t *testing.T) {
-	if !requiresRuntimeProbe(&config.ModelConfig{
-		Model: "lmstudio/openai/gpt-oss-20b",
-	}) {
-		t.Fatal("requiresRuntimeProbe(lmstudio with default base) = false, want true")
-	}
-
-	if requiresRuntimeProbe(&config.ModelConfig{
-		Model:   "lmstudio/openai/gpt-oss-20b",
-		APIBase: "https://api.example.com/v1",
-	}) {
-		t.Fatal("requiresRuntimeProbe(lmstudio with remote base) = true, want false")
-	}
-}
-
-func TestRequiresRuntimeProbe_GPT4Free(t *testing.T) {
-	if !requiresRuntimeProbe(&config.ModelConfig{
-		Model: "gpt4free/gpt-4o-mini",
-	}) {
-		t.Fatal("requiresRuntimeProbe(gpt4free with default base) = false, want true")
-	}
-
-	if requiresRuntimeProbe(&config.ModelConfig{
-		Model:   "gpt4free/gpt-4o-mini",
-		APIBase: "https://g4f.space/v1",
-	}) {
-		t.Fatal("requiresRuntimeProbe(gpt4free with remote base) = true, want false")
-	}
-}
-
-func TestModelProbeAPIBase_LMStudioDefault(t *testing.T) {
-	got := modelProbeAPIBase(&config.ModelConfig{Model: "lmstudio/openai/gpt-oss-20b"})
-	if got != "http://localhost:1234/v1" {
-		t.Fatalf("modelProbeAPIBase(lmstudio) = %q, want %q", got, "http://localhost:1234/v1")
-	}
-}
-
-func TestModelProbeAPIBase_GPT4FreeDefault(t *testing.T) {
-	got := modelProbeAPIBase(&config.ModelConfig{Model: "gpt4free/gpt-4o-mini"})
-	if got != "http://localhost:1337/v1" {
-		t.Fatalf("modelProbeAPIBase(gpt4free) = %q, want %q", got, "http://localhost:1337/v1")
-	}
-}
-
-func TestProbeLocalModelAvailability_LMStudioUsesOpenAICompatibleProbe(t *testing.T) {
-	originalProbe := probeOpenAICompatibleModelFunc
-	defer func() { probeOpenAICompatibleModelFunc = originalProbe }()
-
-	called := false
-	probeOpenAICompatibleModelFunc = func(apiBase, modelID, apiKey string) bool {
-		called = true
-		if apiBase != "http://localhost:1234/v1" {
-			t.Fatalf("apiBase = %q, want %q", apiBase, "http://localhost:1234/v1")
-		}
-		if modelID != "openai/gpt-oss-20b" {
-			t.Fatalf("modelID = %q, want %q", modelID, "openai/gpt-oss-20b")
-		}
-		if apiKey != "" {
-			t.Fatalf("apiKey = %q, want empty", apiKey)
-		}
-		return true
-	}
-
-	model := &config.ModelConfig{Model: "lmstudio/openai/gpt-oss-20b"}
-	if !probeLocalModelAvailability(model) {
-		t.Fatal("probeLocalModelAvailability(lmstudio) = false, want true")
-	}
-	if !called {
-		t.Fatal("probeOpenAICompatibleModelFunc was not called for lmstudio")
-	}
-}
-
-func TestProbeLocalModelAvailability_GPT4FreeUsesOpenAICompatibleProbe(t *testing.T) {
-	originalProbe := probeOpenAICompatibleModelFunc
-	defer func() { probeOpenAICompatibleModelFunc = originalProbe }()
-
-	called := false
-	probeOpenAICompatibleModelFunc = func(apiBase, modelID, apiKey string) bool {
-		called = true
-		if apiBase != "http://localhost:1337/v1" {
-			t.Fatalf("apiBase = %q, want %q", apiBase, "http://localhost:1337/v1")
-		}
-		if modelID != "gpt-4o-mini" {
-			t.Fatalf("modelID = %q, want %q", modelID, "gpt-4o-mini")
-		}
-		if apiKey != "" {
-			t.Fatalf("apiKey = %q, want empty", apiKey)
-		}
-		return true
-	}
-
-	model := &config.ModelConfig{Model: "gpt4free/gpt-4o-mini"}
-	if !probeLocalModelAvailability(model) {
-		t.Fatal("probeLocalModelAvailability(gpt4free) = false, want true")
-	}
-	if !called {
-		t.Fatal("probeOpenAICompatibleModelFunc was not called for gpt4free")
 	}
 }
 
@@ -432,23 +333,5 @@ func TestProbeLocalModelAvailability_DeduplicatesInflightProbe(t *testing.T) {
 
 	if got := atomic.LoadInt32(&calls); got != 1 {
 		t.Fatalf("final probe calls = %d, want 1", got)
-	}
-}
-
-func TestOllamaModelMatches_WithTagRequiresExactTag(t *testing.T) {
-	if ollamaModelMatches("llama3:8b", "llama3:7b") {
-		t.Fatal("ollamaModelMatches() = true, want false for mismatched tags")
-	}
-	if !ollamaModelMatches("llama3:7b", "llama3:7b") {
-		t.Fatal("ollamaModelMatches() = false, want true for exact tagged match")
-	}
-	if ollamaModelMatches("llama3:8b", "llama3") {
-		t.Fatal("ollamaModelMatches() = true, want false when request omits tag (defaults to latest)")
-	}
-	if !ollamaModelMatches("llama3:latest", "llama3") {
-		t.Fatal("ollamaModelMatches() = false, want true when request omits tag and candidate is latest")
-	}
-	if !ollamaModelMatches("llama3", "llama3") {
-		t.Fatal("ollamaModelMatches() = false, want true when both candidate and request omit tag (latest)")
 	}
 }

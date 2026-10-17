@@ -27,7 +27,9 @@ func setupTestEnv(t *testing.T) (string, func()) {
 	cfg := config.DefaultConfig()
 	cfg.ModelList = []*config.ModelConfig{{
 		ModelName: "custom-default",
-		Model:     "openai/gpt-4o",
+		Provider:  "openai",
+		Model:     "gpt-4o",
+		APIBase:   "https://api.example.test/v1",
 		APIKeys:   config.SimpleSecureStrings("sk-default"),
 	}}
 	cfg.Agents.Defaults.ModelName = "custom-default"

@@ -44,7 +44,6 @@ type modelConfigurationSummary struct {
 }
 
 var (
-	probeOllamaModelFunc           = probeOllamaModel
 	probeOpenAICompatibleModelFunc = probeOpenAICompatibleModel
 	modelProbeNowFunc              = time.Now
 	modelProbeState                = newModelProbeCacheState()
@@ -82,27 +81,7 @@ func (s *modelProbeCacheState) resetForTest() {
 }
 
 func hasModelConfiguration(m *config.ModelConfig) bool {
-	protocol := modelProtocol(m)
-	apiKey := strings.TrimSpace(m.APIKey())
-
-	if requiresRuntimeProbe(m) {
-		return true
-	}
-
-	if apiKey != "" {
-		return true
-	}
-	apiBase := strings.TrimSpace(m.APIBase)
-	if apiBase == "" {
-		return false
-	}
-	switch providers.NormalizeProvider(protocol) {
-	case "anthropic", "anthropic-messages", "alibaba-coding-anthropic":
-		return false
-	}
-	defaultBase := providers.DefaultAPIBaseForProtocol(protocol)
-	return defaultBase == "" ||
-		normalizeAPIBaseForCompare(apiBase) != normalizeAPIBaseForCompare(defaultBase)
+	return m != nil && strings.TrimSpace(m.APIBase) != ""
 }
 
 func modelConfigurationStatus(m *config.ModelConfig) modelConfigurationSummary {
@@ -119,18 +98,7 @@ func modelConfigurationStatus(m *config.ModelConfig) modelConfigurationSummary {
 }
 
 func requiresRuntimeProbe(m *config.ModelConfig) bool {
-	protocol := modelProtocol(m)
-
-	if providers.IsHTTPAPIProtocol(protocol) && providers.IsEmptyAPIKeyAllowedForProtocol(protocol) {
-		apiBase := strings.TrimSpace(m.APIBase)
-		return apiBase == "" || hasLocalAPIBase(apiBase)
-	}
-
-	if hasLocalAPIBase(m.APIBase) {
-		return true
-	}
-
-	return false
+	return m != nil && hasLocalAPIBase(m.APIBase)
 }
 
 func probeLocalModelAvailability(m *config.ModelConfig) bool {
@@ -165,19 +133,8 @@ func (s *modelProbeCacheState) probe(cacheKey string, probeFunc func() bool) boo
 }
 
 func runLocalModelProbe(m *config.ModelConfig) bool {
-	apiBase := modelProbeAPIBase(m)
-	protocol, modelID := splitModel(m)
-	switch protocol {
-	case "ollama":
-		return probeOllamaModelFunc(apiBase, modelID)
-	case "vllm", "lmstudio", "gpt4free":
-		return probeOpenAICompatibleModelFunc(apiBase, modelID, m.APIKey())
-	default:
-		if hasLocalAPIBase(apiBase) {
-			return probeOpenAICompatibleModelFunc(apiBase, modelID, m.APIKey())
-		}
-		return false
-	}
+	_, modelID := providers.ExtractProtocol(m)
+	return probeOpenAICompatibleModelFunc(modelProbeAPIBase(m), modelID, m.APIKey())
 }
 
 func modelProbeCacheKey(m *config.ModelConfig) string {
@@ -370,19 +327,10 @@ func modelProbeBackoffDelay(base, maxDelay time.Duration, streak int) time.Durat
 }
 
 func modelProbeAPIBase(m *config.ModelConfig) string {
-	if apiBase := strings.TrimSpace(m.APIBase); apiBase != "" {
-		return normalizeModelProbeAPIBase(apiBase)
+	if m == nil {
+		return ""
 	}
-
-	protocol := modelProtocol(m)
-
-	// Resolve the default API base for any known protocol so that probes
-	// work even when the config stores only a provider without an explicit api_base.
-	if defaultBase := providers.DefaultAPIBaseForProtocol(protocol); defaultBase != "" {
-		return normalizeModelProbeAPIBase(defaultBase)
-	}
-
-	return ""
+	return normalizeModelProbeAPIBase(m.APIBase)
 }
 
 func normalizeModelProbeAPIBase(raw string) string {
@@ -437,30 +385,6 @@ func hasLocalAPIBase(raw string) bool {
 	default:
 		return false
 	}
-}
-
-func probeOllamaModel(apiBase, modelID string) bool {
-	root, err := apiRootFromAPIBase(apiBase)
-	if err != nil {
-		return false
-	}
-
-	var resp struct {
-		Models []struct {
-			Name  string `json:"name"`
-			Model string `json:"model"`
-		} `json:"models"`
-	}
-	if err := getJSON(root+"/api/tags", &resp, ""); err != nil {
-		return false
-	}
-
-	for _, model := range resp.Models {
-		if ollamaModelMatches(model.Name, modelID) || ollamaModelMatches(model.Model, modelID) {
-			return true
-		}
-	}
-	return false
 }
 
 func probeOpenAICompatibleModel(apiBase, modelID, apiKey string) bool {
@@ -524,14 +448,6 @@ func getJSON(rawURL string, out any, apiKey string) error {
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
-func apiRootFromAPIBase(raw string) (string, error) {
-	u, err := parseAPIBase(raw)
-	if err != nil {
-		return "", err
-	}
-	return (&url.URL{Scheme: u.Scheme, Host: u.Host}).String(), nil
-}
-
 func parseAPIBase(raw string) (*url.URL, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -551,29 +467,6 @@ func parseAPIBase(raw string) (*url.URL, error) {
 		u.Scheme = "http"
 	}
 	return u, nil
-}
-
-func ollamaModelMatches(candidate, want string) bool {
-	candidate = strings.TrimSpace(candidate)
-	want = strings.TrimSpace(want)
-	if candidate == "" || want == "" {
-		return false
-	}
-
-	candidateBase, candidateTag := splitOllamaModel(candidate)
-	wantBase, wantTag := splitOllamaModel(want)
-	if candidateBase == "" || wantBase == "" {
-		return false
-	}
-
-	if candidateTag == "" {
-		candidateTag = "latest"
-	}
-	if wantTag == "" {
-		wantTag = "latest"
-	}
-
-	return strings.EqualFold(candidateBase, wantBase) && strings.EqualFold(candidateTag, wantTag)
 }
 
 func splitOllamaModel(raw string) (base, tag string) {

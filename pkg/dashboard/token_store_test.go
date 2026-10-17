@@ -16,7 +16,7 @@ func newTokenStoreTestPath(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(path, []byte(`{"version": 3}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"version": 4}`), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	return path
@@ -103,7 +103,7 @@ func TestTokenStore_VerifyTokenUsesConstantTimeCompare(t *testing.T) {
 func TestTokenStore_BlankTokenIsNotInitialized(t *testing.T) {
 	path := newTokenStoreTestPath(t)
 	if err := os.WriteFile(path,
-		[]byte(`{"version": 3, "dashboard": {"token": "   "}}`), 0o600); err != nil {
+		[]byte(`{"version": 4, "dashboard": {"token": "   "}}`), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
@@ -119,7 +119,7 @@ func TestTokenStore_BlankTokenIsNotInitialized(t *testing.T) {
 func TestTokenStore_MaskedPlaceholderIsNotAToken(t *testing.T) {
 	path := newTokenStoreTestPath(t)
 	// config.json carries the JSON mask SecureString writes instead of the value.
-	if err := os.WriteFile(path, []byte(`{"version": 3, "dashboard": {"token": "[NOT_HERE]"}}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"version": 4, "dashboard": {"token": "[NOT_HERE]"}}`), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 

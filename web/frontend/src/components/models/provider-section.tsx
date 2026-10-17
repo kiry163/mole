@@ -4,11 +4,9 @@ import { useState } from "react"
 import type { ModelInfo } from "@/api/models"
 
 import { ModelCard } from "./model-card"
-import { ProviderIcon } from "./provider-icon"
-import type { ProviderCatalogEntry } from "./provider-registry"
 
 interface ProviderSectionProps {
-  provider: Pick<ProviderCatalogEntry, "key" | "label" | "iconSlug" | "domain">
+  provider: { key: string; label: string }
   models: ModelInfo[]
   onEdit: (model: ModelInfo) => void
   onSetDefault: (model: ModelInfo) => void
@@ -17,8 +15,6 @@ interface ProviderSectionProps {
   fallbackChain: string[]
   defaultModelName: string
   defaultModelEntryCount: number
-  defaultChainAllowedModelNames: Set<string>
-  fallbackDefaultConflictModelNames: Set<string>
 }
 
 export function ProviderSection({
@@ -31,8 +27,6 @@ export function ProviderSection({
   fallbackChain,
   defaultModelName,
   defaultModelEntryCount,
-  defaultChainAllowedModelNames,
-  fallbackDefaultConflictModelNames,
 }: ProviderSectionProps) {
   const [open, setOpen] = useState(true)
 
@@ -47,7 +41,6 @@ export function ProviderSection({
         <div className="border-border/40 border-t" />
         <span className="text-foreground/80 text-center text-xs font-semibold tracking-wide uppercase">
           <span className="bg-background inline-flex items-center gap-1.5 px-2">
-            <ProviderIcon provider={provider} />
             {provider.label}
           </span>
         </span>
@@ -78,12 +71,6 @@ export function ProviderSection({
                 defaultModelName === model.model_name &&
                 defaultModelEntryCount <= 1
               }
-              defaultChainAllowed={defaultChainAllowedModelNames.has(
-                model.model_name,
-              )}
-              fallbackDefaultConflict={fallbackDefaultConflictModelNames.has(
-                model.model_name,
-              )}
             />
           ))}
         </div>

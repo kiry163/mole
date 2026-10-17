@@ -148,9 +148,10 @@ func TestNewAgentInstance_ResolveCandidatesFromModelListAlias(t *testing.T) {
 		wantModel    string
 	}{
 		{
-			name:         "alias with provider prefix",
+			name:         "alias with explicit provider",
 			aliasName:    "step-3.5-flash",
-			modelName:    "openrouter/stepfun/step-3.5-flash:free",
+			modelName:    "stepfun/step-3.5-flash:free",
+			provider:     "openrouter",
 			apiBase:      "https://openrouter.ai/api/v1",
 			wantProvider: "openrouter",
 			wantModel:    "stepfun/step-3.5-flash:free",
@@ -229,12 +230,14 @@ func TestNewAgentInstance_PreservesDistinctLimiterIdentityForSharedResolvedModel
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "glm-4.7",
-				Model:     "zhipu/glm-4.7",
+				Provider:  "zhipu",
+				Model:     "glm-4.7",
 				RPM:       1,
 			},
 			{
 				ModelName: "glm-4.7__key_1",
-				Model:     "zhipu/glm-4.7",
+				Provider:  "zhipu",
+				Model:     "glm-4.7",
 				RPM:       3,
 			},
 		},
@@ -267,14 +270,14 @@ func TestNewAgentInstance_PreservesDistinctLimiterIdentityForSharedResolvedModel
 	}
 }
 
-func TestNewAgentInstance_PreservesConfigIdentityForExplicitProviderModelRef(t *testing.T) {
+func TestNewAgentInstance_PreservesConfigIdentityForAlias(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
 				Workspace: tmpDir,
-				ModelName: "nvidia/z-ai/glm-5.1",
+				ModelName: "nvidia-glm",
 			},
 		},
 		ModelList: []*config.ModelConfig{
@@ -406,7 +409,7 @@ func TestPopulateCandidateProviders_SkipsExistingKeys(t *testing.T) {
 
 	cfg := &config.Config{
 		ModelList: []*config.ModelConfig{
-			{ModelName: "my-gpt", Model: "openai/gpt-4o", APIKeys: config.SimpleSecureStrings("test-key")},
+			{ModelName: "my-gpt", Provider: "openai", Model: "gpt-4o", APIBase: "https://api.openai.com/v1", APIKeys: config.SimpleSecureStrings("test-key")},
 		},
 	}
 	populateCandidateProvidersFromNames(cfg, []string{"my-gpt"}, out)
@@ -424,7 +427,7 @@ func TestPopulateCandidateProviders_ResolvesAlias(t *testing.T) {
 
 	cfg := &config.Config{
 		ModelList: []*config.ModelConfig{
-			{ModelName: "my-gpt", Model: "openai/gpt-4o", APIBase: "https://api.openai.com/v1"},
+			{ModelName: "my-gpt", Provider: "openai", Model: "gpt-4o", APIBase: "https://api.openai.com/v1"},
 		},
 	}
 	populateCandidateProvidersFromNames(cfg, []string{"my-gpt"}, out)
@@ -438,14 +441,15 @@ func TestPopulateCandidateProviders_ResolvesAlias(t *testing.T) {
 // TestPopulateCandidateProviders_ResolvesProtocolPrefix verifies that a
 // model_list entry using full "provider/model" notation (e.g.
 // "deepseek/deepseek-chat") is matched correctly when referenced by model_name.
-func TestPopulateCandidateProviders_ResolvesProtocolPrefix(t *testing.T) {
+func TestPopulateCandidateProviders_ResolvesProviderModel(t *testing.T) {
 	out := map[string]providers.LLMProvider{}
 
 	cfg := &config.Config{
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "gemma",
-				Model:     "deepseek/deepseek-chat",
+				Provider:  "deepseek",
+				Model:     "deepseek-chat",
 				APIKeys:   config.SimpleSecureStrings("deepseek-test-key"),
 			},
 		},
@@ -454,46 +458,7 @@ func TestPopulateCandidateProviders_ResolvesProtocolPrefix(t *testing.T) {
 
 	key := providers.ModelKey("deepseek", "deepseek-chat")
 	if out[key] == nil {
-		t.Fatalf("expected CandidateProviders[%q] to be populated for protocol-prefixed model", key)
-	}
-}
-
-func TestLookupModelConfigByRef_BareUsesDefaultProvider(t *testing.T) {
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{Provider: "openrouter"},
-		},
-		ModelList: []*config.ModelConfig{
-			{ModelName: "openai-model", Provider: "openai", Model: "gpt-4o"},
-			{ModelName: "openrouter-model", Provider: "openrouter", Model: "gpt-4o"},
-		},
-	}
-
-	modelCfg := lookupModelConfigByRef(cfg, "gpt-4o", cfg.Agents.Defaults.Provider)
-	if modelCfg == nil || modelCfg.ModelName != "openrouter-model" {
-		t.Fatalf("resolved model = %#v, want openrouter-model", modelCfg)
-	}
-}
-
-func TestResolvePrimaryProviderForAgent_ResolvesRawUsingProviderTemplate(t *testing.T) {
-	fallback := &mockProvider{}
-	cfg := &config.Config{
-		ModelList: []*config.ModelConfig{{
-			ModelName: "openrouter-template",
-			Model:     "openrouter/auto",
-			APIBase:   "https://openrouter.ai/api/v1",
-			APIKeys:   config.SimpleSecureStrings("sk-or-test"),
-		}},
-	}
-
-	resolved := resolvePrimaryProviderForAgent(
-		cfg,
-		"raw-agent",
-		"openrouter/new-model",
-		fallback,
-	)
-	if resolved == fallback {
-		t.Fatal("raw per-agent primary reused the injected provider")
+		t.Fatalf("expected CandidateProviders[%q] to be populated", key)
 	}
 }
 
@@ -522,21 +487,6 @@ func TestResolvePrimaryProviderForCandidateDoesNotReuseFallbackOnInitFailure(t *
 	classified := providers.ClassifyError(err, candidate.Provider, candidate.Model)
 	if classified == nil || !classified.IsRetriable() {
 		t.Fatalf("classified error = %#v, want retriable failover error", classified)
-	}
-}
-
-func TestResolvePrimaryProviderForCandidatePreservesInjectedProviderForRawModel(t *testing.T) {
-	injected := &mockProvider{}
-	candidate := providers.FallbackCandidate{Provider: "openai", Model: "test-model"}
-
-	resolved := resolvePrimaryProviderForCandidate(
-		&config.Config{},
-		"main",
-		candidate,
-		injected,
-	)
-	if resolved != injected {
-		t.Fatal("raw primary model replaced the injected provider")
 	}
 }
 
@@ -595,7 +545,7 @@ func TestResolvedCandidateModelConfigSurvivesModelListReorder(t *testing.T) {
 		{ModelName: "other", Provider: "openai", Model: "other", APIKeys: config.SimpleSecureStrings("sk-other")},
 		{ModelName: "backup", Provider: "openai", Model: "gpt-4o", APIKeys: config.SimpleSecureStrings("sk-backup")},
 	}}
-	candidate, ok := resolveModelCandidate(cfg, "openai", "backup")
+	candidate, ok := resolveModelCandidate(cfg, "backup")
 	if !ok {
 		t.Fatal("resolveModelCandidate() did not resolve backup")
 	}
@@ -610,16 +560,16 @@ func TestResolvedCandidateModelConfigSurvivesModelListReorder(t *testing.T) {
 	}
 }
 
-func TestResolvedCandidateModelConfigUsesDefaultProviderForLegacyBareAlias(t *testing.T) {
+func TestResolvedCandidateModelConfigUsesExplicitProvider(t *testing.T) {
 	cfg := &config.Config{
-		Agents: config.AgentsConfig{Defaults: config.AgentDefaults{Provider: "anthropic"}},
 		ModelList: []*config.ModelConfig{{
 			ModelName: "primary",
+			Provider:  "anthropic",
 			Model:     "claude-sonnet-4-5",
 			APIKeys:   config.SimpleSecureStrings("test-key"),
 		}},
 	}
-	candidate, ok := resolveModelCandidate(cfg, "anthropic", "primary")
+	candidate, ok := resolveModelCandidate(cfg, "primary")
 	if !ok {
 		t.Fatal("resolveModelCandidate() did not resolve primary")
 	}
@@ -649,7 +599,7 @@ func TestProviderForConfiguredFallbackRejectsMissingProvider(t *testing.T) {
 
 func TestApplyBeforeLLMModelRewriteSwitchesProvider(t *testing.T) {
 	cfg := &config.Config{
-		Agents: config.AgentsConfig{Defaults: config.AgentDefaults{Provider: "openai"}},
+		Agents: config.AgentsConfig{Defaults: config.AgentDefaults{}},
 		ModelList: []*config.ModelConfig{{
 			ModelName: "hook-model",
 			Provider:  "anthropic",
@@ -657,7 +607,7 @@ func TestApplyBeforeLLMModelRewriteSwitchesProvider(t *testing.T) {
 			APIKeys:   config.SimpleSecureStrings("sk-ant-test"),
 		}},
 	}
-	candidate, ok := resolveModelCandidate(cfg, "openai", "hook-model")
+	candidate, ok := resolveModelCandidate(cfg, "hook-model")
 	if !ok {
 		t.Fatal("resolveModelCandidate() did not resolve hook model")
 	}
@@ -679,32 +629,6 @@ func TestApplyBeforeLLMModelRewriteSwitchesProvider(t *testing.T) {
 	}
 	if exec.activeModel != "claude-sonnet" {
 		t.Fatalf("active model = %q, want %q", exec.activeModel, "claude-sonnet")
-	}
-}
-
-func TestResolveRawModelCandidatePreservesSelectedTemplateIndex(t *testing.T) {
-	cfg := &config.Config{ModelList: []*config.ModelConfig{
-		{
-			ModelName: "template",
-			Provider:  "openai",
-			Model:     "gpt-4o",
-			APIKeys:   config.SimpleSecureStrings("sk-shared"),
-		},
-		{
-			ModelName: "template",
-			Provider:  "openai",
-			Model:     "gpt-4o",
-			APIKeys:   config.SimpleSecureStrings("sk-shared"),
-			Enabled:   true,
-		},
-	}}
-
-	candidate, ok := resolveModelCandidate(cfg, "openai", "openai/gpt-4o")
-	if !ok {
-		t.Fatal("resolveModelCandidate() did not resolve raw model")
-	}
-	if candidate.ConfigIndex != 2 {
-		t.Fatalf("ConfigIndex = %d, want enabled template index 2", candidate.ConfigIndex)
 	}
 }
 
@@ -770,29 +694,6 @@ func TestPopulateCandidateProvidersFromCandidatesUsesCandidateProvider(t *testin
 	}
 }
 
-func TestPopulateCandidateProviders_ResolvesRawUsingProviderTemplate(t *testing.T) {
-	out := map[string]providers.LLMProvider{}
-	cfg := &config.Config{
-		ModelList: []*config.ModelConfig{{
-			ModelName: "openrouter-template",
-			Model:     "openrouter/auto",
-			APIBase:   "https://openrouter.ai/api/v1",
-			APIKeys:   config.SimpleSecureStrings("sk-or-test"),
-		}},
-	}
-
-	populateCandidateProvidersFromNames(
-		cfg,
-		[]string{"openrouter/deepseek/deepseek-v3.2"},
-		out,
-	)
-
-	key := providers.ModelKey("openrouter", "deepseek/deepseek-v3.2")
-	if out[key] == nil {
-		t.Fatalf("expected CandidateProviders[%q] to use the OpenRouter template", key)
-	}
-}
-
 // TestPopulateCandidateProviders_EmptyNamesIsNoop verifies the early-exit
 // path when the names slice is empty.
 func TestPopulateCandidateProviders_EmptyNamesIsNoop(t *testing.T) {
@@ -854,18 +755,23 @@ func TestNewAgentInstance_CandidateProvidersPopulatedForCrossProviderFallbacks(t
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "mistral-small-3.1",
-				Model:     "openrouter/mistralai/mistral-small-3.1-24b-instruct:free",
+				Provider:  "openrouter",
+				Model:     "mistralai/mistral-small-3.1-24b-instruct:free",
 				APIBase:   "https://openrouter.ai/api/v1",
 				APIKeys:   config.SimpleSecureStrings("sk-or-test"),
 			},
 			{
 				ModelName: "deepseek-chat",
-				Model:     "deepseek/deepseek-chat",
+				Provider:  "deepseek",
+				Model:     "deepseek-chat",
+				APIBase:   "https://api.deepseek.com/v1",
 				APIKeys:   config.SimpleSecureStrings("AIzaSy-test"),
 			},
 			{
 				ModelName: "deepseek-images",
-				Model:     "deepseek/deepseek-reasoner",
+				Provider:  "deepseek",
+				Model:     "deepseek-reasoner",
+				APIBase:   "https://api.deepseek.com/v1",
 				APIKeys:   config.SimpleSecureStrings("AIzaSy-test"),
 			},
 		},
@@ -1143,14 +1049,15 @@ model: claude-frontmatter
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
 				Workspace: workspace,
-				Provider:  "openai",
 				ModelName: "default-model",
 			},
 		},
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "claude-frontmatter",
-				Model:     "anthropic/claude-3-7-sonnet",
+				Provider:  "anthropic",
+				Model:     "claude-3-7-sonnet",
+				APIBase:   "https://api.example.com/v1",
 				APIKeys:   config.SimpleSecureStrings("test-anthropic-key"),
 			},
 		},

@@ -148,7 +148,7 @@ func TestCollectStatusHealth(t *testing.T) {
 func TestCollectStatusConfigError(t *testing.T) {
 	home := t.TempDir()
 	configPath := filepath.Join(home, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version": 3,`), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(`{"version": 4,`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pid.WritePidFile(home, "127.0.0.1", 18790); err != nil {

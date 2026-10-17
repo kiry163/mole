@@ -131,31 +131,17 @@ func promptOverlaysForOptions(opts processOptions) []PromptPart {
 			Title:   "SubTurn System Instructions",
 			Content: systemPrompt,
 			Stable:  false,
-			Cache:   PromptCacheNone,
 		},
 	}
 }
 
-func promptContentBlock(part PromptPart, cache *providers.CacheControl) providers.ContentBlock {
-	if cache == nil {
-		cache = cacheControlForPromptPart(part)
-	}
+func promptContentBlock(part PromptPart) providers.ContentBlock {
 	return providers.ContentBlock{
 		Type:         "text",
 		Text:         part.Content,
-		CacheControl: cache,
 		PromptLayer:  string(part.Layer),
 		PromptSlot:   string(part.Slot),
 		PromptSource: string(part.Source.ID),
-	}
-}
-
-func cacheControlForPromptPart(part PromptPart) *providers.CacheControl {
-	switch part.Cache {
-	case PromptCacheEphemeral:
-		return &providers.CacheControl{Type: "ephemeral"}
-	default:
-		return nil
 	}
 }
 

@@ -10,17 +10,6 @@ import (
 	"github.com/kiry163/mole/pkg/providers"
 )
 
-func ensureProtocolModel(model string) string {
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return ""
-	}
-	if strings.Contains(model, "/") {
-		return model
-	}
-	return "openai/" + model
-}
-
 func modelConfigIdentityKey(mc *config.ModelConfig) string {
 	if mc == nil {
 		return ""
@@ -31,11 +20,10 @@ func modelConfigIdentityKey(mc *config.ModelConfig) string {
 	return ""
 }
 
-func modelConfigResolutionKey(defaultProvider string, mc *config.ModelConfig) string {
+func modelConfigResolutionKey(mc *config.ModelConfig) string {
 	if mc == nil {
 		return ""
 	}
-	provider, modelID := modelProviderAndIDForResolution(defaultProvider, mc)
 	apiKeys := make([]string, len(mc.APIKeys))
 	for i := range mc.APIKeys {
 		apiKeys[i] = mc.APIKeys[i].String()
@@ -45,7 +33,6 @@ func modelConfigResolutionKey(defaultProvider string, mc *config.ModelConfig) st
 		Provider            string                      `json:"provider"`
 		Model               string                      `json:"model"`
 		APIBase             string                      `json:"api_base"`
-		Proxy               string                      `json:"proxy"`
 		APIKeys             []string                    `json:"api_keys"`
 		Enabled             bool                        `json:"enabled"`
 		UserAgent           string                      `json:"user_agent"`
@@ -58,8 +45,8 @@ func modelConfigResolutionKey(defaultProvider string, mc *config.ModelConfig) st
 		ExtraBody           map[string]any              `json:"extra_body"`
 		CustomHeaders       map[string]string           `json:"custom_headers"`
 	}{
-		ModelName: mc.ModelName, Provider: provider, Model: modelID,
-		APIBase: mc.APIBase, Proxy: mc.Proxy, APIKeys: apiKeys,
+		ModelName: mc.ModelName, Provider: providers.NormalizeProvider(mc.Provider), Model: mc.Model,
+		APIBase: mc.APIBase, APIKeys: apiKeys,
 		Enabled: mc.Enabled, UserAgent: mc.UserAgent, RPM: mc.RPM,
 		RequestTimeout: mc.RequestTimeout, MaxTokensField: mc.MaxTokensField,
 		ThinkingLevel: mc.ThinkingLevel, ToolSchemaTransform: mc.ToolSchemaTransform,
@@ -72,142 +59,63 @@ func modelConfigResolutionKey(defaultProvider string, mc *config.ModelConfig) st
 	return fmt.Sprintf("config:%x", sum)
 }
 
-func effectiveDefaultProvider(defaultProvider string) string {
-	defaultProvider = strings.TrimSpace(defaultProvider)
-	if defaultProvider == "" {
-		return "openai"
-	}
-	return providers.NormalizeProvider(defaultProvider)
-}
-
-func modelProviderAndIDForResolution(defaultProvider string, mc *config.ModelConfig) (provider string, modelID string) {
-	if mc == nil {
-		return "", ""
-	}
-	if strings.TrimSpace(mc.Provider) != "" {
-		return providers.ExtractProtocol(mc)
-	}
-	return providers.SplitModelProviderAndID(mc.Model, effectiveDefaultProvider(defaultProvider))
-}
-
-func cloneModelConfigForResolution(
-	defaultProvider string,
-	mc *config.ModelConfig,
-) *config.ModelConfig {
-	if mc == nil {
-		return nil
-	}
-	clone := *mc
-	return &clone
-}
-
-func candidateFromModelConfig(
-	defaultProvider string,
-	mc *config.ModelConfig,
-) (providers.FallbackCandidate, bool) {
-	if mc == nil {
+func candidateFromModelConfig(mc *config.ModelConfig) (providers.FallbackCandidate, bool) {
+	if mc == nil || strings.TrimSpace(mc.Model) == "" {
 		return providers.FallbackCandidate{}, false
 	}
 
-	protocol, modelID := modelProviderAndIDForResolution(defaultProvider, mc)
-	if strings.TrimSpace(modelID) == "" {
-		return providers.FallbackCandidate{}, false
-	}
-
+	provider, modelID := providers.ExtractProtocol(mc)
 	return providers.FallbackCandidate{
-		Provider:    protocol,
+		Provider:    provider,
 		Model:       modelID,
 		DisplayName: strings.TrimSpace(mc.ModelName),
 		RPM:         mc.RPM,
 		IdentityKey: modelConfigIdentityKey(mc),
-		ConfigKey:   modelConfigResolutionKey(defaultProvider, mc),
+		ConfigKey:   modelConfigResolutionKey(mc),
 	}, true
 }
 
-func lookupModelConfigByRef(cfg *config.Config, raw string, defaultProvider ...string) *config.ModelConfig {
+func lookupModelConfigByRef(cfg *config.Config, raw string) *config.ModelConfig {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || cfg == nil {
 		return nil
 	}
-
-	if mc, err := cfg.GetModelConfig(raw); err == nil && mc != nil && strings.TrimSpace(mc.Model) != "" {
-		return mc
-	}
-
-	resolved, err := providers.ResolveModelConfig(cfg, raw)
+	mc, err := cfg.GetModelConfig(raw)
 	if err != nil {
 		return nil
 	}
-	for _, modelCfg := range cfg.ModelList {
-		if modelConfigsResolveToSameEntry(
-			modelCfg,
-			resolved,
-			cfg.Agents.Defaults.Provider,
-		) {
-			return resolved
-		}
-	}
-	return nil
-}
-
-func modelConfigsResolveToSameEntry(
-	left,
-	right *config.ModelConfig,
-	defaultProvider string,
-) bool {
-	if left == nil || right == nil || left.IsVirtual() {
-		return false
-	}
-	leftProvider, leftModel := modelProviderAndIDForResolution(defaultProvider, left)
-	rightProvider, rightModel := providers.ExtractProtocol(right)
-	return left.ModelName == right.ModelName &&
-		providers.ModelKey(leftProvider, leftModel) == providers.ModelKey(rightProvider, rightModel) &&
-		left.APIBase == right.APIBase &&
-		left.APIKey() == right.APIKey() &&
-		left.Enabled == right.Enabled
+	return mc
 }
 
 func resolveModelCandidate(
 	cfg *config.Config,
-	defaultProvider string,
 	raw string,
 ) (providers.FallbackCandidate, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return providers.FallbackCandidate{}, false
 	}
-	defaultProvider = effectiveDefaultProvider(defaultProvider)
 
-	if mc := lookupModelConfigByRef(cfg, raw, defaultProvider); mc != nil {
-		candidate, ok := candidateFromModelConfig(defaultProvider, mc)
-		if !ok {
-			return providers.FallbackCandidate{}, false
-		}
-		for index, modelCfg := range cfg.ModelList {
-			if modelCfg == mc || modelConfigsResolveToSameEntry(modelCfg, mc, defaultProvider) {
-				candidate.ConfigIndex = index + 1
-				candidate.ConfigKey = modelConfigResolutionKey(defaultProvider, modelCfg)
-				break
-			}
-		}
-		return candidate, true
-	}
-
-	ref := providers.ParseModelRef(raw, defaultProvider)
-	if ref == nil {
+	mc := lookupModelConfigByRef(cfg, raw)
+	if mc == nil {
 		return providers.FallbackCandidate{}, false
 	}
-
-	return providers.FallbackCandidate{
-		Provider:    ref.Provider,
-		Model:       ref.Model,
-		DisplayName: raw,
-	}, true
+	candidate, ok := candidateFromModelConfig(mc)
+	if !ok {
+		return providers.FallbackCandidate{}, false
+	}
+	for index, modelCfg := range cfg.ModelList {
+		if modelCfg == mc {
+			candidate.ConfigIndex = index + 1
+			candidate.ConfigKey = modelConfigResolutionKey(modelCfg)
+			break
+		}
+	}
+	return candidate, true
 }
 
 func resolveModelCandidates(
 	cfg *config.Config,
-	defaultProvider string,
 	primary string,
 	fallbacks []string,
 ) []providers.FallbackCandidate {
@@ -215,7 +123,7 @@ func resolveModelCandidates(
 	candidates := make([]providers.FallbackCandidate, 0, 1+len(fallbacks))
 
 	addCandidate := func(raw string) {
-		candidate, ok := resolveModelCandidate(cfg, defaultProvider, raw)
+		candidate, ok := resolveModelCandidate(cfg, raw)
 		if !ok {
 			return
 		}
@@ -274,44 +182,21 @@ func resolveActiveModelConfig(
 	cfg *config.Config,
 	candidates []providers.FallbackCandidate,
 	activeModel string,
-	defaultProvider string,
 ) *config.ModelConfig {
 	if cfg == nil {
 		return nil
 	}
-	defaultProvider = effectiveDefaultProvider(defaultProvider)
 
 	if len(candidates) > 0 {
-		candidate := candidates[0]
-		if modelCfg, err := resolvedCandidateModelConfig(cfg, candidate); err == nil {
+		if modelCfg, err := resolvedCandidateModelConfig(cfg, candidates[0]); err == nil {
 			return modelCfg
-		}
-		identityKey := strings.TrimSpace(candidate.IdentityKey)
-		if identityKey != "" {
-			for _, mc := range cfg.ModelList {
-				if mc == nil || modelConfigIdentityKey(mc) != identityKey {
-					continue
-				}
-				protocol, modelID := modelProviderAndIDForResolution(defaultProvider, mc)
-				if providers.ModelKey(protocol, modelID) == providers.ModelKey(candidate.Provider, candidate.Model) {
-					return cloneModelConfigForResolution(defaultProvider, mc)
-				}
-			}
-		}
-		for _, mc := range cfg.ModelList {
-			if mc == nil {
-				continue
-			}
-			protocol, modelID := modelProviderAndIDForResolution(defaultProvider, mc)
-			if providers.ModelKey(protocol, modelID) == providers.ModelKey(candidate.Provider, candidate.Model) {
-				return cloneModelConfigForResolution(defaultProvider, mc)
-			}
 		}
 		return nil
 	}
 
-	if mc := lookupModelConfigByRef(cfg, activeModel, defaultProvider); mc != nil {
-		return cloneModelConfigForResolution(defaultProvider, mc)
+	if mc := lookupModelConfigByRef(cfg, activeModel); mc != nil {
+		clone := *mc
+		return &clone
 	}
 
 	return nil

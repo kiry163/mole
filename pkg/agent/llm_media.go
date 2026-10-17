@@ -174,7 +174,6 @@ func (p *Pipeline) routeMediaTurn(ts *turnState, exec *turnExecution) error {
 		p.Cfg,
 		targetCandidates,
 		targetModel,
-		p.Cfg.Agents.Defaults.Provider,
 	)
 	exec.llmModelName = resolvedModelName
 	exec.usedLight = false

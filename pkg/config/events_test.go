@@ -28,7 +28,7 @@ func TestDefaultEventLoggingConfig(t *testing.T) {
 func TestLoadConfigEventLoggingOverrides(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	data := []byte(`{
-		"version": 3,
+		"version": 4,
 		"events": {
 			"logging": {
 				"enabled": false,

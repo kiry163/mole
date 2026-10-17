@@ -10,7 +10,6 @@ export interface ModelInfo {
   model: string
   api_base?: string
   api_key: string
-  proxy?: string
   // Advanced fields
   rpm?: number
   max_tokens_field?: string
@@ -28,32 +27,13 @@ export interface ModelInfo {
   status: "available" | "unconfigured" | "unreachable"
   is_default: boolean
   is_virtual: boolean
-  default_model_allowed?: boolean
-}
-
-export interface ModelProviderOption {
-  id: string
-  display_name?: string
-  icon_slug?: string
-  domain?: string
-  default_api_base: string
-  empty_api_key_allowed: boolean
-  create_allowed: boolean
-  default_model_allowed: boolean
-  supports_fetch?: boolean
-  local?: boolean
-  priority?: number
-  common_models?: string[]
-  aliases?: string[]
 }
 
 interface ModelsListResponse {
   models: ModelInfo[]
   total: number
   default_model: string
-  default_provider: string
   fallback_chain: string[]
-  provider_options: ModelProviderOption[]
 }
 
 export interface ModelReferenceRename {

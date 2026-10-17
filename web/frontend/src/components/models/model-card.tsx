@@ -24,8 +24,6 @@ interface ModelCardProps {
   onDelete: (model: ModelInfo) => void
   inFallbackChain: boolean
   isDefault: boolean
-  defaultChainAllowed: boolean
-  fallbackDefaultConflict: boolean
   deleteDisabled: boolean
 }
 
@@ -37,19 +35,13 @@ export function ModelCard({
   onDelete,
   inFallbackChain,
   isDefault,
-  defaultChainAllowed,
-  fallbackDefaultConflict,
   deleteDisabled,
 }: ModelCardProps) {
   const { t } = useTranslation()
   const status = model.status
   const statusLabel = t(`models.status.${status}`)
-  const canSetDefault = model.available && !isDefault && defaultChainAllowed
-  const canUseInFallback =
-    model.available &&
-    !isDefault &&
-    !fallbackDefaultConflict &&
-    defaultChainAllowed
+  const canSetDefault = model.available && !isDefault
+  const canUseInFallback = model.available && !isDefault
 
   const setDefaultLabel = t("models.action.setDefault")
   const setDefaultDisabledReason = (() => {
@@ -57,9 +49,6 @@ export function ModelCard({
       return t("models.action.setDefaultDisabled.unavailable")
     if (isDefault) return t("models.action.setDefaultDisabled.isDefault")
     if (model.is_virtual) return t("models.action.setDefaultDisabled.isVirtual")
-    if (!defaultChainAllowed) {
-      return t("models.action.setDefaultDisabled.unsupportedProvider")
-    }
     return setDefaultLabel
   })()
 
@@ -71,11 +60,7 @@ export function ModelCard({
     if (!model.available)
       return t("models.action.setDefaultDisabled.unavailable")
     if (model.is_virtual) return t("models.action.setDefaultDisabled.isVirtual")
-    if (!defaultChainAllowed) {
-      return t("models.action.setDefaultDisabled.unsupportedProvider")
-    }
-    if (isDefault || fallbackDefaultConflict)
-      return t("models.action.addToFallbackDisabled.isDefault")
+    if (isDefault) return t("models.action.addToFallbackDisabled.isDefault")
     return toggleFallbackLabel
   })()
   const deleteLabel = t("models.action.delete")

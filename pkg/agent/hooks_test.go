@@ -349,7 +349,6 @@ func TestHookManager_BeforeLLMAllowsJSONRoundTripNonSystemMessageMutation(t *tes
 					{
 						Type:         "text",
 						Text:         "system",
-						CacheControl: &providers.CacheControl{Type: "ephemeral"},
 						PromptLayer:  string(PromptLayerKernel),
 						PromptSlot:   string(PromptSlotIdentity),
 						PromptSource: string(PromptSourceKernel),

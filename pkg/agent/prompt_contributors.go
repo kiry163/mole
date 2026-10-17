@@ -49,7 +49,6 @@ func (c toolDiscoveryPromptContributor) ContributePrompt(
 			Title:   "tool discovery",
 			Content: content,
 			Stable:  true,
-			Cache:   PromptCacheEphemeral,
 		},
 	}, nil
 }
@@ -105,7 +104,6 @@ func (c mcpServerPromptContributor) ContributePrompt(
 				availability,
 			),
 			Stable: true,
-			Cache:  PromptCacheEphemeral,
 		},
 	}, nil
 }
@@ -152,7 +150,6 @@ func (c agentDiscoveryPromptContributor) ContributePrompt(
 			Title:   "agent discovery",
 			Content: content,
 			Stable:  false,
-			Cache:   PromptCacheNone,
 		},
 	}, nil
 }

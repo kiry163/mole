@@ -19,8 +19,6 @@ interface DeleteModelDialogProps {
   isDefaultModel: boolean
   onClose: () => void
   onDeleted: () => void
-  onMutationStarted: () => void
-  onMutationSettled: () => void
 }
 
 export function DeleteModelDialog({
@@ -28,8 +26,6 @@ export function DeleteModelDialog({
   isDefaultModel,
   onClose,
   onDeleted,
-  onMutationStarted,
-  onMutationSettled,
 }: DeleteModelDialogProps) {
   const { t } = useTranslation()
   const [deleting, setDeleting] = useState(false)
@@ -41,14 +37,12 @@ export function DeleteModelDialog({
       return
     }
     setDeleting(true)
-    onMutationStarted()
     try {
       await deleteModel(model.index)
       onDeleted()
     } catch {
       // ignore, user can retry from list
     } finally {
-      onMutationSettled()
       setDeleting(false)
       onClose()
     }

@@ -25,7 +25,7 @@ mole serve   # starts the gateway + web console in the foreground; no browser op
 For an always-on install that starts at login, register the same `mole serve` process with the OS
 service manager instead of keeping a terminal open — see [Run as a service](#run-as-a-service).
 
-On a machine with no model configured yet the console starts in limited mode: it logs that no default model is set and serves its first-run setup page, where you set a console access token and add a model with its API key. The token is the config's `dashboard.token`: saving it writes `DASHBOARD_TOKEN` to `~/.mole/.env` (mode 0600) and leaves only the `$DASHBOARD_TOKEN` reference in `config.json`, and console API responses omit it entirely. Make it a long random string. The token also keys the session cookie: restarting the gateway signs every browser out, while rotating the token does not - sessions already signed in stay valid until you restart, although the new value is accepted at the next login. To preconfigure by hand instead, edit `~/.mole/config.json` (see `config/config.example.json`) and put the secrets it references into `~/.mole/.env` (see `config/env.example`): give one `model_list` entry an `api_keys` reference such as `$DEEPSEEK_API_KEY`, set `"enabled": true` on it and select it via `agents.defaults.model_name`.
+On a machine with no model configured yet the console starts in limited mode: it logs that no default model is set and serves its first-run setup page, where you set a console access token and add a model with its provider label, Base URL, optional API key, and model identifier. The token is the config's `dashboard.token`: saving it writes `DASHBOARD_TOKEN` to `~/.mole/.env` (mode 0600) and leaves only the `$DASHBOARD_TOKEN` reference in `config.json`, and console API responses omit it entirely. Make it a long random string. The token also keys the session cookie: restarting the gateway signs every browser out, while rotating the token does not - sessions already signed in stay valid until you restart, although the new value is accepted at the next login. To preconfigure by hand instead, edit `~/.mole/config.json` (see `config/config.example.json`) and put the secrets it references into `~/.mole/.env` (see `config/env.example`): give one `model_list` entry a `provider` label, an `api_base` URL, an `api_keys` reference such as `$DEEPSEEK_API_KEY`, set `"enabled": true` on it and select it via `agents.defaults.model_name`.
 
 ## Run as a service
 
@@ -117,7 +117,7 @@ Settings live in `~/.mole/config.json` (the directory is overridable with `$MOLE
 
 A secret field in `config.json` is a `$VAR` reference such as `"api_keys": ["$DEEPSEEK_API_KEY"]` or `"token": "$DASHBOARD_TOKEN"`; the value lives in `~/.mole/.env` (mode 0600), which the gateway loads at startup. Only whole values are expanded, an undefined variable is a load error, `$$` means a literal `$`, and expansion is not recursive. Copy `config/env.example` to `~/.mole/.env` and fill it in; `config/config.example.json` shows the matching references. Changes to `.env` apply on the next start: restart `mole serve`, or run `mole service restart` when the agent is installed as a service.
 
-**Upgrading from an older version:** the loader accepts only the current `version`, and rejects unknown config keys by naming them in its error — so an existing `config.json` needs the removed keys deleted by hand. Removed sections such as `heartbeat`, `tools.cron`, `tools.approval.unattended`, and `automation` approval rules are rejected too. The changes you are most likely to hit:
+**Upgrading from an older version:** the loader accepts only the current `version`, and rejects unknown config keys by naming them in its error — so an existing `config.json` needs the removed keys deleted by hand. Removed sections such as `heartbeat`, `tools.cron`, `tools.approval.unattended`, and `automation` approval rules are rejected too. There is no built-in model catalog and no Anthropic protocol support: every `model_list` entry needs an explicit `provider`, `api_base`, and `model`, and the model-level `proxy` field is gone. The changes you are most likely to hit:
 
 - `channel_list.pico` → `channel_list.webchat` (the key doubles as the channel type),
 - `~/.mole/.security.yml` is gone: move its values into `~/.mole/.env` and reference them from `config.json` as `$VAR` (`enc://` values are rejected; plaintext in `.env` or a `file://` path are supported),
@@ -134,7 +134,7 @@ Sessions recorded under the old channel prefix are no longer listed. WebChat cli
 
 ## Providers
 
-The OpenAI-compatible family (OpenAI, OpenRouter, DeepSeek, Groq, Qwen, Moonshot, Zhipu, Volcengine, Mistral, Ollama, vLLM, LM Studio, and others) plus Anthropic, including the native Anthropic Messages protocol.
+Mole supports the OpenAI Chat Completions protocol only. Any OpenAI-compatible endpoint works: OpenAI, OpenRouter, DeepSeek, Groq, Qwen, Moonshot, Zhipu, Volcengine, Mistral, Ollama, vLLM, LM Studio, and others. `provider` is a free-form label used for grouping and diagnostics; the Base URL and model identifier are the routing inputs.
 
 ## License
 

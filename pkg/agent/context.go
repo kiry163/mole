@@ -257,7 +257,6 @@ func (cb *ContextBuilder) buildSystemPromptParts(opts systemPromptBuildOptions) 
 		Title:   "mole identity",
 		Content: cb.getIdentity(opts.IncludeToolUseRule),
 		Stable:  true,
-		Cache:   PromptCacheEphemeral,
 	})
 
 	// Bootstrap files
@@ -271,7 +270,6 @@ func (cb *ContextBuilder) buildSystemPromptParts(opts systemPromptBuildOptions) 
 			Title:   "workspace instructions",
 			Content: bootstrapContent,
 			Stable:  true,
-			Cache:   PromptCacheEphemeral,
 		})
 	}
 
@@ -301,7 +299,6 @@ func (cb *ContextBuilder) buildSystemPromptParts(opts systemPromptBuildOptions) 
 
 %s`, skillIntro, skillsSummary),
 			Stable: true,
-			Cache:  PromptCacheEphemeral,
 		})
 	}
 
@@ -316,7 +313,6 @@ func (cb *ContextBuilder) buildSystemPromptParts(opts systemPromptBuildOptions) 
 			Title:   "memory",
 			Content: "# Memory\n\n" + memoryContext,
 			Stable:  true,
-			Cache:   PromptCacheEphemeral,
 		})
 	}
 
@@ -333,7 +329,6 @@ You MUST frequently use <|[SPLIT]|> to break your responses into multiple short 
 
 Each part separated by the marker will be sent as an independent message.`,
 			Stable: true,
-			Cache:  PromptCacheEphemeral,
 		})
 	}
 
@@ -404,7 +399,7 @@ func (cb *ContextBuilder) buildSystemPromptForRequest(
 				Slot:    PromptSlotIdentity,
 				Source:  PromptSource{ID: PromptSourceKernel, Name: "static"},
 				Content: staticPrompt,
-			}, &providers.CacheControl{Type: "ephemeral"}),
+			}),
 		}
 	}
 
@@ -420,7 +415,7 @@ func (cb *ContextBuilder) buildSystemPromptForRequest(
 		if strings.TrimSpace(part.Content) == "" {
 			continue
 		}
-		blocks = append(blocks, promptContentBlock(part, cacheControlForPromptPart(part)))
+		blocks = append(blocks, promptContentBlock(part))
 	}
 	return staticPrompt, blocks
 }
@@ -768,14 +763,10 @@ func (cb *ContextBuilder) LoadBootstrapFiles() string {
 	return sb.String()
 }
 
-// buildDynamicContext returns a short dynamic context string with per-request info.
-// This changes every request (time, session) so it is NOT part of the cached prompt.
-// LLM-side KV cache reuse is achieved by each provider adapter's native mechanism:
-//   - Anthropic: per-block cache_control (ephemeral) on the static SystemParts block
-//   - OpenAI / Codex: prompt_cache_key for prefix-based caching
+// formatCurrentSenderLine formats the current sender for the model prompt.
 //
-// See: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
-// See: https://platform.openai.com/docs/guides/prompt-caching
+// LLM-side KV cache reuse is requested through prompt_cache_key on compatible
+// OpenAI endpoints. See https://platform.openai.com/docs/guides/prompt-caching
 func formatCurrentSenderLine(senderID, senderDisplayName string) string {
 	senderID = strings.TrimSpace(senderID)
 	senderDisplayName = strings.TrimSpace(senderDisplayName)
@@ -840,23 +831,14 @@ func (cb *ContextBuilder) BuildMessagesFromPrompt(req PromptBuildRequest) []prov
 	// (fixes issue #607). Profile-customized static prompts are built on demand.
 	// Dynamic parts (time, session, summary) are appended per request unless the
 	// profile suppresses Mole system context.
-	// Everything is sent as a single system message for provider compatibility:
-	// - Anthropic adapter extracts messages[0] (Role=="system") and maps its content
-	//   to the top-level "system" parameter in the Messages API request. A single
-	//   contiguous system block makes this extraction straightforward.
-	// - Codex maps only the first system message to its instructions field.
-	// - OpenAI-compat passes messages through as-is.
+	// Everything is sent as a single system message. OpenAI-compatible
+	// endpoints accept messages as-is, and Codex maps the first system message
+	// to its instructions field.
 	staticPrompt, contentBlocks := cb.buildSystemPromptForRequest(req)
 
-	// Compose a single system message: static (cached) + dynamic + optional summary.
-	// Keeping all system content in one message ensures every provider adapter can
-	// extract it correctly (Anthropic adapter -> top-level system param,
-	// Codex -> instructions field).
-	//
-	// SystemParts carries the same content as structured blocks so that
-	// cache-aware adapters (Anthropic) can set per-block cache_control.
-	// The static block is marked "ephemeral" — its prefix hash is stable
-	// across requests, enabling LLM-side KV cache reuse.
+	// Compose a single system message: static + dynamic + optional summary.
+	// SystemParts carries the same content as structured blocks for token
+	// accounting and prompt observability.
 	var stringParts []string
 	if strings.TrimSpace(staticPrompt) != "" {
 		stringParts = append(stringParts, staticPrompt)
@@ -896,7 +878,7 @@ func (cb *ContextBuilder) BuildMessagesFromPrompt(req PromptBuildRequest) []prov
 				continue
 			}
 			stringParts = append(stringParts, overlay.Content)
-			contentBlocks = append(contentBlocks, promptContentBlock(overlay, nil))
+			contentBlocks = append(contentBlocks, promptContentBlock(overlay))
 		}
 	}
 
@@ -918,10 +900,9 @@ func (cb *ContextBuilder) BuildMessagesFromPrompt(req PromptBuildRequest) []prov
 			Title:   "runtime context",
 			Content: dynamicCtx,
 			Stable:  false,
-			Cache:   PromptCacheNone,
 		}
 		stringParts = append(stringParts, dynamicCtx)
-		contentBlocks = append(contentBlocks, promptContentBlock(runtimePart, nil))
+		contentBlocks = append(contentBlocks, promptContentBlock(runtimePart))
 
 		if req.Summary != "" {
 			summaryPart := PromptPart{
@@ -936,10 +917,9 @@ func (cb *ContextBuilder) BuildMessagesFromPrompt(req PromptBuildRequest) []prov
 					req.Summary,
 				),
 				Stable: false,
-				Cache:  PromptCacheNone,
 			}
 			stringParts = append(stringParts, summaryPart.Content)
-			contentBlocks = append(contentBlocks, promptContentBlock(summaryPart, nil))
+			contentBlocks = append(contentBlocks, promptContentBlock(summaryPart))
 		}
 	}
 
@@ -952,10 +932,9 @@ func (cb *ContextBuilder) BuildMessagesFromPrompt(req PromptBuildRequest) []prov
 			Title:   "tool use fallback",
 			Content: toolUseSystemPromptRule(),
 			Stable:  true,
-			Cache:   PromptCacheEphemeral,
 		}
 		stringParts = append(stringParts, fallbackPart.Content)
-		contentBlocks = append(contentBlocks, promptContentBlock(fallbackPart, nil))
+		contentBlocks = append(contentBlocks, promptContentBlock(fallbackPart))
 	}
 
 	fullSystemPrompt := strings.Join(stringParts, "\n\n---\n\n")
@@ -987,7 +966,7 @@ func (cb *ContextBuilder) BuildMessagesFromPrompt(req PromptBuildRequest) []prov
 	history := sanitizeHistoryForProvider(req.History)
 
 	// Single system message containing all context — compatible with all providers.
-	// SystemParts enables cache-aware adapters to set per-block cache_control;
+	// SystemParts carries structured prompt segments for observability;
 	// Content is the concatenated fallback for adapters that don't read SystemParts.
 	if strings.TrimSpace(fullSystemPrompt) != "" {
 		messages = append(messages, providers.Message{
@@ -1025,7 +1004,7 @@ func sanitizeHistoryForProvider(history []providers.Message) []providers.Message
 			// Drop system messages from history. BuildMessages always
 			// constructs its own single system message (static + dynamic +
 			// summary); extra system messages would break providers that
-			// only accept one (Anthropic, Codex).
+			// only accept one (for example Codex).
 			logger.DebugCF("agent", "Dropping system message from history", map[string]any{})
 			continue
 
@@ -1276,7 +1255,6 @@ func (cb *ContextBuilder) buildActiveSkillsPromptParts(skillNames []string) []Pr
 			Title:   "active skills",
 			Content: skillsText,
 			Stable:  false,
-			Cache:   PromptCacheNone,
 		},
 	}
 }

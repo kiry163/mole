@@ -748,11 +748,13 @@ func TestProcessMessage_BeforeLLMModelRewriteReevaluatesThinkingOff(t *testing.T
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "plain-model",
-				Model:     "openai/plain-model",
+				Provider:  "openai",
+				Model:     "plain-model",
 			},
 			{
 				ModelName:     "off-model",
-				Model:         "openai/off-model",
+				Provider:      "openai",
+				Model:         "off-model",
 				ThinkingLevel: "off",
 			},
 		},
@@ -800,12 +802,14 @@ func TestProcessMessage_BeforeLLMModelRewriteDoesNotLeakThinkingOff(t *testing.T
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName:     "off-model",
-				Model:         "openai/off-model",
+				Provider:      "openai",
+				Model:         "off-model",
 				ThinkingLevel: "off",
 			},
 			{
 				ModelName: "plain-model",
-				Model:     "openai/plain-model",
+				Provider:  "openai",
+				Model:     "plain-model",
 			},
 		},
 	}
@@ -856,11 +860,19 @@ func TestProcessMessage_BtwCommandSuppressesReasoningWhenThinkingOff(t *testing.
 				MaxToolIterations: 10,
 			},
 		},
-		ModelList: []*config.ModelConfig{{
-			ModelName:     "test-model",
-			Model:         "openai/test-model",
-			ThinkingLevel: "off",
-		}},
+		ModelList: []*config.ModelConfig{
+			{
+				ModelName:     "test-model",
+				Provider:      "openai",
+				Model:         "test-model",
+				ThinkingLevel: "off",
+			},
+			{
+				ModelName: "fallback-model",
+				Provider:  "openai",
+				Model:     "fallback-model",
+			},
+		},
 	}
 
 	al := NewAgentLoop(cfg, bus.NewMessageBus(), &sideQuestionFallbackTestProvider{model: "test-model"})
@@ -903,11 +915,13 @@ func TestProcessMessage_BtwHookModelRewriteReevaluatesThinkingOff(t *testing.T) 
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "plain-model",
-				Model:     "openai/plain-model",
+				Provider:  "openai",
+				Model:     "plain-model",
 			},
 			{
 				ModelName:     "off-model",
-				Model:         "openai/off-model",
+				Provider:      "openai",
+				Model:         "off-model",
 				ThinkingLevel: "off",
 			},
 		},
@@ -959,12 +973,14 @@ func TestProcessMessage_BtwHookModelRewriteDoesNotLeakThinkingOff(t *testing.T) 
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName:     "off-model",
-				Model:         "openai/off-model",
+				Provider:      "openai",
+				Model:         "off-model",
 				ThinkingLevel: "off",
 			},
 			{
 				ModelName: "plain-model",
-				Model:     "openai/plain-model",
+				Provider:  "openai",
+				Model:     "plain-model",
 			},
 		},
 	}
@@ -1005,16 +1021,24 @@ func TestProcessMessage_BtwFallbackDoesNotInheritPrimaryThinkingOff(t *testing.T
 			Defaults: config.AgentDefaults{
 				Workspace:         tmpDir,
 				ModelName:         "test-model",
-				ModelFallbacks:    []string{"openai/fallback-model"},
+				ModelFallbacks:    []string{"fallback-model"},
 				MaxTokens:         4096,
 				MaxToolIterations: 10,
 			},
 		},
-		ModelList: []*config.ModelConfig{{
-			ModelName:     "test-model",
-			Model:         "openai/test-model",
-			ThinkingLevel: "off",
-		}},
+		ModelList: []*config.ModelConfig{
+			{
+				ModelName:     "test-model",
+				Provider:      "openai",
+				Model:         "test-model",
+				ThinkingLevel: "off",
+			},
+			{
+				ModelName: "fallback-model",
+				Provider:  "openai",
+				Model:     "fallback-model",
+			},
+		},
 	}
 
 	al := NewAgentLoop(cfg, bus.NewMessageBus(), &sideQuestionFallbackTestProvider{model: "test-model"})
@@ -1114,7 +1138,7 @@ func TestProcessMessage_BtwCommandRunsWithoutPersistingHistory(t *testing.T) {
 		},
 		// Add model list so isolated provider can resolve the model
 		ModelList: []*config.ModelConfig{
-			{ModelName: "test-model", Model: "openai/test-model"},
+			{ModelName: "test-model", Provider: "openai", Model: "test-model"},
 		},
 	}
 
@@ -1245,7 +1269,7 @@ func TestProcessMessage_BtwCommandUsesIsolatedProvider(t *testing.T) {
 		},
 		// Add model list so isolated provider can resolve the model
 		ModelList: []*config.ModelConfig{
-			{ModelName: "test-model", Model: "openai/test-model"},
+			{ModelName: "test-model", Provider: "openai", Model: "test-model"},
 		},
 	}
 
@@ -1314,7 +1338,7 @@ func TestProcessMessage_BtwCommandRetriesWithoutMediaOnVisionUnsupported(t *test
 		},
 		// Add model list so isolated provider can resolve the model
 		ModelList: []*config.ModelConfig{
-			{ModelName: "test-model", Model: "openai/test-model"},
+			{ModelName: "test-model", Provider: "openai", Model: "test-model"},
 		},
 	}
 
@@ -1357,8 +1381,8 @@ func TestProcessMessage_BtwCommandUsesProviderFactoryModel(t *testing.T) {
 			},
 		},
 		ModelList: []*config.ModelConfig{
-			{ModelName: "lb-model", Model: "openai/lb-model-a"},
-			{ModelName: "lb-model", Model: "openai/lb-model-b"},
+			{ModelName: "lb-model", Provider: "openai", Model: "lb-model-a"},
+			{ModelName: "lb-model", Provider: "openai", Model: "lb-model-b"},
 		},
 	}
 
@@ -3561,7 +3585,6 @@ func TestProcessMessage_SwitchModelShowModelConsistency(t *testing.T) {
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
 				Workspace:         tmpDir,
-				Provider:          "openai",
 				ModelName:         "local",
 				MaxTokens:         4096,
 				MaxToolIterations: 10,
@@ -3570,13 +3593,15 @@ func TestProcessMessage_SwitchModelShowModelConsistency(t *testing.T) {
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "local",
-				Model:     "openai/local-model",
+				Provider:  "openai",
+				Model:     "local-model",
 				APIBase:   "https://local.example.invalid/v1",
 				APIKeys:   config.SimpleSecureStrings("test-key"),
 			},
 			{
 				ModelName: "deepseek",
-				Model:     "openrouter/deepseek/deepseek-v3.2",
+				Provider:  "openrouter",
+				Model:     "deepseek/deepseek-v3.2",
 				APIBase:   "https://openrouter.ai/api/v1",
 				APIKeys:   config.SimpleSecureStrings("test-key"),
 			},
@@ -3624,7 +3649,6 @@ func TestProcessMessage_SwitchModelRejectsUnknownAlias(t *testing.T) {
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
 				Workspace:         tmpDir,
-				Provider:          "openai",
 				ModelName:         "local",
 				MaxTokens:         4096,
 				MaxToolIterations: 10,
@@ -3633,7 +3657,8 @@ func TestProcessMessage_SwitchModelRejectsUnknownAlias(t *testing.T) {
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "local",
-				Model:     "openai/local-model",
+				Provider:  "openai",
+				Model:     "local-model",
 				APIBase:   "https://local.example.invalid/v1",
 				APIKeys:   config.SimpleSecureStrings("test-key"),
 			},
@@ -3691,7 +3716,6 @@ func TestProcessMessage_SwitchModelRoutesSubsequentRequestsToSelectedProvider(t 
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
 				Workspace:         tmpDir,
-				Provider:          "openai",
 				ModelName:         "local",
 				MaxTokens:         4096,
 				MaxToolIterations: 10,
@@ -3700,19 +3724,22 @@ func TestProcessMessage_SwitchModelRoutesSubsequentRequestsToSelectedProvider(t 
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "local",
-				Model:     "openai/Qwen3.5-35B-A3B",
+				Provider:  "openai",
+				Model:     "Qwen3.5-35B-A3B",
 				APIBase:   localServer.URL,
 				APIKeys:   config.SimpleSecureStrings("local-key"),
 			},
 			{
 				ModelName: "deepseek",
-				Model:     "openrouter/deepseek/deepseek-v3.2",
+				Provider:  "openrouter",
+				Model:     "deepseek/deepseek-v3.2",
 				APIBase:   remoteServer.URL,
 				APIKeys:   config.SimpleSecureStrings("remote-key"),
 			},
 			{
 				ModelName: "deepseek",
-				Model:     "openrouter/deepseek/deepseek-v3.2",
+				Provider:  "openrouter",
+				Model:     "deepseek/deepseek-v3.2",
 				APIBase:   remoteServer.URL,
 				APIKeys:   config.SimpleSecureStrings("remote-key-secondary"),
 			},
@@ -3792,7 +3819,6 @@ func TestProcessMessage_SwitchModelPreservesPrimaryProviderFallbackInheritance(t
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
 				Workspace:         workspace,
-				Provider:          "openai",
 				ModelName:         "first",
 				ModelFallbacks:    []string{"fallback"},
 				MaxTokens:         4096,
@@ -3974,13 +4000,15 @@ func TestProcessMessage_FallbackUsesPerCandidateProvider(t *testing.T) {
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "mistral-primary",
-				Model:     "openrouter/mistralai/mistral-small-3.1",
+				Provider:  "openrouter",
+				Model:     "mistralai/mistral-small-3.1",
 				APIBase:   primaryServer.URL,
 				APIKeys:   config.SimpleSecureStrings("primary-key"),
 			},
 			{
 				ModelName: "gemma-fallback",
-				Model:     "openrouter/gemma-3-27b-it",
+				Provider:  "openrouter",
+				Model:     "gemma-3-27b-it",
 				APIBase:   fallbackServer.URL,
 				APIKeys:   config.SimpleSecureStrings("fallback-key"),
 			},
@@ -4078,13 +4106,15 @@ func TestProcessMessage_FallbackReceivesExplicitThinkingOff(t *testing.T) {
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "primary-model",
-				Model:     "openrouter/primary-model",
+				Provider:  "openrouter",
+				Model:     "primary-model",
 				APIBase:   primaryServer.URL,
 				APIKeys:   config.SimpleSecureStrings("primary-key"),
 			},
 			{
 				ModelName:     "doubao-fallback",
-				Model:         "openai/doubao-seed-1-6-flash-250828",
+				Provider:      "openai",
+				Model:         "doubao-seed-1-6-flash-250828",
 				APIBase:       fallbackServer.URL,
 				APIKeys:       config.SimpleSecureStrings("fallback-key"),
 				ThinkingLevel: "off",
@@ -4170,14 +4200,16 @@ func TestProcessMessage_PrimaryThinkingOffDoesNotLeakToFallback(t *testing.T) {
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName:     "primary-model",
-				Model:         "openrouter/primary-model",
+				Provider:      "openrouter",
+				Model:         "primary-model",
 				APIBase:       primaryServer.URL,
 				APIKeys:       config.SimpleSecureStrings("primary-key"),
 				ThinkingLevel: "off",
 			},
 			{
 				ModelName: "doubao-fallback",
-				Model:     "openai/doubao-seed-1-6-flash-250828",
+				Provider:  "openai",
+				Model:     "doubao-seed-1-6-flash-250828",
 				APIBase:   fallbackServer.URL,
 				APIKeys:   config.SimpleSecureStrings("fallback-key"),
 			},
@@ -4262,19 +4294,22 @@ func TestProcessMessage_FallbackThinkingOffUsesCandidateIdentity(t *testing.T) {
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "primary-model",
-				Model:     "openrouter/primary-model",
+				Provider:  "openrouter",
+				Model:     "primary-model",
 				APIBase:   primaryServer.URL,
 				APIKeys:   config.SimpleSecureStrings("primary-key"),
 			},
 			{
 				ModelName: "doubao-default",
-				Model:     "openai/doubao-seed-1-6-flash-250828",
+				Provider:  "openai",
+				Model:     "doubao-seed-1-6-flash-250828",
 				APIBase:   fallbackServer.URL,
 				APIKeys:   config.SimpleSecureStrings("fallback-key"),
 			},
 			{
 				ModelName:     "doubao-off",
-				Model:         "openai/doubao-seed-1-6-flash-250828",
+				Provider:      "openai",
+				Model:         "doubao-seed-1-6-flash-250828",
 				APIBase:       fallbackServer.URL,
 				APIKeys:       config.SimpleSecureStrings("fallback-key"),
 				ThinkingLevel: "off",
@@ -4343,7 +4378,8 @@ func TestProcessMessage_FallbackUsesActiveProviderWhenCandidateNotRegistered(t *
 		ModelList: []*config.ModelConfig{
 			{
 				ModelName: "primary-model",
-				Model:     "openrouter/primary-model",
+				Provider:  "openrouter",
+				Model:     "primary-model",
 				APIBase:   primaryServer.URL,
 				APIKeys:   config.SimpleSecureStrings("primary-key"),
 			},
@@ -4941,8 +4977,8 @@ func TestAgentLoop_UserAttachmentRoutesToImageModelAfterMediaResolution(t *testi
 			},
 		},
 		ModelList: []*config.ModelConfig{
-			{ModelName: "text-model", Model: "openai/text-model"},
-			{ModelName: "vision-model", Model: "openai/vision-model"},
+			{ModelName: "text-model", Provider: "openai", Model: "text-model"},
+			{ModelName: "vision-model", Provider: "openai", Model: "vision-model"},
 		},
 	}
 
@@ -5030,8 +5066,8 @@ func TestAgentLoop_TextFollowUpAfterUserAttachmentStaysOnTextModel(t *testing.T)
 			},
 		},
 		ModelList: []*config.ModelConfig{
-			{ModelName: "text-model", Model: "openai/text-model"},
-			{ModelName: "vision-model", Model: "openai/vision-model"},
+			{ModelName: "text-model", Provider: "openai", Model: "text-model"},
+			{ModelName: "vision-model", Provider: "openai", Model: "vision-model"},
 		},
 	}
 
@@ -5119,8 +5155,8 @@ func TestAgentLoop_GenericImagePlaceholderDoesNotRouteToImageModel(t *testing.T)
 			},
 		},
 		ModelList: []*config.ModelConfig{
-			{ModelName: "text-model", Model: "openai/text-model"},
-			{ModelName: "vision-model", Model: "openai/vision-model"},
+			{ModelName: "text-model", Provider: "openai", Model: "text-model"},
+			{ModelName: "vision-model", Provider: "openai", Model: "vision-model"},
 		},
 	}
 
@@ -5191,8 +5227,8 @@ func TestAgentLoop_TextFollowUpAfterLoadImageStaysOnTextModel(t *testing.T) {
 			LoadImage: config.ToolConfig{Enabled: true},
 		},
 		ModelList: []*config.ModelConfig{
-			{ModelName: "text-model", Model: "openai/text-model"},
-			{ModelName: "vision-model", Model: "openai/vision-model"},
+			{ModelName: "text-model", Provider: "openai", Model: "text-model"},
+			{ModelName: "vision-model", Provider: "openai", Model: "vision-model"},
 		},
 	}
 
@@ -5298,8 +5334,8 @@ func TestAgentLoop_LoadImageFollowUpRoutesToImageModel(t *testing.T) {
 			LoadImage: config.ToolConfig{Enabled: true},
 		},
 		ModelList: []*config.ModelConfig{
-			{ModelName: "text-model", Model: "openai/text-model"},
-			{ModelName: "vision-model", Model: "openai/vision-model"},
+			{ModelName: "text-model", Provider: "openai", Model: "text-model"},
+			{ModelName: "vision-model", Provider: "openai", Model: "vision-model"},
 		},
 	}
 
@@ -5379,7 +5415,7 @@ func TestAgentLoop_LoadImageFollowUpWithoutImageModelFailsClearly(t *testing.T) 
 			LoadImage: config.ToolConfig{Enabled: true},
 		},
 		ModelList: []*config.ModelConfig{
-			{ModelName: "text-model", Model: "openai/text-model"},
+			{ModelName: "text-model", Provider: "openai", Model: "text-model"},
 		},
 	}
 

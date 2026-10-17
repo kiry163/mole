@@ -2,24 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
-import {
-  type ModelInfo,
-  type ModelProviderOption,
-  getModels,
-  setDefaultModel,
-} from "@/api/models"
+import { type ModelInfo, getModels, setDefaultModel } from "@/api/models"
 import { refreshGatewayState } from "@/store/gateway"
 
 interface UseChatModelsOptions {
   isConnected: boolean
 }
 
-function isLocalModel(
-  model: ModelInfo,
-  localProviderKeys: Set<string>,
-): boolean {
-  const provider = model.provider?.trim().toLowerCase() ?? ""
-  if (provider && localProviderKeys.has(provider)) return true
+function isLocalModel(model: ModelInfo): boolean {
   return Boolean(
     model.api_base?.includes("localhost") ||
     model.api_base?.includes("127.0.0.1"),
@@ -29,9 +19,6 @@ function isLocalModel(
 export function useChatModels({ isConnected }: UseChatModelsOptions) {
   const { t } = useTranslation()
   const [modelList, setModelList] = useState<ModelInfo[]>([])
-  const [providerOptions, setProviderOptions] = useState<ModelProviderOption[]>(
-    [],
-  )
   const [defaultModelName, setDefaultModelName] = useState("")
   const [settingDefault, setSettingDefault] = useState(false)
   const setDefaultRequestIdRef = useRef(0)
@@ -50,7 +37,6 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
       const data = await getModels()
       if (requestId !== loadModelsRequestIdRef.current) return
       setModelList(data.models)
-      setProviderOptions(data.provider_options)
       syncDefaultModelName(data.default_model)
     } catch {
       // silently fail
@@ -82,8 +68,7 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
           if (requestId !== setDefaultRequestIdRef.current) return
 
           setModelList(data.models)
-          setProviderOptions(data.provider_options)
-          syncDefaultModelName(data.default_model)
+              syncDefaultModelName(data.default_model)
           await refreshGatewayState({ force: true })
           if (requestId !== setDefaultRequestIdRef.current) return
           toast.success(t("models.defaultChangeSuccess"))
@@ -114,9 +99,7 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
     return [...modelsByAlias.values()].flatMap((entries) =>
       entries.every(
         (model) =>
-          model.default_model_allowed !== false &&
-          model.is_virtual !== true &&
-          model.status !== "unconfigured",
+          model.is_virtual !== true && model.status !== "unconfigured",
       )
         ? [entries.find((model) => model.available) ?? entries[0]]
         : [],
@@ -128,30 +111,20 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
     [defaultSelectableModels],
   )
 
-  const localProviderKeys = useMemo(
-    () =>
-      new Set(
-        providerOptions
-          .filter((option) => option.local === true)
-          .map((option) => option.id.toLowerCase()),
-      ),
-    [providerOptions],
-  )
-
   const localModels = useMemo(
     () =>
       defaultSelectableModels.filter(
-        (m) => m.available && isLocalModel(m, localProviderKeys),
+        (m) => m.available && isLocalModel(m),
       ),
-    [defaultSelectableModels, localProviderKeys],
+    [defaultSelectableModels],
   )
 
   const apiKeyModels = useMemo(
     () =>
       defaultSelectableModels.filter(
-        (m) => m.available && !isLocalModel(m, localProviderKeys),
+        (m) => m.available && !isLocalModel(m),
       ),
-    [defaultSelectableModels, localProviderKeys],
+    [defaultSelectableModels],
   )
 
   return {

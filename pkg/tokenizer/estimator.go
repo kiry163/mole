@@ -21,7 +21,7 @@ func EstimateMessageTokens(msg providers.Message) int {
 		for _, part := range msg.SystemParts {
 			systemPartsChars += utf8.RuneCountInString(part.Text)
 		}
-		// Per-part overhead for JSON structure (type, text, cache_control).
+		// Per-part overhead for JSON structure (type, text).
 		const perPartOverhead = 20
 		systemPartsChars += len(msg.SystemParts) * perPartOverhead
 	}

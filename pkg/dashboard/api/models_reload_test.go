@@ -47,6 +47,7 @@ func TestHandleAddModel_RequestsReload(t *testing.T) {
 	rec := serveModelRequest(t, h, http.MethodPost, "/api/models", `{
 		"model_name":"added-model",
 		"provider":"openai",
+		"api_base":"https://api.example.test/v1",
 		"model":"gpt-4o",
 		"api_key":"sk-added"
 	}`)
@@ -90,7 +91,8 @@ func TestHandleUpdateModel_RequestsReload(t *testing.T) {
 	rec := serveModelRequest(t, h, http.MethodPut, "/api/models/0", `{
 		"model_name":"custom-default",
 		"provider":"openai",
-		"model":"openai/gpt-4o-mini",
+		"api_base":"https://api.example.test/v1",
+		"model":"gpt-4o-mini",
 		"api_key":"sk-updated"
 	}`)
 	if rec.Code != http.StatusOK {

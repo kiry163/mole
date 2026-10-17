@@ -19,7 +19,6 @@ type (
 	ExtraContent           = protocoltypes.ExtraContent
 	GoogleExtra            = protocoltypes.GoogleExtra
 	ContentBlock           = protocoltypes.ContentBlock
-	CacheControl           = protocoltypes.CacheControl
 	Attachment             = protocoltypes.Attachment
 )
 
@@ -65,8 +64,8 @@ type StreamingEventProvider interface {
 }
 
 // ThinkingCapable is an optional interface for providers that support
-// extended thinking (e.g. Anthropic). Used by the agent loop to warn
-// when thinking_level is configured but the active provider cannot use it.
+// extended thinking. Used by the agent loop to warn when thinking_level is
+// configured but the active provider cannot use it.
 type ThinkingCapable interface {
 	SupportsThinking() bool
 }
@@ -117,10 +116,4 @@ func (e *FailoverError) Unwrap() error {
 // Non-retriable: Format errors (bad request structure, image dimension/size).
 func (e *FailoverError) IsRetriable() bool {
 	return e.Reason != FailoverFormat && e.Reason != FailoverContextOverflow
-}
-
-// ModelConfig holds primary model and fallback list.
-type ModelConfig struct {
-	Primary   string
-	Fallbacks []string
 }

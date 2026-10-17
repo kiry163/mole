@@ -147,7 +147,7 @@ func TestHandleUpdateConfig_PreservesExecAllowRemoteDefaultWhenOmitted(t *testin
 	h.RegisterRoutes(mux)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/config", bytes.NewBufferString(`{
-"version": 3,
+"version": 4,
 		"agents": {
 			"defaults": {
 				"workspace": "~/.mole/workspace"
@@ -1654,7 +1654,7 @@ func TestHandleUpdateConfigPromotesSecretToEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := NewHandler(path)
-	body := `{"version":3,"channel_list":{"telegram":{"enabled":true,"type":"telegram","allow_from":["*"],"settings":{"token":"tg-secret"}}},"model_list":[],"agents":{"defaults":{"model_name":""}}}`
+	body := `{"version":4,"channel_list":{"telegram":{"enabled":true,"type":"telegram","allow_from":["*"],"settings":{"token":"tg-secret"}}},"model_list":[],"agents":{"defaults":{"model_name":""}}}`
 	req := httptest.NewRequest(http.MethodPut, "/api/config", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	h.handleUpdateConfig(rec, req)
@@ -1734,7 +1734,7 @@ func TestHandleGetConfig_KeepsSecretReferences(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	data := `{
-		"version": 3,
+		"version": 4,
 		"agents": {"defaults": {"model_name": "ref-model"}},
 		"model_list": [{"model_name": "ref-model", "model": "openai/gpt-4o", "api_keys": ["$PLAIN_MODEL_KEY"]}],
 		"dashboard": {"token": "$DASHBOARD_TOKEN"}
@@ -1765,7 +1765,7 @@ func TestHandleGetConfig_KeepsSecretReferences(t *testing.T) {
 func writeConfigWithPlainRef(t *testing.T, path string) {
 	t.Helper()
 	data := `{
-		"version": 3,
+		"version": 4,
 		"agents": {"defaults": {"model_name": "ref-model"}},
 		"model_list": [{"model_name": "ref-model", "model": "openai/gpt-4o", "api_base": "$TEST_API_BASE"}]
 	}`

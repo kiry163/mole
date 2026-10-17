@@ -42,7 +42,6 @@ type modelResponse struct {
 	Model     string `json:"model"`
 	APIBase   string `json:"api_base,omitempty"`
 	APIKey    string `json:"api_key"`
-	Proxy     string `json:"proxy,omitempty"`
 	// Advanced fields
 	RPM                 int                         `json:"rpm,omitempty"`
 	MaxTokensField      string                      `json:"max_tokens_field,omitempty"`
@@ -53,12 +52,11 @@ type modelResponse struct {
 	ExtraBody           map[string]any              `json:"extra_body,omitempty"`
 	CustomHeaders       map[string]string           `json:"custom_headers,omitempty"`
 	// Meta
-	Enabled             bool   `json:"enabled"`
-	Available           bool   `json:"available"`
-	Status              string `json:"status"`
-	IsDefault           bool   `json:"is_default"`
-	IsVirtual           bool   `json:"is_virtual"`
-	DefaultModelAllowed bool   `json:"default_model_allowed"`
+	Enabled   bool   `json:"enabled"`
+	Available bool   `json:"available"`
+	Status    string `json:"status"`
+	IsDefault bool   `json:"is_default"`
+	IsVirtual bool   `json:"is_virtual"`
 }
 
 type defaultChainResponse struct {
@@ -71,7 +69,7 @@ type defaultChainRequest struct {
 	FallbackChain []string `json:"fallback_chain"`
 }
 
-func normalizeStoredModelConfig(mc *config.ModelConfig, defaultProvider string) bool {
+func normalizeStoredModelConfig(mc *config.ModelConfig) bool {
 	if mc == nil {
 		return false
 	}
@@ -87,102 +85,49 @@ func normalizeStoredModelConfig(mc *config.ModelConfig, defaultProvider string) 
 		mc.Model = model
 		changed = true
 	}
-	provider := strings.TrimSpace(mc.Provider)
+	provider := providers.NormalizeProvider(mc.Provider)
 	if provider != mc.Provider {
 		mc.Provider = provider
-		changed = true
-	}
-
-	if provider != "" {
-		normalizedProvider := providers.NormalizeProvider(provider)
-		if providers.IsSupportedModelProvider(normalizedProvider) && normalizedProvider != provider {
-			mc.Provider = normalizedProvider
-			changed = true
-		}
-		return changed
-	}
-
-	effectiveProvider, modelID := providers.SplitModelProviderAndID(model, defaultProvider)
-	if effectiveProvider == "" {
-		return changed
-	}
-	if mc.Provider != effectiveProvider {
-		mc.Provider = effectiveProvider
-		changed = true
-	}
-	if mc.Model != modelID {
-		mc.Model = modelID
 		changed = true
 	}
 	return changed
 }
 
-func normalizeIncomingModelConfig(mc *config.ModelConfig, defaultProvider string) {
+func normalizeIncomingModelConfig(mc *config.ModelConfig) {
 	if mc == nil {
 		return
 	}
-
 	mc.ModelName = strings.TrimSpace(mc.ModelName)
 	mc.Model = strings.TrimSpace(mc.Model)
-	mc.Provider = strings.TrimSpace(mc.Provider)
-	if mc.Provider == "" {
-		mc.Provider, mc.Model = providers.SplitModelProviderAndID(mc.Model, defaultProvider)
-	} else {
-		mc.Provider = providers.NormalizeProvider(mc.Provider)
-	}
+	mc.Provider = providers.NormalizeProvider(mc.Provider)
+	mc.APIBase = strings.TrimRight(strings.TrimSpace(mc.APIBase), "/")
 }
 
-func createAllowedForProvider(provider string) bool {
-	return providers.IsCreatableModelProvider(providers.NormalizeProvider(provider))
-}
-
-func modelProviderOptionsForResponse() []providers.ModelProviderOption {
-	options := providers.ModelProviderOptions()
-	for i := range options {
-		options[i].CreateAllowed = createAllowedForProvider(options[i].ID)
-	}
-	return options
-}
-
-func defaultModelAllowedForModelConfig(mc *config.ModelConfig, defaultProvider string) bool {
-	provider, _ := modelConfigProviderAndID(mc, defaultProvider)
-	return providers.IsDefaultModelProvider(provider)
-}
-
-func validateIncomingModelConfig(mc *config.ModelConfig, existing *config.ModelConfig) error {
+func validateIncomingModelConfig(mc *config.ModelConfig) error {
 	if mc == nil {
 		return fmt.Errorf("model config is required")
 	}
 	if err := mc.Validate(); err != nil {
 		return err
 	}
-	if strings.TrimSpace(mc.Provider) == "" {
-		return fmt.Errorf("provider is required")
+	if _, err := url.ParseRequestURI(mc.APIBase); err != nil {
+		return fmt.Errorf("api_base is invalid: %w", err)
 	}
-	if !providers.IsSupportedModelProvider(mc.Provider) {
-		return fmt.Errorf("provider %q is not supported", mc.Provider)
-	}
-	if !createAllowedForProvider(mc.Provider) {
-		if existing == nil {
-			return fmt.Errorf("provider %q is not available for new models", mc.Provider)
-		}
-		existingProvider, _ := providers.ExtractProtocol(existing)
-		if providers.NormalizeProvider(existingProvider) != mc.Provider {
-			return fmt.Errorf("provider %q is not available for selection", mc.Provider)
-		}
+	parsed, err := url.Parse(mc.APIBase)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return fmt.Errorf("api_base must be an absolute http(s) URL")
 	}
 	return nil
 }
 
-func normalizeStoredModelProviders(cfg *config.Config) bool {
+func normalizeStoredModels(cfg *config.Config) bool {
 	if cfg == nil {
 		return false
 	}
 
 	changed := false
-	defaultProvider := defaultChainProvider(cfg)
 	for _, model := range cfg.ModelList {
-		if normalizeStoredModelConfig(model, defaultProvider) {
+		if normalizeStoredModelConfig(model) {
 			changed = true
 		}
 	}
@@ -275,7 +220,6 @@ func validateDefaultChainModelSet(
 	modelName string,
 	models []*config.ModelConfig,
 	defaultContext bool,
-	defaultProvider string,
 ) error {
 	if len(models) == 0 {
 		if defaultContext {
@@ -290,20 +234,11 @@ func validateDefaultChainModelSet(
 			}
 			return fmt.Errorf("cannot add virtual model %q to fallback_chain", modelName)
 		}
-		if !defaultModelAllowedForModelConfig(modelCfg, defaultProvider) {
+		if !hasModelConfiguration(modelCfg) {
 			if defaultContext {
-				return fmt.Errorf("model %q cannot be used as the default chat model", modelName)
+				return fmt.Errorf("default model %q has no api_base configured", modelName)
 			}
-			return fmt.Errorf("model %q cannot be used in the fallback chain", modelName)
-		}
-		effectiveModelCfg := modelCfg
-		if strings.TrimSpace(modelCfg.Provider) == "" {
-			clone := *modelCfg
-			normalizeStoredModelConfig(&clone, defaultProvider)
-			effectiveModelCfg = &clone
-		}
-		if !hasModelConfiguration(effectiveModelCfg) {
-			return rawModelConfigurationError(modelName, defaultContext)
+			return fmt.Errorf("fallback model %q has no api_base configured", modelName)
 		}
 	}
 	return nil
@@ -315,98 +250,21 @@ func validateDefaultChainReference(
 	models []*config.ModelConfig,
 	defaultContext bool,
 ) error {
-	if len(models) > 0 {
-		return validateDefaultChainModelSet(
-			modelName,
-			models,
-			defaultContext,
-			defaultChainProvider(cfg),
-		)
-	}
-
-	resolved, err := providers.ResolveModelConfig(cfg, modelName)
-	if err != nil || resolved == nil {
-		ref := providers.ParseModelRef(modelName, defaultChainProvider(cfg))
-		if ref != nil &&
-			strings.TrimSpace(ref.Provider) != "" &&
-			strings.TrimSpace(ref.Model) != "" &&
-			!providers.IsDefaultModelProvider(ref.Provider) {
-			if defaultContext {
-				return fmt.Errorf("model %q cannot be used as the default chat model", modelName)
-			}
-			return fmt.Errorf("model %q cannot be used in the fallback chain", modelName)
+	if len(models) == 0 {
+		modelName = strings.TrimSpace(modelName)
+		if modelName == "" {
+			return fmt.Errorf("model is required")
 		}
-		if ref != nil &&
-			strings.TrimSpace(ref.Provider) != "" &&
-			strings.TrimSpace(ref.Model) != "" &&
-			providers.IsDefaultModelProvider(ref.Provider) {
-			return rawModelConfigurationError(modelName, defaultContext)
+		if defaultContext {
+			return fmt.Errorf("default model %q not found in model_list", modelName)
 		}
-		return validateDefaultChainModelSet(
-			modelName,
-			nil,
-			defaultContext,
-			defaultChainProvider(cfg),
-		)
+		return fmt.Errorf("fallback model %q not found in model_list", modelName)
 	}
-	if err := validateDefaultChainModelSet(
-		modelName,
-		[]*config.ModelConfig{resolved},
-		defaultContext,
-		defaultChainProvider(cfg),
-	); err != nil {
-		return err
-	}
-	if !rawTemplateHasConfiguration(resolved) {
-		return rawModelConfigurationError(modelName, defaultContext)
-	}
-	return nil
+	return validateDefaultChainModelSet(modelName, models, defaultContext)
 }
 
-func rawTemplateHasConfiguration(modelCfg *config.ModelConfig) bool {
-	return hasModelConfiguration(modelCfg)
-}
-
-func rawModelConfigurationError(modelName string, defaultContext bool) error {
-	if defaultContext {
-		return fmt.Errorf("default model %q has no configured provider", modelName)
-	}
-	return fmt.Errorf("fallback model %q has no configured provider", modelName)
-}
-
-func defaultChainProvider(cfg *config.Config) string {
-	if cfg != nil && strings.TrimSpace(cfg.Agents.Defaults.Provider) != "" {
-		return providers.NormalizeProvider(cfg.Agents.Defaults.Provider)
-	}
-	return "openai"
-}
-
-func defaultChainReferenceIdentity(cfg *config.Config, modelName string) string {
-	modelName = strings.TrimSpace(modelName)
-	if modelName == "" {
-		return ""
-	}
-
-	defaultProvider := defaultChainProvider(cfg)
-	var modelList []*config.ModelConfig
-	if cfg != nil {
-		modelList = cfg.ModelList
-	}
-	matches := modelConfigsMatchingSignatureRef(modelList, modelName, defaultProvider)
-	if len(matches) > 0 {
-		modelCfg := matches[0]
-		if alias := strings.TrimSpace(modelCfg.ModelName); alias != "" {
-			return "model_name:" + alias
-		}
-		provider, modelID := providers.ExtractProtocol(modelCfg)
-		return providers.ModelKey(provider, modelID)
-	}
-
-	ref := providers.ParseModelRef(modelName, defaultProvider)
-	if ref == nil {
-		return ""
-	}
-	return providers.ModelKey(ref.Provider, ref.Model)
+func defaultChainReferenceIdentity(modelName string) string {
+	return strings.TrimSpace(modelName)
 }
 
 func validateDefaultModelChain(
@@ -435,7 +293,7 @@ func validateDefaultModelChain(
 		); err != nil {
 			return nil, err
 		}
-		defaultIdentity = defaultChainReferenceIdentity(cfg, defaultModel)
+		defaultIdentity = defaultChainReferenceIdentity(defaultModel)
 	}
 
 	seenIdentities := make(map[string]struct{}, len(fallbacks))
@@ -447,7 +305,7 @@ func validateDefaultModelChain(
 		if err := validateDefaultChainReference(cfg, fallback, modelsByName[fallback], false); err != nil {
 			return nil, err
 		}
-		identity := defaultChainReferenceIdentity(cfg, fallback)
+		identity := defaultChainReferenceIdentity(fallback)
 		if identity != "" && identity == defaultIdentity {
 			return nil, fmt.Errorf(
 				"fallback model %q resolves to the same runtime model as default model %q",
@@ -486,7 +344,7 @@ func normalizeDefaultChainReferences(cfg *config.Config) {
 		); err != nil {
 			defaultModel = ""
 		}
-		defaultIdentity = defaultChainReferenceIdentity(cfg, defaultModel)
+		defaultIdentity = defaultChainReferenceIdentity(defaultModel)
 	}
 	if defaultModel == "" {
 		cfg.Agents.Defaults.ModelName = ""
@@ -503,7 +361,7 @@ func normalizeDefaultChainReferences(cfg *config.Config) {
 		if err := validateDefaultChainReference(cfg, fallback, modelsByName[fallback], false); err != nil {
 			continue
 		}
-		identity := defaultChainReferenceIdentity(cfg, fallback)
+		identity := defaultChainReferenceIdentity(fallback)
 		if identity != "" && identity == defaultIdentity {
 			continue
 		}
@@ -532,7 +390,7 @@ func (h *Handler) handleListModels(w http.ResponseWriter, r *http.Request) {
 
 	// Normalize stored provider/model fields in memory so GET can round-trip
 	// through the current API shape without mutating the on-disk config.
-	normalizeStoredModelProviders(cfg)
+	normalizeStoredModels(cfg)
 	normalizeDefaultChainReferences(cfg)
 
 	defaultModel := cfg.Agents.Defaults.GetModelName()
@@ -559,7 +417,6 @@ func (h *Handler) handleListModels(w http.ResponseWriter, r *http.Request) {
 			Model:               modelID,
 			APIBase:             m.APIBase,
 			APIKey:              maskAPIKey(m.APIKey()),
-			Proxy:               m.Proxy,
 			RPM:                 m.RPM,
 			MaxTokensField:      m.MaxTokensField,
 			RequestTimeout:      m.RequestTimeout,
@@ -573,18 +430,15 @@ func (h *Handler) handleListModels(w http.ResponseWriter, r *http.Request) {
 			Status:              modelStatuses[i].Status,
 			IsDefault:           m.ModelName == defaultModel,
 			IsVirtual:           m.IsVirtual(),
-			DefaultModelAllowed: defaultModelAllowedForModelConfig(m, defaultChainProvider(cfg)),
 		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"models":           models,
-		"total":            len(models),
-		"default_model":    defaultModel,
-		"default_provider": defaultChainProvider(cfg),
-		"fallback_chain":   fallbackChain,
-		"provider_options": modelProviderOptionsForResponse(),
+		"models":         models,
+		"total":          len(models),
+		"default_model":  defaultModel,
+		"fallback_chain": fallbackChain,
 	})
 }
 
@@ -597,7 +451,7 @@ func (h *Handler) handleGetDefaultChain(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
 		return
 	}
-	normalizeStoredModelProviders(cfg)
+	normalizeStoredModels(cfg)
 	normalizeDefaultChainReferences(cfg)
 
 	resp := defaultChainResponse{
@@ -643,14 +497,14 @@ func (h *Handler) handleAddModel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
 		return
 	}
-	normalizeIncomingModelConfig(&mc.ModelConfig, defaultChainProvider(cfg))
-	if err = validateIncomingModelConfig(&mc.ModelConfig, nil); err != nil {
+	normalizeIncomingModelConfig(&mc.ModelConfig)
+	if err = validateIncomingModelConfig(&mc.ModelConfig); err != nil {
 		http.Error(w, fmt.Sprintf("Validation error: %v", err), http.StatusBadRequest)
 		return
 	}
 
 	cfg.ModelList = append(cfg.ModelList, &mc.ModelConfig)
-	normalizeStoredModelProviders(cfg)
+	normalizeStoredModels(cfg)
 	normalizeDefaultChainReferences(cfg)
 
 	if err := config.SaveConfig(h.configPath, cfg); err != nil {
@@ -671,7 +525,7 @@ func (h *Handler) handleAddModel(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdateModel replaces a model configuration entry at the given index.
 // If the request body omits api_key (or sends an empty string), the existing
-// stored key is preserved so callers can update only api_base / proxy without
+// stored key is preserved so callers can update only api_base without
 // exposing or clearing the secret.
 //
 //	PUT /api/models/{index}
@@ -714,7 +568,7 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
 		return
 	}
-	normalizeStoredModelProviders(cfg)
+	normalizeStoredModels(cfg)
 
 	if idx < 0 || idx >= len(cfg.ModelList) {
 		http.Error(w, fmt.Sprintf("Index %d out of range (0-%d)", idx, len(cfg.ModelList)-1), http.StatusNotFound)
@@ -723,7 +577,7 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 	oldModelName := strings.TrimSpace(cfg.ModelList[idx].ModelName)
 
 	// Preserve the existing API key when the caller omits it (empty string).
-	// This lets the UI update api_base / proxy without clearing the stored secret.
+	// This lets the UI update api_base without clearing the stored secret.
 	if mc.APIKey == "" {
 		mc.ModelConfig.SetAPIKey(cfg.ModelList[idx].APIKey())
 	} else {
@@ -757,8 +611,8 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 		mc.Provider = cfg.ModelList[idx].Provider
 	}
 
-	normalizeIncomingModelConfig(&mc.ModelConfig, defaultChainProvider(cfg))
-	if err = validateIncomingModelConfig(&mc.ModelConfig, cfg.ModelList[idx]); err != nil {
+	normalizeIncomingModelConfig(&mc.ModelConfig)
+	if err = validateIncomingModelConfig(&mc.ModelConfig); err != nil {
 		http.Error(w, fmt.Sprintf("Validation error: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -771,7 +625,6 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 			oldModelName,
 			remainingOldNameModels,
 			true,
-			defaultChainProvider(cfg),
 		); err != nil {
 			defaultReferenceRenamed = true
 			if strings.TrimSpace(cfg.Agents.Defaults.ModelName) == oldModelName {
@@ -782,7 +635,6 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 			oldModelName,
 			remainingOldNameModels,
 			false,
-			defaultChainProvider(cfg),
 		); err != nil {
 			fallbackReferenceRenamed = true
 			cfg.Agents.Defaults.ModelFallbacks = replaceModelName(
@@ -793,7 +645,7 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cfg.ModelList[idx] = &mc.ModelConfig
-	normalizeStoredModelProviders(cfg)
+	normalizeStoredModels(cfg)
 	normalizeDefaultChainReferences(cfg)
 
 	logger.Debugf("update model config: %#v", mc.ModelConfig)
@@ -859,7 +711,6 @@ func (h *Handler) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 				deletedModelName,
 				remainingModels,
 				true,
-				defaultChainProvider(cfg),
 			); err != nil {
 				cfg.Agents.Defaults.ModelName = ""
 			}
@@ -868,7 +719,6 @@ func (h *Handler) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 			deletedModelName,
 			remainingModels,
 			false,
-			defaultChainProvider(cfg),
 		); err != nil {
 			cfg.Agents.Defaults.ModelFallbacks = removeModelName(
 				cfg.Agents.Defaults.ModelFallbacks,
@@ -965,7 +815,6 @@ func (h *Handler) handleSetDefaultModel(w http.ResponseWriter, r *http.Request) 
 		modelName,
 		modelConfigsByName(cfg)[modelName],
 		true,
-		defaultChainProvider(cfg),
 	); err != nil {
 		status := http.StatusBadRequest
 		if strings.Contains(err.Error(), "not found in model_list") {
@@ -1072,7 +921,7 @@ func maskAPIKey(key string) string {
 	return key[:3] + "****" + key[len(key)-4:]
 }
 
-// handleFetchModels fetches available models from an upstream provider.
+// handleFetchModels lists models from an OpenAI-compatible endpoint.
 //
 //	POST /api/models/fetch
 func (h *Handler) handleFetchModels(w http.ResponseWriter, r *http.Request) {
@@ -1094,49 +943,34 @@ func (h *Handler) handleFetchModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Provider == "" {
-		http.Error(w, "provider is required", http.StatusBadRequest)
-		return
-	}
-
-	if !providers.IsModelProviderFetchable(req.Provider) {
-		http.Error(w, fmt.Sprintf("provider %q does not support model listing", req.Provider), http.StatusBadRequest)
-		return
-	}
-
 	apiKey := strings.TrimSpace(req.APIKey)
-	apiBase := strings.TrimSpace(req.APIBase)
-
-	if apiKey == "" && req.ModelIndex != nil {
-		if stored := h.lookupStoredAPIKey(*req.ModelIndex, req.Provider, apiBase); stored != "" {
-			apiKey = stored
-		}
-	}
-
+	apiBase := strings.TrimRight(strings.TrimSpace(req.APIBase), "/")
 	if apiBase == "" {
-		apiBase = providers.DefaultAPIBaseForProtocol(req.Provider)
-	}
-	if apiBase == "" {
-		http.Error(w, fmt.Sprintf("No default API base for provider %q", req.Provider), http.StatusBadRequest)
+		http.Error(w, "api_base is required", http.StatusBadRequest)
 		return
+	}
+	if req.ModelIndex != nil && apiKey == "" {
+		apiKey = h.lookupStoredAPIKey(*req.ModelIndex, apiBase)
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	models, err := fetchUpstreamModels(ctx, req.Provider, apiBase, apiKey)
+	models, err := fetchUpstreamModels(ctx, apiBase, apiKey)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to fetch models: %v", err), http.StatusBadGateway)
 		return
 	}
 
-	// Auto-save fetched models to catalog
 	catalogModels := make([]CatalogModel, len(models))
 	for i, m := range models {
 		catalogModels[i] = CatalogModel{ID: m.ID, OwnedBy: m.OwnedBy}
 	}
-	if saveErr := SaveCatalog(req.Provider, apiBase, apiKey, catalogModels); saveErr != nil {
-		// Log but don't fail the request — saving catalog is non-critical
+	provider := providers.NormalizeProvider(req.Provider)
+	if provider == "" {
+		provider = "custom"
+	}
+	if saveErr := SaveCatalog(provider, apiBase, apiKey, catalogModels); saveErr != nil {
 		logger.Warnf("Failed to save model catalog: %v", saveErr)
 	}
 
@@ -1147,25 +981,13 @@ func (h *Handler) handleFetchModels(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) lookupStoredAPIKey(index int, reqProvider, reqAPIBase string) string {
+func (h *Handler) lookupStoredAPIKey(index int, reqAPIBase string) string {
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil || index < 0 || index >= len(cfg.ModelList) {
 		return ""
 	}
 	stored := cfg.ModelList[index]
-	storedProvider, _ := providers.ExtractProtocol(stored)
-	if providers.NormalizeProvider(reqProvider) != providers.NormalizeProvider(storedProvider) {
-		return ""
-	}
-	effectiveReqBase := strings.TrimSpace(reqAPIBase)
-	if effectiveReqBase == "" {
-		effectiveReqBase = providers.DefaultAPIBaseForProtocol(reqProvider)
-	}
-	effectiveStoredBase := strings.TrimSpace(stored.APIBase)
-	if effectiveStoredBase == "" {
-		effectiveStoredBase = providers.DefaultAPIBaseForProtocol(storedProvider)
-	}
-	if normalizeAPIBaseForCompare(effectiveReqBase) != normalizeAPIBaseForCompare(effectiveStoredBase) {
+	if normalizeAPIBaseForCompare(stored.APIBase) != normalizeAPIBaseForCompare(reqAPIBase) {
 		return ""
 	}
 	return stored.APIKey()
@@ -1176,76 +998,9 @@ type upstreamModel struct {
 	OwnedBy string `json:"owned_by,omitempty"`
 }
 
-func fetchUpstreamModels(ctx context.Context, provider, apiBase, apiKey string) ([]upstreamModel, error) {
-	apiBase = strings.TrimRight(strings.TrimSpace(apiBase), "/")
-	provider = providers.NormalizeProvider(provider)
-
-	var fetchURL string
-	switch provider {
-	case "ollama":
-		// Strip /v1 suffix if present to get the Ollama root
-		root := apiBase
-		if strings.HasSuffix(root, "/v1") {
-			root = root[:len(root)-3]
-		}
-		root = strings.TrimRight(root, "/")
-		fetchURL = root + "/api/tags"
-		return fetchOllamaModels(ctx, fetchURL)
-	case "nearai":
-		fetchURL = apiBase + "/model/list"
-		return fetchNearAIModels(ctx, fetchURL, apiKey)
-	default:
-		// OpenAI-compatible: /v1/models
-		fetchURL = apiBase + "/models"
-		return fetchOpenAICompatibleModels(ctx, fetchURL, apiKey)
-	}
-}
-
-func fetchNearAIModels(ctx context.Context, fetchURL, apiKey string) ([]upstreamModel, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	if apiKey = strings.TrimSpace(apiKey); apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("nearai returned status %d", resp.StatusCode)
-	}
-
-	var parsed struct {
-		Models []struct {
-			ModelID  string `json:"modelId"`
-			OwnedBy  string `json:"ownedBy"`
-			Metadata struct {
-				OwnedBy string `json:"ownedBy"`
-			} `json:"metadata"`
-		} `json:"models"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return nil, err
-	}
-
-	models := make([]upstreamModel, 0, len(parsed.Models))
-	for _, m := range parsed.Models {
-		id := strings.TrimSpace(m.ModelID)
-		if id == "" {
-			continue
-		}
-		ownedBy := strings.TrimSpace(m.OwnedBy)
-		if ownedBy == "" {
-			ownedBy = strings.TrimSpace(m.Metadata.OwnedBy)
-		}
-		models = append(models, upstreamModel{ID: id, OwnedBy: ownedBy})
-	}
-	return models, nil
+func fetchUpstreamModels(ctx context.Context, apiBase, apiKey string) ([]upstreamModel, error) {
+	fetchURL := strings.TrimRight(strings.TrimSpace(apiBase), "/") + "/models"
+	return fetchOpenAICompatibleModels(ctx, fetchURL, apiKey)
 }
 
 func fetchOpenAICompatibleModels(ctx context.Context, fetchURL, apiKey string) ([]upstreamModel, error) {
@@ -1256,6 +1011,7 @@ func fetchOpenAICompatibleModels(ctx context.Context, fetchURL, apiKey string) (
 	if apiKey = strings.TrimSpace(apiKey); apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -1263,97 +1019,45 @@ func fetchOpenAICompatibleModels(ctx context.Context, fetchURL, apiKey string) (
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("upstream returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("upstream returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	type modelItem struct {
-		ID      string `json:"id"`
-		OwnedBy string `json:"owned_by"`
-	}
-
-	// {"data": [...]} envelope. Distinguish "envelope shape with empty list"
-	// from "object without a data key" via Data being non-nil after unmarshal:
-	// json.Unmarshal sets Data to []modelItem{} for `{"data":[]}` but leaves
-	// it as nil when "data" is absent or null.
 	var envelope struct {
-		Data []modelItem `json:"data"`
+		Data *[]upstreamModel `json:"data"`
 	}
 	if err := json.Unmarshal(body, &envelope); err == nil && envelope.Data != nil {
-		models := make([]upstreamModel, 0, len(envelope.Data))
-		for _, m := range envelope.Data {
-			if m.ID != "" {
-				models = append(models, upstreamModel{ID: m.ID, OwnedBy: m.OwnedBy})
-			}
-		}
-		return models, nil
+		return normalizeUpstreamModels(*envelope.Data), nil
 	}
 
-	// Bare-array shape, including `[]`.
-	var arr []modelItem
-	if err := json.Unmarshal(body, &arr); err == nil {
-		models := make([]upstreamModel, 0, len(arr))
-		for _, m := range arr {
-			if m.ID != "" {
-				models = append(models, upstreamModel{ID: m.ID, OwnedBy: m.OwnedBy})
-			}
-		}
-		return models, nil
+	var list []upstreamModel
+	if err := json.Unmarshal(body, &list); err != nil {
+		return nil, fmt.Errorf("unrecognized model list response: %w", err)
 	}
-
-	preview := body
-	if len(preview) > 256 {
-		preview = preview[:256]
-	}
-	return nil, fmt.Errorf("decode response: unrecognized shape: %s", strings.TrimSpace(string(preview)))
+	return normalizeUpstreamModels(list), nil
 }
 
-func fetchOllamaModels(ctx context.Context, fetchURL string) ([]upstreamModel, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ollama returned status %d", resp.StatusCode)
-	}
-
-	var parsed struct {
-		Models []struct {
-			Name  string `json:"name"`
-			Model string `json:"model"`
-		} `json:"models"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return nil, err
-	}
-
-	models := make([]upstreamModel, 0, len(parsed.Models))
-	for _, m := range parsed.Models {
-		id := m.Name
+func normalizeUpstreamModels(models []upstreamModel) []upstreamModel {
+	out := make([]upstreamModel, 0, len(models))
+	seen := make(map[string]struct{}, len(models))
+	for _, model := range models {
+		id := strings.TrimSpace(model.ID)
 		if id == "" {
-			id = m.Model
+			continue
 		}
-		if id != "" {
-			models = append(models, upstreamModel{ID: id})
+		if _, ok := seen[id]; ok {
+			continue
 		}
+		seen[id] = struct{}{}
+		out = append(out, upstreamModel{ID: id, OwnedBy: strings.TrimSpace(model.OwnedBy)})
 	}
-	return models, nil
+	return out
 }
 
-// normalizeAPIBaseForCompare normalizes an API base URL for equality comparison
-// by trimming trailing slashes and lowering the scheme/host.
 func normalizeAPIBaseForCompare(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -1450,34 +1154,21 @@ func (h *Handler) handleTestInlineModel(w http.ResponseWriter, r *http.Request) 
 		m.SetAPIKey(req.APIKey)
 	}
 
-	// When api_key is empty and model_index is provided, fall back to stored credentials.
-	// This lets the edit form test unsaved field changes while using the saved key.
-	// Only reuse the stored key when the provider and effective API base match
-	// the saved model, to prevent attaching a credential to a different endpoint.
+	// When api_key is empty and model_index is provided, fall back to stored
+	// credentials. Only reuse the stored key when the effective API base
+	// matches, to prevent attaching a credential to a different endpoint.
 	if req.APIKey == "" && req.ModelIndex != nil {
 		cfg, err := config.LoadConfig(h.configPath)
 		if err == nil && *req.ModelIndex >= 0 && *req.ModelIndex < len(cfg.ModelList) {
 			stored := cfg.ModelList[*req.ModelIndex]
-			storedProvider, _ := providers.ExtractProtocol(stored)
-			reqProvider := providers.NormalizeProvider(m.Provider)
-			providerMatch := reqProvider == "" || reqProvider == providers.NormalizeProvider(storedProvider)
-
 			effectiveReqBase := strings.TrimSpace(m.APIBase)
 			if effectiveReqBase == "" {
-				effectiveReqBase = providers.DefaultAPIBaseForProtocol(reqProvider)
+				effectiveReqBase = stored.APIBase
+				m.APIBase = stored.APIBase
 			}
-			effectiveStoredBase := strings.TrimSpace(stored.APIBase)
-			if effectiveStoredBase == "" {
-				effectiveStoredBase = providers.DefaultAPIBaseForProtocol(storedProvider)
-			}
-			baseMatch := normalizeAPIBaseForCompare(effectiveReqBase) == normalizeAPIBaseForCompare(effectiveStoredBase)
-
-			if providerMatch && baseMatch {
+			if normalizeAPIBaseForCompare(effectiveReqBase) == normalizeAPIBaseForCompare(stored.APIBase) {
 				if stored.APIKey() != "" {
 					m.SetAPIKey(stored.APIKey())
-				}
-				if m.APIBase == "" && stored.APIBase != "" {
-					m.APIBase = stored.APIBase
 				}
 			}
 		}
@@ -1518,98 +1209,9 @@ func (h *Handler) handleTestInlineModel(w http.ResponseWriter, r *http.Request) 
 // probeModelConnectivity performs a real network probe to verify model endpoint reachability.
 func probeModelConnectivity(m *config.ModelConfig) bool {
 	apiBase := modelProbeAPIBase(m)
-	protocol, modelID := splitModel(m)
-
-	switch protocol {
-	case "ollama":
-		return probeOllamaModel(apiBase, modelID)
-	case "vllm", "lmstudio", "gpt4free":
-		return probeOpenAICompatibleModel(apiBase, modelID, m.APIKey())
-	default:
-		// For remote providers (OpenAI, Anthropic, DeepSeek, etc.),
-		// make a real GET /models request to verify connectivity and credentials.
-		if apiBase != "" {
-			return probeOpenAICompatibleModel(apiBase, modelID, m.APIKey())
-		}
+	_, modelID := providers.ExtractProtocol(m)
+	if apiBase == "" {
 		return false
 	}
-}
-
-// modelConfigsMatchingSignatureRef returns the model entries that a default-chain
-// reference resolves to: an entry whose ModelName matches the reference exactly,
-// otherwise the entry provider/model resolution lands on.
-//
-// It moved here when the gateway supervision file was removed: the console needs
-// it to give a default-chain entry a stable identity.
-func modelConfigsMatchingSignatureRef(
-	modelList []*config.ModelConfig,
-	raw string,
-	defaultProvider string,
-) []*config.ModelConfig {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil
-	}
-
-	matches := make([]*config.ModelConfig, 0, 1)
-	for _, mc := range modelList {
-		if mc == nil || strings.TrimSpace(mc.ModelName) != raw {
-			continue
-		}
-		matches = append(matches, mc)
-	}
-	if len(matches) > 0 {
-		return matches
-	}
-
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{Provider: defaultProvider},
-		},
-		ModelList: modelList,
-	}
-	resolved, err := providers.ResolveModelConfig(cfg, raw)
-	if err != nil {
-		return nil
-	}
-	for _, modelCfg := range modelList {
-		if modelConfigsMatchResolvedEntry(modelCfg, resolved, defaultProvider) {
-			return []*config.ModelConfig{modelCfg}
-		}
-	}
-
-	return nil
-}
-
-// modelConfigsMatchResolvedEntry reports whether a configured model entry and a
-// resolved entry denote the same provider/model endpoint.
-func modelConfigsMatchResolvedEntry(
-	left,
-	right *config.ModelConfig,
-	defaultProvider string,
-) bool {
-	if left == nil || right == nil || left.IsVirtual() {
-		return false
-	}
-	leftProvider, leftModel := modelConfigProviderAndID(left, defaultProvider)
-	rightProvider, rightModel := providers.ExtractProtocol(right)
-
-	return left.ModelName == right.ModelName &&
-		providers.ModelKey(leftProvider, leftModel) == providers.ModelKey(rightProvider, rightModel) &&
-		left.APIBase == right.APIBase &&
-		left.APIKey() == right.APIKey() &&
-		left.Enabled == right.Enabled
-}
-
-// modelConfigProviderAndID returns the provider and model id of a configured
-// model entry, falling back to the default provider when the entry names none.
-func modelConfigProviderAndID(mc *config.ModelConfig, defaultProvider string) (string, string) {
-	if mc == nil {
-		return "", ""
-	}
-	if strings.TrimSpace(mc.Provider) != "" {
-		return providers.ExtractProtocol(mc)
-	}
-
-	return providers.SplitModelProviderAndID(mc.Model, defaultProvider)
+	return probeOpenAICompatibleModel(apiBase, modelID, m.APIKey())
 }

@@ -285,7 +285,7 @@ func TestLoadConfig_MCPMaxInlineTextChars(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
 	raw := `{
-		"version": 3,
+		"version": 4,
 		"tools": {
 			"mcp": {
 				"enabled": true,
@@ -388,29 +388,6 @@ func TestDefaultConfig_WorkspacePath(t *testing.T) {
 
 	if cfg.Agents.Defaults.Workspace == "" {
 		t.Error("Workspace should not be empty")
-	}
-}
-
-// TestDefaultConfig_AnthropicModelsUseClaudeAPIIDs verifies that first-party
-// Anthropic defaults use Claude API model IDs, not dotted display names or
-// Bedrock-style provider prefixes. See:
-// https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions
-func TestDefaultConfig_AnthropicModelsUseClaudeAPIIDs(t *testing.T) {
-	cfg := DefaultConfig()
-
-	checked := 0
-	for _, model := range cfg.ModelList {
-		if model.Provider != "anthropic" {
-			continue
-		}
-		checked++
-		if strings.Contains(model.Model, ".") {
-			t.Fatalf("Anthropic default model %q uses dotted ID %q", model.ModelName, model.Model)
-		}
-	}
-
-	if checked == 0 {
-		t.Fatal("DefaultConfig() missing Anthropic models")
 	}
 }
 
@@ -795,6 +772,7 @@ func setExampleConfigEnv(t *testing.T) {
 		"TELEGRAM_TOKEN":    "123456:example",
 		"DEEPSEEK_BASE_URL": "https://api.deepseek.com/v1",
 		"DEEPSEEK_API_KEY":  "sk-example",
+		"OPENAI_API_KEY":    "sk-openai-example",
 		"TAVILY_API_KEY":    "tvly-example",
 	} {
 		t.Setenv(name, value)
@@ -832,7 +810,7 @@ func TestLoadConfig_ToolFeedbackDefaultsFalseWhenUnset(t *testing.T) {
 	configPath := filepath.Join(dir, "config.json")
 	if err := os.WriteFile(
 		configPath,
-		[]byte(`{"version": 3,"agents":{"defaults":{"workspace":"./workspace"}}}`),
+		[]byte(`{"version": 4,"agents":{"defaults":{"workspace":"./workspace"}}}`),
 		0o600,
 	); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
@@ -855,7 +833,7 @@ func TestLoadConfig_ToolFeedbackDefaultsFalseWhenUnset(t *testing.T) {
 func TestLoadConfig_WebPreferNativeDefaultsTrueWhenUnset(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version": 3,"tools":{"web":{"enabled":true}}}`), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(`{"version": 4,"tools":{"web":{"enabled":true}}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
 
@@ -871,7 +849,7 @@ func TestLoadConfig_WebPreferNativeDefaultsTrueWhenUnset(t *testing.T) {
 func TestLoadConfig_WebPreferNativeCanBeDisabled(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version":3,"tools":{"web":{"prefer_native":false}}}`), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(`{"version":4,"tools":{"web":{"prefer_native":false}}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
 
@@ -887,7 +865,7 @@ func TestLoadConfig_WebPreferNativeCanBeDisabled(t *testing.T) {
 func TestLoadConfig_SyntaxErrorReportsLineAndColumn(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	raw := "{\n  \"version\": 3,\n  \"tools\": {\n    \"web\": {\n      \"enabled\": true,,\n      \"format\": \"markdown\"\n    }\n  }\n}\n"
+	raw := "{\n  \"version\": 4,\n  \"tools\": {\n    \"web\": {\n      \"enabled\": true,,\n      \"format\": \"markdown\"\n    }\n  }\n}\n"
 	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
@@ -910,7 +888,7 @@ func TestLoadConfig_SyntaxErrorReportsLineAndColumn(t *testing.T) {
 func TestLoadConfig_TypeErrorReportsFieldPath(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	raw := "{\n  \"version\": 3,\n  \"tools\": {\n    \"web\": {\n      \"fetch_limit_bytes\": \"oops\"\n    }\n  }\n}\n"
+	raw := "{\n  \"version\": 4,\n  \"tools\": {\n    \"web\": {\n      \"fetch_limit_bytes\": \"oops\"\n    }\n  }\n}\n"
 	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
@@ -936,7 +914,7 @@ func TestLoadConfig_TypeErrorReportsFieldPath(t *testing.T) {
 func TestLoadConfig_UnknownFieldsReportsExactPaths(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	raw := "{\n  \"version\": 3,\n  \"tools\": {\n    \"weeb\": {\n      \"enabled\": true\n    },\n    \"web\": {\n      \"fatch_limit_bytes\": 123\n    }\n  }\n}\n"
+	raw := "{\n  \"version\": 4,\n  \"tools\": {\n    \"weeb\": {\n      \"enabled\": true\n    },\n    \"web\": {\n      \"fatch_limit_bytes\": 123\n    }\n  }\n}\n"
 	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
@@ -984,7 +962,7 @@ func TestDefaultConfig_LoadImageEnabled(t *testing.T) {
 func TestLoadConfig_LoadImageCanBeDisabled(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	raw := "{\n  \"version\": 3,\n  \"tools\": {\n    \"load_image\": {\n      \"enabled\": false\n    }\n  }\n}\n"
+	raw := "{\n  \"version\": 4,\n  \"tools\": {\n    \"load_image\": {\n      \"enabled\": false\n    }\n  }\n}\n"
 	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
@@ -1057,7 +1035,7 @@ func TestDefaultConfig_LogLevel(t *testing.T) {
 func TestLoadConfig_ExecAllowRemoteDefaultsTrueWhenUnset(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version": 3,"tools":{"exec":{"enable_deny_patterns":true}}}`),
+	if err := os.WriteFile(configPath, []byte(`{"version": 4,"tools":{"exec":{"enable_deny_patterns":true}}}`),
 		0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
@@ -1075,7 +1053,7 @@ func TestLoadConfig_WebToolsProxy(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 	configJSON := `{
-  "version": 3,
+  "version": 4,
   "agents": {"defaults":{"workspace":"./workspace","model_name":"gpt4","max_tokens":8192,"max_tool_iterations":20}},
   "model_list": [{"model_name":"gpt4","model":"openai/gpt-5.4","api_keys":["x"]}],
   "tools": {"web":{"proxy":"http://127.0.0.1:7890"}}
@@ -1097,7 +1075,7 @@ func TestLoadConfig_HooksProcessConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 	configJSON := `{
-  "version": 3,
+  "version": 4,
   "hooks": {
     "processes": {
       "review-gate": {
@@ -1523,7 +1501,7 @@ func TestLoadConfig_TelegramPlaceholderTextAcceptsSingleString(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.json")
 	data := `{
-		"version": 3,
+		"version": 4,
 		"agents": { "defaults": { "workspace": "", "model_name": "", "max_tokens": 0, "max_tool_iterations": 0 } },
 		"session": {},
 		"channel_list": {
@@ -1565,7 +1543,7 @@ func TestLoadConfig_FileRefNotSealed(t *testing.T) {
 	if err := os.WriteFile(keyFile, []byte("sk-from-file"), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	data := `{"version": 3,"model_list":[{"model_name":"test","model":"openai/gpt-4","api_keys":["file://openai.key"]}]}`
+	data := `{"version": 4,"model_list":[{"model_name":"test","model":"openai/gpt-4","api_keys":["file://openai.key"]}]}`
 	if err := os.WriteFile(cfgPath, []byte(data), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -1590,7 +1568,7 @@ func TestLoadConfig_FileRefNotSealed(t *testing.T) {
 func TestConfigParsesLogLevel(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.json")
-	data := `{"version": 3,"gateway":{"log_level":"debug"}}`
+	data := `{"version": 4,"gateway":{"log_level":"debug"}}`
 	if err := os.WriteFile(cfgPath, []byte(data), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -1607,7 +1585,7 @@ func TestConfigParsesLogLevel(t *testing.T) {
 func TestConfigLogLevelEmpty(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.json")
-	data := `{"version": 3}`
+	data := `{"version": 4}`
 	if err := os.WriteFile(cfgPath, []byte(data), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -1625,7 +1603,7 @@ func TestConfigLogLevelEmpty(t *testing.T) {
 func TestResolveGatewayLogLevel(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.json")
-	data := `{"version": 3,"gateway":{"log_level":"debug"}}`
+	data := `{"version": 4,"gateway":{"log_level":"debug"}}`
 	if err := os.WriteFile(cfgPath, []byte(data), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -1638,7 +1616,7 @@ func TestResolveGatewayLogLevel(t *testing.T) {
 func TestResolveGatewayLogLevel_UsesConfigValue(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.json")
-	data := `{"version": 3,"gateway":{"log_level":"warning"}}`
+	data := `{"version": 4,"gateway":{"log_level":"warning"}}`
 	if err := os.WriteFile(cfgPath, []byte(data), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -1914,7 +1892,7 @@ func TestFilterSensitiveData_AllTokenTypes(t *testing.T) {
 func TestMakeBackup_WithDateSuffix(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version": 3}`), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(`{"version": 4}`), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -1937,7 +1915,7 @@ func TestMakeBackup_WithDateSuffix(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ReadFile backup: %v", err)
 			}
-			if string(data) != `{"version": 3}` {
+			if string(data) != `{"version": 4}` {
 				t.Errorf("backup content = %q, want original content", string(data))
 			}
 			break
@@ -1955,7 +1933,7 @@ func TestMakeBackup_AlsoBacksEnvFile(t *testing.T) {
 	configPath := filepath.Join(dir, "config.json")
 	envPath := EnvFilePath(configPath)
 
-	os.WriteFile(configPath, []byte(`{"version": 3}`), 0o600)
+	os.WriteFile(configPath, []byte(`{"version": 4}`), 0o600)
 	os.WriteFile(envPath, []byte("DASHBOARD_TOKEN=sk-test\n"), 0o600)
 
 	if err := MakeBackup(configPath); err != nil {
@@ -2001,7 +1979,7 @@ func TestMakeBackup_NonexistentFileSkipsBackup(t *testing.T) {
 func TestMakeBackup_OnlyConfigNoEnv(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	os.WriteFile(configPath, []byte(`{"version": 3}`), 0o600)
+	os.WriteFile(configPath, []byte(`{"version": 4}`), 0o600)
 
 	if err := MakeBackup(configPath); err != nil {
 		t.Fatalf("MakeBackup: %v", err)
@@ -2033,7 +2011,7 @@ func TestMakeBackup_SameDateSuffix(t *testing.T) {
 	configPath := filepath.Join(dir, "config.json")
 	envPath := EnvFilePath(configPath)
 
-	os.WriteFile(configPath, []byte(`{"version": 3}`), 0o600)
+	os.WriteFile(configPath, []byte(`{"version": 4}`), 0o600)
 	os.WriteFile(envPath, []byte("KEY=value\n"), 0o600)
 
 	if err := MakeBackup(configPath); err != nil {
@@ -2193,7 +2171,7 @@ func TestLoadConfigExpandsEnvRefsFromProcessEnv(t *testing.T) {
 	path := filepath.Join(dir, "config.json")
 	t.Setenv("TEST_API_BASE", "https://example.test/v1")
 	data := `{
-	  "version": 3,
+	  "version": 4,
 	  "model_list": [{
 	    "model_name": "m",
 	    "provider": "openai",
@@ -2234,12 +2212,18 @@ func TestLoadConfigMissingFileStillRunsPostProcessing(t *testing.T) {
 func TestLoadConfigRejectsMissingEnvRef(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	data := `{"version":3,"model_list":[{"model_name":"m","provider":"openai","model":"gpt-test","api_base":"$NO_SUCH_BASE","api_keys":["sk"]}],"agents":{"defaults":{"model_name":"m"}}}`
+	data := `{"version":4,"model_list":[{"model_name":"m","provider":"openai","model":"gpt-test","api_base":"$NO_SUCH_BASE","api_keys":["sk"]}],"agents":{"defaults":{"model_name":"m"}}}`
 	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := LoadConfig(path)
 	if err == nil || !strings.Contains(err.Error(), "NO_SUCH_BASE") {
 		t.Fatalf("error = %v, want NO_SUCH_BASE", err)
+	}
+}
+
+func TestDefaultConfigHasNoBuiltInModels(t *testing.T) {
+	if got := len(DefaultConfig().ModelList); got != 0 {
+		t.Fatalf("DefaultConfig().ModelList length = %d, want 0", got)
 	}
 }

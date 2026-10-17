@@ -649,7 +649,7 @@ func (al *AgentLoop) sideQuestionModelConfig(
 	if agent == nil {
 		return nil, fmt.Errorf("sideQuestionModelConfig: no agent available for /btw")
 	}
-	if candidate.ConfigIndex > 0 {
+	if candidate.ConfigIndex > 0 || candidate.ConfigKey != "" {
 		if modelCfg, err := resolvedCandidateModelConfig(
 			al.GetConfig(),
 			candidate,
@@ -659,54 +659,34 @@ func (al *AgentLoop) sideQuestionModelConfig(
 	}
 
 	if name := modelAliasFromCandidateIdentityKey(candidate.IdentityKey); name != "" {
-		modelCfg, err := resolvedRuntimeModelConfig(al.GetConfig(), name)
-		if err == nil {
+		if modelCfg, err := resolvedRuntimeModelConfig(al.GetConfig(), name); err == nil {
 			return modelCfg, nil
 		}
-		// Fallback: create a minimal config if lookup fails
 	}
 
-	// Older identity keys used provider/model; keep resolving those by model.
-	if name := modelNameFromIdentityKey(candidate.IdentityKey); name != "" {
-		modelCfg, err := resolvedRuntimeModelConfig(al.GetConfig(), name)
-		if err == nil {
-			return modelCfg, nil
-		}
-		// Fallback: create a minimal config if lookup fails
-	}
-
-	if candidate.Provider != "" && candidate.Model != "" {
-		candidateRef := providers.NormalizeProvider(candidate.Provider) + "/" + candidate.Model
-		if modelCfg, err := resolvedRuntimeModelConfig(al.GetConfig(), candidateRef); err == nil {
-			return modelCfg, nil
-		}
-		return &config.ModelConfig{
-			ModelName: candidateRef,
-			Model:     candidateRef,
-		}, nil
-	}
-
-	// Otherwise, clean up the base model name and use it
 	baseModelName = strings.TrimSpace(baseModelName)
-	modelCfg, err := resolvedRuntimeModelConfig(al.GetConfig(), baseModelName)
-	if err != nil {
-		// Fallback: create a minimal config for test scenarios
-		model := strings.TrimSpace(baseModelName)
-		if candidate.Model != "" {
-			model = candidate.Model
+	if baseModelName != "" {
+		if modelCfg, err := resolvedRuntimeModelConfig(al.GetConfig(), baseModelName); err == nil {
+			return modelCfg, nil
 		}
-		if candidate.Provider != "" && candidate.Model != "" {
-			model = providers.NormalizeProvider(candidate.Provider) + "/" + candidate.Model
-		} else {
-			model = ensureProtocolModel(model)
-		}
-		return &config.ModelConfig{
-			ModelName: baseModelName,
-			Model:     model,
-		}, nil
 	}
 
-	// If candidate specifies a different provider/model, override
-	clone := *modelCfg
-	return &clone, nil
+	// Limited mode (no model_list) still allows /btw to use the injected
+	// provider with the active model identifier.
+	modelName := baseModelName
+	if modelName == "" {
+		modelName = strings.TrimSpace(candidate.Model)
+	}
+	if modelName == "" {
+		return nil, fmt.Errorf("sideQuestionModelConfig: no configured model for /btw")
+	}
+	provider := strings.TrimSpace(candidate.Provider)
+	if provider == "" {
+		provider = "openai"
+	}
+	return &config.ModelConfig{
+		ModelName: modelName,
+		Provider:  provider,
+		Model:     modelName,
+	}, nil
 }

@@ -10,7 +10,7 @@ import (
 func TestLoadConfigMalformedJSONStillReportsSyntaxError(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	raw := "{\n  \"version\": 3,\n  \"heartbeat\": {\"enabled\": true,,\n}\n"
+	raw := "{\n  \"version\": 4,\n  \"heartbeat\": {\"enabled\": true,,\n}\n"
 	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}

@@ -106,7 +106,7 @@ func TestSaveConfigKeepsEnvValueEditedByUser(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	t.Setenv("DASHBOARD_TOKEN", "from-process")
-	if err := os.WriteFile(path, []byte(`{"version": 3, "dashboard": {"token": "$DASHBOARD_TOKEN"}}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"version": 4, "dashboard": {"token": "$DASHBOARD_TOKEN"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(EnvFilePath(path), []byte("DASHBOARD_TOKEN=from-env\n"), 0o600); err != nil {

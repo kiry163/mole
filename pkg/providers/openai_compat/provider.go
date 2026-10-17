@@ -107,11 +107,11 @@ func WithProviderName(providerName string) Option {
 	}
 }
 
-func NewProvider(apiKey, apiBase, proxy string, opts ...Option) *Provider {
+func NewProvider(apiKey, apiBase string, opts ...Option) *Provider {
 	p := &Provider{
 		apiKey:     apiKey,
 		apiBase:    strings.TrimRight(apiBase, "/"),
-		httpClient: common.NewHTTPClient(proxy),
+		httpClient: common.NewHTTPClient(),
 	}
 
 	for _, opt := range opts {
@@ -121,23 +121,6 @@ func NewProvider(apiKey, apiBase, proxy string, opts ...Option) *Provider {
 	}
 
 	return p
-}
-
-func NewProviderWithMaxTokensField(apiKey, apiBase, proxy, maxTokensField string) *Provider {
-	return NewProvider(apiKey, apiBase, proxy, WithMaxTokensField(maxTokensField))
-}
-
-func NewProviderWithMaxTokensFieldAndTimeout(
-	apiKey, apiBase, proxy, maxTokensField string,
-	requestTimeoutSeconds int,
-) *Provider {
-	return NewProvider(
-		apiKey,
-		apiBase,
-		proxy,
-		WithMaxTokensField(maxTokensField),
-		WithRequestTimeout(time.Duration(requestTimeoutSeconds)*time.Second),
-	)
 }
 
 // buildRequestBody constructs the common request body for Chat and ChatStream.

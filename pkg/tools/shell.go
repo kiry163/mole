@@ -1173,6 +1173,12 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 		if err != nil {
 			return ""
 		}
+		// Resolve the workspace itself before comparing. On macOS /var is a
+		// symlink to /private/var, so an unresolved cwd would make every
+		// resolved path under t.TempDir() look like it escapes the workspace.
+		if resolvedCwd, err := filepath.EvalSymlinks(cwdPath); err == nil {
+			cwdPath = resolvedCwd
+		}
 
 		// Web URL schemes whose path components (starting with //) should be exempt
 		// from workspace sandbox checks. file: is intentionally excluded so that

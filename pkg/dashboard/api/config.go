@@ -82,7 +82,6 @@ func (h *Handler) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg.Session.ApplyDmScope()
-	cfg.Session.DeriveDmScope()
 	// A PUT body that omits tools.exec.allow_remote must keep the stored value:
 	// the console's save path is not an opinion about a switch it does not show.
 	if execAllowRemoteOmitted(body) {
@@ -215,7 +214,6 @@ func (h *Handler) handlePatchConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newCfg.Session.ApplyDmScope()
-	newCfg.Session.DeriveDmScope()
 
 	// Restore security fields (tokens/keys) from the loaded config before validation,
 	// because private fields are lost during JSON round-trip.

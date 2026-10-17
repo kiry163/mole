@@ -62,9 +62,6 @@ linters:
     - usestdlibvars
     - usetesting
   settings:
-    gomoddirectives:
-      replace-allow-list:
-        - github.com/bwmarrin/discordgo
     errcheck:
       check-type-assertions: true
       check-blank: true

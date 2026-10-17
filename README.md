@@ -117,13 +117,16 @@ Settings live in `~/.mole/config.json` (the directory is overridable with `$MOLE
 
 A secret field in `config.json` is a `$VAR` reference such as `"api_keys": ["$DEEPSEEK_API_KEY"]` or `"token": "$DASHBOARD_TOKEN"`; the value lives in `~/.mole/.env` (mode 0600), which the gateway loads at startup. Only whole values are expanded, an undefined variable is a load error, `$$` means a literal `$`, and expansion is not recursive. Copy `config/env.example` to `~/.mole/.env` and fill it in; `config/config.example.json` shows the matching references. Changes to `.env` apply on the next start: restart `mole serve`, or run `mole service restart` when the agent is installed as a service.
 
-**Upgrading from an older version:** the loader accepts only the current `version`, and rejects unknown config keys by naming them in its error — so an existing `config.json` needs the removed keys deleted by hand. The changes you are most likely to hit:
+**Upgrading from an older version:** the loader accepts only the current `version`, and rejects unknown config keys by naming them in its error — so an existing `config.json` needs the removed keys deleted by hand. Removed sections such as `heartbeat`, `tools.cron`, `tools.approval.unattended`, and `automation` approval rules are rejected too. The changes you are most likely to hit:
 
 - `channel_list.pico` → `channel_list.webchat` (the key doubles as the channel type),
 - `~/.mole/.security.yml` is gone: move its values into `~/.mole/.env` and reference them from `config.json` as `$VAR` (`enc://` values are rejected; plaintext in `.env` or a `file://` path are supported),
-- the `MOLE_*` configuration variables (`MOLE_DASHBOARD_TOKEN`, `MOLE_KEY_PASSPHRASE`, `MOLE_LOG_LEVEL`, `MOLE_LOG_FILE`, the `MOLE_GATEWAY_*` and `MOLE_CHANNELS_*` variables) are no longer read. Only `MOLE_HOME`, `MOLE_CONFIG` and `MOLE_BUILTIN_SKILLS` remain; set the equivalent config fields instead.
+- the `MOLE_*` configuration variables (`MOLE_DASHBOARD_TOKEN`, `MOLE_KEY_PASSPHRASE`, `MOLE_LOG_LEVEL`, `MOLE_LOG_FILE`, the `MOLE_GATEWAY_*` and `MOLE_CHANNELS_*` variables) are no longer read. Only `MOLE_HOME`, `MOLE_CONFIG` and `MOLE_BUILTIN_SKILLS` remain; set the equivalent config fields instead,
+- `session.dm_scope` must be set explicitly; it is no longer derived from a legacy `session.dimensions` array,
+- skill frontmatter must be YAML; JSON frontmatter is no longer accepted,
+- legacy pre-service autostart entries are no longer removed automatically: delete `~/Library/LaunchAgents/io.mole.launcher.plist`, `~/.config/autostart/mole-web.desktop`, or the Windows `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value `MoleLauncher` yourself.
 
-Sessions recorded under the old channel prefix are no longer listed.
+Sessions recorded under the old channel prefix are no longer listed. WebChat clients must send `payload.kind = "thought"`; the legacy boolean `payload.thought` marker is no longer sent or honored.
 
 ## Channels
 

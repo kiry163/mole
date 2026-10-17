@@ -129,14 +129,6 @@ func normalizeIncomingModelConfig(mc *config.ModelConfig, defaultProvider string
 		mc.Provider, mc.Model = providers.SplitModelProviderAndID(mc.Model, defaultProvider)
 	} else {
 		mc.Provider = providers.NormalizeProvider(mc.Provider)
-		if mc.Provider == "elevenlabs" {
-			if _, strippedModel, found := strings.Cut(mc.Model, "/"); found {
-				strippedModel = strings.TrimSpace(strippedModel)
-				if strippedModel != "" {
-					mc.Model = strippedModel
-				}
-			}
-		}
 	}
 }
 
@@ -538,7 +530,7 @@ func (h *Handler) handleListModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Normalize legacy provider/model storage in memory so GET can round-trip
+	// Normalize stored provider/model fields in memory so GET can round-trip
 	// through the current API shape without mutating the on-disk config.
 	normalizeStoredModelProviders(cfg)
 	normalizeDefaultChainReferences(cfg)
@@ -759,34 +751,10 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 	if _, ok := rawFields["streaming"]; !ok {
 		mc.Streaming = cfg.ModelList[idx].Streaming
 	}
-	// Preserve the existing Provider when the caller omits it. This keeps the
-	// update API backward-compatible for clients that haven't started sending
-	// the new field yet, while still allowing explicit clearing via "".
+	// Preserve the existing Provider when the caller omits it, while still
+	// allowing explicit clearing via "".
 	if _, ok := rawFields["provider"]; !ok {
 		mc.Provider = cfg.ModelList[idx].Provider
-		// Older clients still round-trip the legacy model field only. When the
-		// stored config encodes provider/model in Model and has no explicit
-		// Provider field yet, continue preserving that hidden provider prefix.
-		// This keeps provider-omitted updates backward-compatible even when an
-		// older client edits the visible model ID.
-		if strings.TrimSpace(cfg.ModelList[idx].Provider) == "" {
-			existingRawModel := strings.TrimSpace(cfg.ModelList[idx].Model)
-			incomingModel := strings.TrimSpace(mc.Model)
-			existingProtocol, existingModelID := providers.ExtractProtocol(cfg.ModelList[idx])
-			if existingRawModel != "" && existingRawModel != existingModelID && incomingModel != "" {
-				if incomingModel == existingModelID {
-					mc.Model = existingRawModel
-				} else if strings.Contains(incomingModel, "/") && !strings.Contains(existingModelID, "/") {
-					// Older clients never saw the hidden provider prefix for simple
-					// legacy entries such as "openai/gpt-4o". If they now send an
-					// explicit provider/model string, treat it as the caller's full
-					// intent instead of re-applying the old hidden prefix.
-					mc.Model = incomingModel
-				} else if !strings.HasPrefix(incomingModel, existingProtocol+"/") {
-					mc.Model = existingProtocol + "/" + incomingModel
-				}
-			}
-		}
 	}
 
 	normalizeIncomingModelConfig(&mc.ModelConfig, defaultChainProvider(cfg))
@@ -990,8 +958,9 @@ func (h *Handler) handleSetDefaultModel(w http.ResponseWriter, r *http.Request) 
 	}
 	normalizeStoredModelNames(cfg)
 
-	// Keep this legacy endpoint alias-only. Raw references are managed by the
-	// default-chain endpoint and may already exist in persisted configuration.
+	// This endpoint only sets the default model alias. Raw references are
+	// managed by the default-chain endpoint and may already exist in persisted
+	// configuration.
 	if err := validateDefaultChainModelSet(
 		modelName,
 		modelConfigsByName(cfg)[modelName],

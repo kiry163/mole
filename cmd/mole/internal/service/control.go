@@ -8,8 +8,6 @@ package service
 import (
 	"errors"
 	"fmt"
-	"io"
-	"os"
 
 	managersvc "github.com/kardianos/service"
 	"github.com/spf13/cobra"
@@ -54,7 +52,6 @@ func newInstallCommand() *cobra.Command {
 				return fmt.Errorf("install service: %w", err)
 			}
 			printInstalled(w, spec)
-			cleanupLegacyAutostart(w)
 			if now {
 				return startInstalled(w, spec, m)
 			}
@@ -120,7 +117,6 @@ func newReinstallCommand() *cobra.Command {
 				return fmt.Errorf("install service: %w", err)
 			}
 			printInstalled(w, spec)
-			cleanupLegacyAutostart(w)
 			if running || now {
 				return startInstalled(w, spec, m)
 			}
@@ -153,7 +149,6 @@ func newUninstallCommand() *cobra.Command {
 			}
 			if !installed {
 				fmt.Fprintln(w, "Service is not installed")
-				cleanupLegacyAutostart(w)
 				return nil
 			}
 			if running {
@@ -164,29 +159,13 @@ func newUninstallCommand() *cobra.Command {
 			if err := m.Uninstall(); err != nil {
 				if errors.Is(err, managersvc.ErrNotInstalled) {
 					fmt.Fprintln(w, "Service is not installed")
-					cleanupLegacyAutostart(w)
 					return nil
 				}
 				return fmt.Errorf("uninstall service: %w", err)
 			}
 			fmt.Fprintf(w, "Uninstalled %s (data in %s was kept)\n", spec.Name(), spec.HomePath)
-			cleanupLegacyAutostart(w)
 			return nil
 		},
-	}
-}
-
-// cleanupLegacyAutostart removes autostart entries from older mole releases.
-// Cleanup is best effort: problems are reported as warnings and never fail
-// the uninstall.
-func cleanupLegacyAutostart(w io.Writer) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(w, "Warning: could not locate home for legacy autostart cleanup: %v\n", err)
-		return
-	}
-	for _, err := range svc.RemoveLegacyAutostart(home) {
-		fmt.Fprintf(w, "Warning: could not remove legacy autostart entry: %v\n", err)
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -224,26 +223,6 @@ func (s *SessionConfig) ApplyDmScope() {
 	}
 }
 
-// DeriveDmScope sets DmScope based on Dimensions when DmScope is empty.
-// This handles legacy/fresh configs that only have explicit Dimensions
-// without a corresponding DmScope value, ensuring the API response always
-// includes a dm_scope that matches the actual runtime dimensions.
-func (s *SessionConfig) DeriveDmScope() {
-	if s.DmScope != "" || len(s.Dimensions) == 0 {
-		return
-	}
-	switch {
-	case slices.Equal(s.Dimensions, []string{"chat", "sender"}):
-		s.DmScope = "per-channel-peer"
-	case slices.Equal(s.Dimensions, []string{"chat"}):
-		s.DmScope = "per-channel"
-	case slices.Equal(s.Dimensions, []string{"sender"}):
-		s.DmScope = "per-peer"
-	}
-	// Dimensions not matching any known scope mapping (custom array)
-	// is fine — DmScope stays empty and the UI can handle it.
-}
-
 // RoutingConfig controls the intelligent model routing feature.
 // When enabled, each incoming message is scored against structural features
 // (message length, code blocks, tool call history, conversation depth, attachments).
@@ -327,8 +306,7 @@ func (d *AgentDefaults) IsToolFeedbackSeparateMessagesEnabled() bool {
 	return d.ToolFeedback.SeparateMessages
 }
 
-// GetModelName returns the effective model name for the agent defaults.
-// It prefers the new "model_name" field but falls back to "model" for backward compatibility.
+// GetModelName returns the configured default model name.
 func (d *AgentDefaults) GetModelName() string {
 	return d.ModelName
 }
@@ -825,15 +803,6 @@ func (c *MCPConfig) GetMaxInlineTextChars() int {
 func loadConfig(data []byte) (*Config, error) {
 	cfg := DefaultConfig()
 
-	// Drop fields the current schema no longer defines so configs written by
-	// earlier builds still load. Diagnostics use the original bytes.
-	migrated, err := stripRemovedConfigFields(data)
-	if err != nil {
-		return nil, wrapJSONError(data, err, "config.json")
-	}
-	original := data
-	data = migrated
-
 	// Pre-scan the JSON to check how many model_list entries the user provided.
 	// Go's JSON decoder reuses existing slice backing-array elements rather than
 	// zero-initializing them, so fields absent from the user's JSON (e.g. api_base)
@@ -841,14 +810,14 @@ func loadConfig(data []byte) (*Config, error) {
 	// index position. We only reset cfg.ModelList when the user actually provides
 	// entries; when count is 0 we keep DefaultConfig's built-in list as fallback.
 	var tmp Config
-	if err := decodeConfigJSON(original, data, &tmp); err != nil {
+	if err := decodeJSONWithDiagnostics(data, &tmp, "config.json"); err != nil {
 		return nil, err
 	}
 	if len(tmp.ModelList) > 0 {
 		cfg.ModelList = nil
 	}
 
-	if err := decodeConfigJSON(original, data, cfg); err != nil {
+	if err := decodeJSONWithDiagnostics(data, cfg, "config.json"); err != nil {
 		return nil, err
 	}
 	return cfg, nil
@@ -884,7 +853,6 @@ func LoadConfig(path string) (*Config, error) {
 		cfg.Agents.Defaults.Workspace = filepath.Join(GetHome(), pkg.WorkspaceName)
 	}
 	cfg.Session.ApplyDmScope()
-	cfg.Session.DeriveDmScope()
 	return cfg, nil
 }
 
@@ -1051,7 +1019,6 @@ func ResetToDefaults(configPath string) error {
 	}
 	cfg := DefaultConfig()
 	cfg.Session.ApplyDmScope()
-	cfg.Session.DeriveDmScope()
 	if err := cfg.SecurityCopyFrom(configPath); err != nil {
 		logger.WarnF("could not preserve security config", map[string]any{"error": err})
 	}

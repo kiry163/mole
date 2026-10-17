@@ -37,7 +37,6 @@ type Manager struct {
 func NewManager(workspace string) *Manager {
 	stateDir := filepath.Join(workspace, "state")
 	stateFile := filepath.Join(stateDir, "state.json")
-	oldStateFile := filepath.Join(workspace, "state.json")
 
 	// Create state directory if it doesn't exist
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {
@@ -53,30 +52,10 @@ func NewManager(workspace string) *Manager {
 		state:     &State{},
 	}
 
-	// Try to load from new location first
-	if _, err := os.Stat(stateFile); os.IsNotExist(err) {
-		// New file doesn't exist, try migrating from old location
-		if data, err := os.ReadFile(oldStateFile); err == nil {
-			if err := json.Unmarshal(data, sm.state); err == nil {
-				// Migrate to new location
-				if err := sm.saveAtomic(); err != nil {
-					logger.WarnCF("state", "failed to save state", map[string]any{
-						"error": err.Error(),
-					})
-				}
-				logger.InfoCF("state", "migrated state", map[string]any{
-					"from": oldStateFile,
-					"to":   stateFile,
-				})
-			}
-		}
-	} else {
-		// Load from new location
-		if err := sm.load(); err != nil {
-			logger.WarnCF("state", "failed to load state", map[string]any{
-				"error": err.Error(),
-			})
-		}
+	if err := sm.load(); err != nil {
+		logger.WarnCF("state", "failed to load state", map[string]any{
+			"error": err.Error(),
+		})
 	}
 
 	return sm

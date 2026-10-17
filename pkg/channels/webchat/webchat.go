@@ -334,11 +334,6 @@ func (c *WebChatChannel) Send(ctx context.Context, msg bus.OutboundMessage) ([]s
 	case isThought:
 		payload[PayloadKeyKind] = MessageKindThought
 
-		// This field is kept solely for compatibility with legacy webchat clients that
-		// do not yet support the newer "kind" field.
-		// DO NOT use it for any purpose other than legacy client compatibility.
-		payload[PayloadKeyThought] = true
-
 	case isToolCalls:
 		payload[PayloadKeyKind] = MessageKindToolCalls
 		if toolCalls, ok := webchatToolCallsPayload(msg); ok {
@@ -711,7 +706,6 @@ func (s *webchatStreamer) sendReasoningLocked(ctx context.Context, content strin
 			PayloadKeyContent: content,
 			"message_id":      s.reasoningID,
 			PayloadKeyKind:    MessageKindThought,
-			PayloadKeyThought: true,
 		}
 		if s.modelName != "" {
 			payload[PayloadKeyModelName] = s.modelName
@@ -725,7 +719,6 @@ func (s *webchatStreamer) sendReasoningLocked(ctx context.Context, content strin
 			PayloadKeyContent: content,
 			"message_id":      s.reasoningID,
 			PayloadKeyKind:    MessageKindThought,
-			PayloadKeyThought: true,
 		}
 		if s.modelName != "" {
 			payload[PayloadKeyModelName] = s.modelName

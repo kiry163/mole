@@ -46,7 +46,7 @@ func IsDefaultModelProvider(provider string) bool {
 	return ok && option.DefaultModelAllowed
 }
 
-// SplitModelProviderAndID separates a legacy "provider/model" string into its
+// SplitModelProviderAndID separates a "provider/model" string into its
 // effective provider and canonical model ID. Unknown prefixes are treated as
 // part of the model ID and fall back to defaultProvider.
 func SplitModelProviderAndID(model, defaultProvider string) (provider, modelID string) {

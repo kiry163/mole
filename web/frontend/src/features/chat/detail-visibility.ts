@@ -19,13 +19,10 @@ interface StorageLike {
 interface AssistantDetailVisibilityDecision {
   value: AssistantDetailVisibility
   newValueAction: "keep" | "write" | "remove"
-  removeLegacyValue: boolean
 }
 
 export const ASSISTANT_DETAIL_VISIBILITY_STORAGE_KEY =
   "mole:chat-assistant-detail-visibility"
-export const LEGACY_SHOW_ASSISTANT_DETAILS_STORAGE_KEY =
-  "mole:chat-show-thoughts"
 export const DEFAULT_ASSISTANT_DETAIL_VISIBILITY: AssistantDetailVisibility =
   "all"
 
@@ -43,67 +40,26 @@ function serializeAssistantDetailVisibility(
   return JSON.stringify(value)
 }
 
-function parseStoredValue(rawValue: string | null): unknown {
-  if (rawValue === null) {
-    return undefined
-  }
-
-  try {
-    return JSON.parse(rawValue)
-  } catch {
-    return rawValue.trim()
-  }
-}
-
-function parseAssistantDetailVisibility(
-  rawValue: unknown,
-): AssistantDetailVisibility | undefined {
-  if (typeof rawValue !== "string") {
-    return undefined
-  }
-
-  const normalized = rawValue.trim().toLowerCase()
-  if (
-    normalized === "none" ||
-    normalized === "thought" ||
-    normalized === "tool_calls" ||
-    normalized === "all"
-  ) {
-    return normalized
-  }
-
-  return undefined
-}
-
-function parseLegacyShowAssistantDetails(
-  rawValue: unknown,
-): boolean | undefined {
-  if (typeof rawValue === "boolean") {
-    return rawValue
-  }
-
-  if (typeof rawValue !== "string") {
-    return undefined
-  }
-
-  const normalized = rawValue.trim().toLowerCase()
-  if (normalized === "true") {
-    return true
-  }
-  if (normalized === "false") {
-    return false
-  }
-
-  return undefined
-}
-
 export function resolveAssistantDetailVisibilityPreference(
   storedValue: string | null,
-  legacyStoredValue: string | null,
 ): AssistantDetailVisibilityDecision {
-  const nextValue = parseAssistantDetailVisibility(
-    parseStoredValue(storedValue),
-  )
+  let parsedValue: unknown
+  if (storedValue !== null) {
+    try {
+      parsedValue = JSON.parse(storedValue)
+    } catch {
+      parsedValue = storedValue.trim()
+    }
+  }
+
+  const nextValue =
+    typeof parsedValue === "string" &&
+    ["none", "thought", "tool_calls", "all"].includes(
+      parsedValue.trim().toLowerCase(),
+    )
+      ? (parsedValue.trim().toLowerCase() as AssistantDetailVisibility)
+      : undefined
+
   if (nextValue) {
     return {
       value: nextValue,
@@ -111,25 +67,12 @@ export function resolveAssistantDetailVisibilityPreference(
         storedValue === serializeAssistantDetailVisibility(nextValue)
           ? "keep"
           : "write",
-      removeLegacyValue: legacyStoredValue !== null,
-    }
-  }
-
-  const legacyValue = parseLegacyShowAssistantDetails(
-    parseStoredValue(legacyStoredValue),
-  )
-  if (legacyValue !== undefined) {
-    return {
-      value: legacyValue ? "all" : "none",
-      newValueAction: "write",
-      removeLegacyValue: legacyStoredValue !== null,
     }
   }
 
   return {
     value: DEFAULT_ASSISTANT_DETAIL_VISIBILITY,
     newValueAction: storedValue !== null ? "remove" : "keep",
-    removeLegacyValue: legacyStoredValue !== null,
   }
 }
 
@@ -145,7 +88,6 @@ export function syncAssistantDetailVisibilityStorage(
   try {
     decision = resolveAssistantDetailVisibilityPreference(
       resolvedStorage.getItem(ASSISTANT_DETAIL_VISIBILITY_STORAGE_KEY),
-      resolvedStorage.getItem(LEGACY_SHOW_ASSISTANT_DETAILS_STORAGE_KEY),
     )
   } catch {
     return DEFAULT_ASSISTANT_DETAIL_VISIBILITY
@@ -158,19 +100,11 @@ export function syncAssistantDetailVisibilityStorage(
         serializeAssistantDetailVisibility(decision.value),
       )
     } catch {
-      // Ignore migration write failures and keep the parsed preference value.
+      // Ignore write failures and keep the parsed preference value.
     }
   } else if (decision.newValueAction === "remove") {
     try {
       resolvedStorage.removeItem(ASSISTANT_DETAIL_VISIBILITY_STORAGE_KEY)
-    } catch {
-      // Ignore cleanup failures and keep the parsed preference value.
-    }
-  }
-
-  if (decision.removeLegacyValue) {
-    try {
-      resolvedStorage.removeItem(LEGACY_SHOW_ASSISTANT_DETAILS_STORAGE_KEY)
     } catch {
       // Ignore cleanup failures and keep the parsed preference value.
     }
@@ -191,7 +125,6 @@ export const assistantDetailVisibilityStorage = {
 
     try {
       storage.setItem(key, serializeAssistantDetailVisibility(newValue))
-      storage.removeItem(LEGACY_SHOW_ASSISTANT_DETAILS_STORAGE_KEY)
     } catch {
       // Ignore storage write failures and keep the in-memory atom state.
     }
@@ -218,12 +151,7 @@ export const assistantDetailVisibilityStorage = {
 
     const handleStorage = (event: StorageEvent) => {
       const storage = getSafeLocalStorage()
-      if (
-        !storage ||
-        event.storageArea !== storage ||
-        (event.key !== key &&
-          event.key !== LEGACY_SHOW_ASSISTANT_DETAILS_STORAGE_KEY)
-      ) {
+      if (!storage || event.storageArea !== storage || event.key !== key) {
         return
       }
 

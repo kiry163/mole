@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -463,95 +462,4 @@ func TestInstallRejectsGoBuildBeforeEnv(t *testing.T) {
 	assert.Empty(t, fake.calls, "install must not reach the platform service")
 	_, statErr := os.Stat(spec.EnvPath())
 	assert.True(t, os.IsNotExist(statErr), "failed install must not create .env")
-}
-
-func userLegacyAutostartPath(t *testing.T) string {
-	t.Helper()
-	switch runtime.GOOS {
-	case "darwin":
-		return "Library/LaunchAgents/io.mole.launcher.plist"
-	case "linux":
-		return ".config/autostart/mole-web.desktop"
-	default:
-		t.Skipf("no filesystem legacy autostart on %s", runtime.GOOS)
-		return ""
-	}
-}
-
-// stubAbsentService resolves commands to a temp instance whose service unit is
-// not installed and records manager lookups.
-func stubAbsentService(t *testing.T, spec svc.Spec) *fakeService {
-	t.Helper()
-	origSpec, origManager := resolveSpec, newManager
-	t.Cleanup(func() { resolveSpec, newManager = origSpec, origManager })
-	resolveSpec = func() (svc.Spec, error) { return spec, nil }
-	fake := &fakeService{statusErr: managersvc.ErrNotInstalled}
-	newManager = func(s svc.Spec, _ string) (*svc.Manager, error) {
-		return &svc.Manager{Spec: s, Service: fake}, nil
-	}
-	return fake
-}
-
-func TestUninstallRemovesLegacyAutostartWhenServiceAbsent(t *testing.T) {
-	userHome := t.TempDir()
-	t.Setenv("HOME", userHome)
-	target := filepath.Join(userHome, userLegacyAutostartPath(t))
-	require.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
-	require.NoError(t, os.WriteFile(target, []byte("legacy"), 0o600))
-
-	home := t.TempDir()
-	spec := svc.Spec{HomePath: home, ConfigPath: filepath.Join(home, "config.json"), Executable: "/bin/mole"}
-	fake := stubAbsentService(t, spec)
-
-	cmd := NewServiceCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"uninstall"})
-	require.NoError(t, cmd.Execute())
-	assert.Contains(t, out.String(), "Service is not installed")
-	assert.NotContains(t, fake.calls, "uninstall", "no uninstall call is needed when the unit is absent")
-	_, err := os.Stat(target)
-	assert.True(t, os.IsNotExist(err), "legacy autostart entry must be removed")
-}
-
-func TestInstallCleansLegacyAutostart(t *testing.T) {
-	userHome := t.TempDir()
-	t.Setenv("HOME", userHome)
-	target := filepath.Join(userHome, userLegacyAutostartPath(t))
-	require.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
-	require.NoError(t, os.WriteFile(target, []byte("legacy"), 0o600))
-
-	home := t.TempDir()
-	spec := svc.Spec{HomePath: home, ConfigPath: filepath.Join(home, "config.json"), Executable: "/bin/mole"}
-	managerCalled := stubSpec(t, spec)
-
-	cmd := NewServiceCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"install"})
-	require.NoError(t, cmd.Execute())
-	assert.True(t, *managerCalled)
-	assert.Contains(t, out.String(), "Installed")
-	_, err := os.Stat(target)
-	assert.True(t, os.IsNotExist(err), "install must remove legacy autostart entries")
-}
-
-func TestUninstallWarnsButSucceedsWhenLegacyCleanupFails(t *testing.T) {
-	userHome := t.TempDir()
-	t.Setenv("HOME", userHome)
-	target := filepath.Join(userHome, userLegacyAutostartPath(t))
-	// os.Remove cannot delete a non-empty directory, forcing a cleanup error.
-	require.NoError(t, os.MkdirAll(target, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(target, "keep"), []byte("x"), 0o600))
-
-	home := t.TempDir()
-	spec := svc.Spec{HomePath: home, ConfigPath: filepath.Join(home, "config.json"), Executable: "/bin/mole"}
-	stubAbsentService(t, spec)
-
-	cmd := NewServiceCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"uninstall"})
-	require.NoError(t, cmd.Execute(), "legacy cleanup errors must not fail uninstall")
-	assert.Contains(t, out.String(), "Warning: could not remove legacy autostart entry")
 }

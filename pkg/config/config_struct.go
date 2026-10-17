@@ -51,13 +51,7 @@ func (f *FlexibleStringSlice) UnmarshalJSON(data []byte) error {
 	// Try []interface{} to handle mixed types
 	var raw []any
 	if err := json.Unmarshal(data, &raw); err != nil {
-		var s string
-		// fail over to compatible to old format string
-		if err = json.Unmarshal(data, &s); err != nil {
-			return err
-		}
-		*f = []string{s}
-		return nil
+		return err
 	}
 
 	result := make([]string, 0, len(raw))
@@ -190,7 +184,7 @@ func (s *SecureStrings) UnmarshalJSON(value []byte) error {
 //nolint:recvcheck
 type SecureString struct {
 	resolved string // Decrypted/resolved value returned by String()
-	raw      string // Persisted raw value (enc://, file://, or plaintext)
+	raw      string // Persisted raw value (file:// or plaintext)
 }
 
 // IsZero returns true if the SecureString is empty.
@@ -332,21 +326,21 @@ func (v *SkillsRegistriesConfig) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	legacy := map[string]json.RawMessage{}
-	if err := json.Unmarshal(data, &legacy); err != nil {
+	registriesByName := map[string]json.RawMessage{}
+	if err := json.Unmarshal(data, &registriesByName); err != nil {
 		return err
 	}
 
 	if len(*v) == 0 {
-		keys := make([]string, 0, len(legacy))
-		for name := range legacy {
+		keys := make([]string, 0, len(registriesByName))
+		for name := range registriesByName {
 			keys = append(keys, name)
 		}
 		sort.Strings(keys)
 		decodedList := make([]*SkillRegistryConfig, 0, len(keys))
 		for _, name := range keys {
 			var registry SkillRegistryConfig
-			if err := json.Unmarshal(legacy[name], &registry); err != nil {
+			if err := json.Unmarshal(registriesByName[name], &registry); err != nil {
 				return err
 			}
 			registry.Name = name
@@ -356,12 +350,12 @@ func (v *SkillsRegistriesConfig) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	for _, name := range sortedRegistryNamesFromJSON(legacy) {
+	for _, name := range sortedRegistryNamesFromJSON(registriesByName) {
 		registry := cloneRegistryConfig(findRegistryConfigByName(*v, name))
 		if registry == nil {
 			registry = &SkillRegistryConfig{Name: name}
 		}
-		if err := json.Unmarshal(legacy[name], registry); err != nil {
+		if err := json.Unmarshal(registriesByName[name], registry); err != nil {
 			return err
 		}
 		registry.Name = name

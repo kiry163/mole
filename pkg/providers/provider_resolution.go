@@ -38,8 +38,6 @@ func ResolveModelConfig(cfg *config.Config, model string) (*config.ModelConfig, 
 	rawHasProvider := explicitRef != nil && strings.TrimSpace(explicitRef.Provider) != ""
 	var exactMatch *config.ModelConfig
 	exactMatchScore := -1
-	var legacyMatch *config.ModelConfig
-	legacyMatchScore := -1
 	var canonicalMatch *config.ModelConfig
 	canonicalMatchScore := -1
 	var providerTemplate *config.ModelConfig
@@ -52,13 +50,6 @@ func ResolveModelConfig(cfg *config.Config, model string) (*config.ModelConfig, 
 		if rawHasProvider && strings.TrimSpace(candidate.Model) == model && score > exactMatchScore {
 			exactMatch = candidate
 			exactMatchScore = score
-		}
-		if rawHasProvider &&
-			strings.TrimSpace(candidate.Provider) == "" &&
-			strings.TrimSpace(candidate.Model) == NormalizeProvider(defaultProvider)+"/"+model &&
-			score > legacyMatchScore {
-			legacyMatch = candidate
-			legacyMatchScore = score
 		}
 		provider, modelID := modelConfigProviderAndID(candidate, defaultProvider)
 		if ModelKey(provider, modelID) == targetKey && score > canonicalMatchScore {
@@ -74,9 +65,6 @@ func ResolveModelConfig(cfg *config.Config, model string) (*config.ModelConfig, 
 	}
 	if exactMatch != nil {
 		return cloneResolvedModelConfig(exactMatch, defaultProvider), nil
-	}
-	if legacyMatch != nil {
-		return cloneResolvedModelConfig(legacyMatch, defaultProvider), nil
 	}
 	if canonicalMatch != nil {
 		return cloneResolvedModelConfig(canonicalMatch, defaultProvider), nil
@@ -139,8 +127,6 @@ func modelConfigTemplateScore(modelCfg *config.ModelConfig, defaultProvider stri
 }
 
 // CreateProvider creates a provider based on the configuration.
-// It uses the model_list configuration (new format) to create providers.
-// The old providers config is automatically converted to model_list during config loading.
 // Returns the provider, the model ID to use, and any error.
 func CreateProvider(cfg *config.Config) (LLMProvider, string, error) {
 	model := cfg.Agents.Defaults.GetModelName()

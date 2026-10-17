@@ -10,7 +10,7 @@ Two build paths:
 
 | Command | What it does |
 |---------|--------------|
-| `make build` | Builds the console frontend first (`web/frontend`, via `pnpm` — **Node.js and pnpm are required**), then the Go binary. Result: `build/mole`. |
+| `make build` | Builds the console frontend first (`web/frontend`, via `pnpm` — **Node.js and pnpm are required**), then the Go binary. Result: `./mole`. |
 | `go build ./cmd/mole` | Go toolchain only, **no Node.js needed**. It embeds whatever is already in `pkg/dashboard/dist`; in a fresh clone that directory contains only the tracked `.gitkeep` placeholder, so the binary runs but the console has no UI until you build the frontend. |
 
 ## Quick start

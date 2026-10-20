@@ -31,15 +31,13 @@ func TestMatchingTurnMessageTail_IgnoresInternalRuntimeFields(t *testing.T) {
 			Role: "assistant",
 			ToolCalls: []providers.ToolCall{
 				{
-					ID:               "call_1",
-					Type:             "function",
-					Name:             "read_file",
-					Arguments:        map[string]any{"path": "/tmp/test"},
-					ThoughtSignature: "internal-signature",
+					ID:        "call_1",
+					Type:      "function",
+					Name:      "read_file",
+					Arguments: map[string]any{"path": "/tmp/test"},
 					Function: &providers.FunctionCall{
-						Name:             "read_file",
-						Arguments:        `{"path":"/tmp/test"}`,
-						ThoughtSignature: "internal-signature",
+						Name:      "read_file",
+						Arguments: `{"path":"/tmp/test"}`,
 					},
 				},
 			},

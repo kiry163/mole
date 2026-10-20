@@ -240,8 +240,6 @@
       "providerDefault": "provider default",
       "maxTokensField": "Max Tokens Field",
       "maxTokensFieldHint": "Override the request field name for max tokens, e.g. max_completion_tokens.",
-      "toolSchemaTransform": "Tool Schema Transform",
-      "toolSchemaTransformHint": "Optional compatibility transform for tool JSON schemas. Leave blank for native behavior. Supported values: simple.",
       "streamingEnabled": "Streaming Output",
       "streamingEnabledHint": "Allow this model entry to try provider streaming requests. The current channel streaming switch must also be enabled.",
       "extraBody": "Extra Body",

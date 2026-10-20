@@ -69,10 +69,6 @@ func newModelProbeCacheState() *modelProbeCacheState {
 	return &modelProbeCacheState{cache: map[string]*modelProbeCacheEntry{}}
 }
 
-func resetModelProbeCache() {
-	modelProbeState.resetForTest()
-}
-
 func (s *modelProbeCacheState) resetForTest() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -355,11 +351,6 @@ func normalizeModelProbeAPIBase(raw string) string {
 	return u.String()
 }
 
-func modelProtocol(m *config.ModelConfig) string {
-	protocol, _ := splitModel(m)
-	return protocol
-}
-
 func splitModel(m *config.ModelConfig) (protocol, modelID string) {
 	protocol, modelID = providers.ExtractProtocol(m)
 	return strings.ToLower(strings.TrimSpace(protocol)), strings.ToLower(strings.TrimSpace(modelID))
@@ -467,14 +458,4 @@ func parseAPIBase(raw string) (*url.URL, error) {
 		u.Scheme = "http"
 	}
 	return u, nil
-}
-
-func splitOllamaModel(raw string) (base, tag string) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", ""
-	}
-
-	base, tag, _ = strings.Cut(raw, ":")
-	return strings.TrimSpace(base), strings.TrimSpace(tag)
 }

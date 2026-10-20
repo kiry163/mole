@@ -1598,21 +1598,6 @@ func TestResolveWebSearchProviderName_FallsBackFromUnknownProvider(t *testing.T)
 	}
 }
 
-type stubSearchProvider struct {
-	result string
-	calls  []string
-}
-
-func (p *stubSearchProvider) Search(
-	_ context.Context,
-	query string,
-	_ int,
-	_ string,
-) (string, error) {
-	p.calls = append(p.calls, query)
-	return p.result, nil
-}
-
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {

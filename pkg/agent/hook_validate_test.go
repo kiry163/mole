@@ -105,7 +105,7 @@ func TestValidateHooksConfigRejectsABuiltinShadowedByAProcess(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("RegisterBuiltinHook() error = %v", err)
 	}
-	t.Cleanup(func() { unregisterBuiltinHook("shadowed") })
+	t.Cleanup(func() { unregisterTestBuiltinHook("shadowed") })
 
 	errs := ValidateHooksConfig(cfg)
 	if len(errs) == 0 {
@@ -123,7 +123,7 @@ func TestBuiltinHookNamesListsTheRegistry(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("RegisterBuiltinHook() error = %v", err)
 	}
-	t.Cleanup(func() { unregisterBuiltinHook("p3-test-builtin") })
+	t.Cleanup(func() { unregisterTestBuiltinHook("p3-test-builtin") })
 
 	names := BuiltinHookNames()
 	found := false

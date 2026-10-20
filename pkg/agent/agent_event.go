@@ -67,26 +67,10 @@ func (al *AgentLoop) UnmountHook(name string) {
 	al.hooks.Unmount(name)
 }
 
-// RuntimeEvents returns the root runtime event channel.
-func (al *AgentLoop) RuntimeEvents() runtimeevents.EventChannel {
-	if al == nil || al.runtimeEvents == nil {
-		return nil
-	}
-	return al.runtimeEvents.Channel()
-}
-
 // SetApprovalStore installs the store the builtin approver uses. Call it before
 // the first turn; a nil store makes the approver fail closed.
 func (al *AgentLoop) SetApprovalStore(store *approval.Store) {
 	al.approvalStore = store
-}
-
-// RuntimeEventStats returns runtime event bus counters.
-func (al *AgentLoop) RuntimeEventStats() runtimeevents.Stats {
-	if al == nil || al.runtimeEvents == nil {
-		return runtimeevents.Stats{Closed: true}
-	}
-	return al.runtimeEvents.Stats()
 }
 
 // RuntimeEventBus returns the runtime event bus used by the agent loop.

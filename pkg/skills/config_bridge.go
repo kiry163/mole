@@ -2,8 +2,6 @@ package skills
 
 import "github.com/kiry163/mole/pkg/config"
 
-const defaultGitHubRegistryBaseURL = "https://github.com"
-
 func effectiveRegistryConfigsFromToolsConfig(cfg config.SkillsToolsConfig) []config.SkillRegistryConfig {
 	effective := make([]config.SkillRegistryConfig, 0, len(cfg.Registries))
 	for _, registryCfg := range cfg.Registries {
@@ -47,14 +45,6 @@ func LookupRegistryFromToolsConfig(cfg config.SkillsToolsConfig, name string) Sk
 		return registry
 	}
 	return nil
-}
-
-func GitHubInstallDirNameFromToolsConfig(cfg config.SkillsToolsConfig, target string) (string, error) {
-	registryCfg, ok := cfg.Registries.Get("github")
-	if ok {
-		return githubInstallDirNameWithBaseURL(target, registryCfg.BaseURL)
-	}
-	return githubInstallDirNameWithBaseURL(target, defaultGitHubRegistryBaseURL)
 }
 
 func NormalizeInstallTargetForRegistry(cfg config.SkillsToolsConfig, registryName, target string) string {

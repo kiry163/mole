@@ -23,16 +23,14 @@ import (
 
 // Re-export protocol types used across providers.
 type (
-	ToolCall               = protocoltypes.ToolCall
-	FunctionCall           = protocoltypes.FunctionCall
-	LLMResponse            = protocoltypes.LLMResponse
-	UsageInfo              = protocoltypes.UsageInfo
-	Message                = protocoltypes.Message
-	ToolDefinition         = protocoltypes.ToolDefinition
-	ToolFunctionDefinition = protocoltypes.ToolFunctionDefinition
-	ExtraContent           = protocoltypes.ExtraContent
-	GoogleExtra            = protocoltypes.GoogleExtra
-	ReasoningDetail        = protocoltypes.ReasoningDetail
+	ToolCall        = protocoltypes.ToolCall
+	FunctionCall    = protocoltypes.FunctionCall
+	LLMResponse     = protocoltypes.LLMResponse
+	UsageInfo       = protocoltypes.UsageInfo
+	Message         = protocoltypes.Message
+	ToolDefinition  = protocoltypes.ToolDefinition
+	ExtraContent    = protocoltypes.ExtraContent
+	ReasoningDetail = protocoltypes.ReasoningDetail
 )
 
 const DefaultRequestTimeout = 120 * time.Second
@@ -63,9 +61,8 @@ type openaiToolCall struct {
 }
 
 type openaiFunctionCall struct {
-	Name             string `json:"name"`
-	Arguments        string `json:"arguments"`
-	ThoughtSignature string `json:"thought_signature,omitempty"`
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 // SerializeMessages converts internal Message structs to the OpenAI wire format.
@@ -148,23 +145,11 @@ func serializeToolCalls(toolCalls []ToolCall) []openaiToolCall {
 		}
 
 		if tc.Function != nil {
-			thoughtSignature := tc.Function.ThoughtSignature
-			if thoughtSignature == "" {
-				thoughtSignature = tc.ThoughtSignature
-			}
-			if thoughtSignature == "" && tc.ExtraContent != nil && tc.ExtraContent.Google != nil {
-				thoughtSignature = tc.ExtraContent.Google.ThoughtSignature
-			}
 			wireCall.Function = &openaiFunctionCall{
-				Name:             tc.Function.Name,
-				Arguments:        tc.Function.Arguments,
-				ThoughtSignature: thoughtSignature,
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
 			}
-		} else if tc.Name != "" || len(tc.Arguments) > 0 || tc.ThoughtSignature != "" {
-			thoughtSignature := tc.ThoughtSignature
-			if thoughtSignature == "" && tc.ExtraContent != nil && tc.ExtraContent.Google != nil {
-				thoughtSignature = tc.ExtraContent.Google.ThoughtSignature
-			}
+		} else if tc.Name != "" || len(tc.Arguments) > 0 {
 			argsJSON := "{}"
 			if len(tc.Arguments) > 0 {
 				if encoded, err := json.Marshal(tc.Arguments); err == nil {
@@ -172,9 +157,8 @@ func serializeToolCalls(toolCalls []ToolCall) []openaiToolCall {
 				}
 			}
 			wireCall.Function = &openaiFunctionCall{
-				Name:             tc.Name,
-				Arguments:        argsJSON,
-				ThoughtSignature: thoughtSignature,
+				Name:      tc.Name,
+				Arguments: argsJSON,
 			}
 		}
 
@@ -220,14 +204,10 @@ func ParseResponse(body io.Reader) (*LLMResponse, error) {
 					ID       string `json:"id"`
 					Type     string `json:"type"`
 					Function *struct {
-						Name             string          `json:"name"`
-						Arguments        json.RawMessage `json:"arguments"`
-						ThoughtSignature string          `json:"thought_signature"`
+						Name      string          `json:"name"`
+						Arguments json.RawMessage `json:"arguments"`
 					} `json:"function"`
 					ExtraContent *struct {
-						Google *struct {
-							ThoughtSignature string `json:"thought_signature"`
-						} `json:"google"`
 						ToolFeedbackExplanation string `json:"tool_feedback_explanation"`
 					} `json:"extra_content"`
 				} `json:"tool_calls"`
@@ -254,40 +234,20 @@ func ParseResponse(body io.Reader) (*LLMResponse, error) {
 		arguments := make(map[string]any)
 		name := ""
 
-		thoughtSignature := ""
-		if tc.Function != nil {
-			thoughtSignature = tc.Function.ThoughtSignature
-		}
-		if thoughtSignature == "" && tc.ExtraContent != nil && tc.ExtraContent.Google != nil {
-			thoughtSignature = tc.ExtraContent.Google.ThoughtSignature
-		}
-
 		if tc.Function != nil {
 			name = tc.Function.Name
 			arguments = DecodeToolCallArguments(tc.Function.Arguments, name)
 		}
 
 		toolCall := ToolCall{
-			ID:               tc.ID,
-			Name:             name,
-			Arguments:        arguments,
-			ThoughtSignature: thoughtSignature,
+			ID:        tc.ID,
+			Name:      name,
+			Arguments: arguments,
 		}
 
-		if thoughtSignature != "" || tc.ExtraContent != nil {
-			extraContent := &ExtraContent{
-				ToolFeedbackExplanation: "",
-			}
-			if tc.ExtraContent != nil {
-				extraContent.ToolFeedbackExplanation = tc.ExtraContent.ToolFeedbackExplanation
-			}
-			if thoughtSignature != "" {
-				extraContent.Google = &GoogleExtra{
-					ThoughtSignature: thoughtSignature,
-				}
-			}
-			if extraContent.Google != nil || strings.TrimSpace(extraContent.ToolFeedbackExplanation) != "" {
-				toolCall.ExtraContent = extraContent
+		if tc.ExtraContent != nil && strings.TrimSpace(tc.ExtraContent.ToolFeedbackExplanation) != "" {
+			toolCall.ExtraContent = &ExtraContent{
+				ToolFeedbackExplanation: tc.ExtraContent.ToolFeedbackExplanation,
 			}
 		}
 

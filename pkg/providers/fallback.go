@@ -228,23 +228,6 @@ func (fc *FallbackChain) ExecuteCandidate(
 	return nil, &FallbackExhaustedError{Attempts: result.Attempts}
 }
 
-// ExecuteImage runs the fallback chain for image/vision requests.
-// Simpler than Execute: no cooldown checks (image endpoints have different rate limits).
-// Image dimension/size errors abort immediately (non-retriable).
-func (fc *FallbackChain) ExecuteImage(
-	ctx context.Context,
-	candidates []FallbackCandidate,
-	run func(ctx context.Context, provider, model string) (*LLMResponse, error),
-) (*FallbackResult, error) {
-	return fc.ExecuteImageCandidate(
-		ctx,
-		candidates,
-		func(ctx context.Context, candidate FallbackCandidate) (*LLMResponse, error) {
-			return run(ctx, candidate.Provider, candidate.Model)
-		},
-	)
-}
-
 // ExecuteImageCandidate preserves model-list identity metadata for each image
 // fallback attempt.
 func (fc *FallbackChain) ExecuteImageCandidate(

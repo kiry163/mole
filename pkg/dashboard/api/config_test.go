@@ -826,7 +826,6 @@ func TestHandleUpdateConfig_SucceedsWhenWebChatTokenInEnvOnly(t *testing.T) {
 				"enabled": true,
 				"ping_interval": 30,
 				"read_timeout": 60,
-				"write_timeout": 10,
 				"max_connections": 100
 			}
 		},

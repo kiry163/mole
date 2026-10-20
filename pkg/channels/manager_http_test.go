@@ -33,11 +33,11 @@ func TestManagerHandleHTTP_ServesDashboardAndKeepsChannelPriority(t *testing.T) 
 		t.Fatalf("dashboard fallback should serve /models, got %d", rec.Code)
 	}
 
-	m.UnhandleHTTP("/")
+	m.mux.Unhandle("/")
 	req = httptest.NewRequest(http.MethodGet, "/models", nil)
 	rec = httptest.NewRecorder()
 	m.mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("after UnhandleHTTP expect 404, got %d", rec.Code)
+		t.Fatalf("after mux unregister expect 404, got %d", rec.Code)
 	}
 }

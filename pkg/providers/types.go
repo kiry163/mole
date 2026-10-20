@@ -17,7 +17,6 @@ type (
 	ToolDefinition         = protocoltypes.ToolDefinition
 	ToolFunctionDefinition = protocoltypes.ToolFunctionDefinition
 	ExtraContent           = protocoltypes.ExtraContent
-	GoogleExtra            = protocoltypes.GoogleExtra
 	ContentBlock           = protocoltypes.ContentBlock
 	Attachment             = protocoltypes.Attachment
 )
@@ -91,7 +90,6 @@ const (
 	FailoverFormat          FailoverReason = "format"
 	FailoverContextOverflow FailoverReason = "context_overflow"
 	FailoverOverloaded      FailoverReason = "overloaded"
-	FailoverUnknown         FailoverReason = "unknown"
 )
 
 // FailoverError wraps an LLM provider error with classification metadata.

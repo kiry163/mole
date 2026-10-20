@@ -341,23 +341,6 @@ func NewAgentInstance(
 	}
 }
 
-// populateCandidateProvidersFromNames resolves each model name (alias or
-// "provider/model") and creates a dedicated LLMProvider for it. Raw references
-// reuse endpoint and credential settings from another model of the same provider.
-func populateCandidateProvidersFromNames(
-	cfg *config.Config,
-	names []string,
-	out map[string]providers.LLMProvider,
-) {
-	if cfg == nil || len(names) == 0 {
-		return
-	}
-	for _, name := range names {
-		candidates := resolveModelCandidates(cfg, name, nil)
-		populateCandidateProvidersFromCandidates(cfg, candidates, out)
-	}
-}
-
 func populateCandidateProvidersFromCandidates(
 	cfg *config.Config,
 	candidates []providers.FallbackCandidate,

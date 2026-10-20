@@ -810,7 +810,7 @@ func TestConfiguredStreamingBeforeLLMModelRewriteReevaluatesModelStreaming(t *te
 				}},
 			}
 			al := NewAgentLoop(cfg, msgBus, provider)
-			if err := al.MountHook(NamedHook("rewrite-model", configuredStreamingBeforeModelHook{
+			if err := al.MountHook(namedHook("rewrite-model", configuredStreamingBeforeModelHook{
 				model: tt.rewriteModel,
 			})); err != nil {
 				t.Fatalf("MountHook() error = %v", err)
@@ -922,7 +922,7 @@ func TestConfiguredStreamingFinalizesAfterAfterLLMHookMutation(t *testing.T) {
 		}},
 	}
 	al := NewAgentLoop(cfg, msgBus, provider)
-	if err := al.MountHook(NamedHook("rewrite-stream-response", configuredStreamingAfterHook{
+	if err := al.MountHook(namedHook("rewrite-stream-response", configuredStreamingAfterHook{
 		content: "hooked final response",
 	})); err != nil {
 		t.Fatalf("MountHook() error = %v", err)
@@ -960,7 +960,7 @@ func TestConfiguredStreamingAfterLLMAbortCancelsPublishedStream(t *testing.T) {
 				}},
 			}
 			al := NewAgentLoop(cfg, msgBus, provider)
-			if err := al.MountHook(NamedHook("abort-stream-response", configuredStreamingAfterHook{
+			if err := al.MountHook(namedHook("abort-stream-response", configuredStreamingAfterHook{
 				action: tt.action,
 			})); err != nil {
 				t.Fatalf("MountHook() error = %v", err)

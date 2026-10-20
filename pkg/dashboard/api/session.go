@@ -619,13 +619,6 @@ func assistantToolCallsMessage(
 	}, true
 }
 
-func visibleAssistantToolArgsPreview(
-	tc providers.ToolCall,
-	toolFeedbackMaxArgsLength int,
-) string {
-	return utils.VisibleToolCallArgumentsPreview(tc, toolFeedbackMaxArgsLength)
-}
-
 func visibleAssistantToolMessages(
 	toolCalls []providers.ToolCall,
 	modelName string,

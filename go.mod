@@ -10,7 +10,6 @@ require (
 	github.com/h2non/filetype v1.1.3
 	github.com/kardianos/service v1.3.0
 	github.com/larksuite/oapi-sdk-go/v3 v3.9.4
-	github.com/mdp/qrterminal/v3 v3.2.1
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/mymmrac/telego v1.10.0
 	github.com/pmezard/go-difflib v1.0.0

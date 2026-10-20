@@ -28,7 +28,6 @@ type TokenStore interface {
 // AuthRouteOpts configures dashboard auth handlers.
 type AuthRouteOpts struct {
 	SessionCookie string
-	SecureCookie  func(*http.Request) bool
 	// TokenStore enables token login. It must be non-nil for auth to work.
 	TokenStore TokenStore
 }
@@ -49,13 +48,8 @@ type authStatusResponse struct {
 
 // RegisterAuthRoutes registers /api/auth/login|logout|status|setup.
 func RegisterAuthRoutes(mux *http.ServeMux, opts AuthRouteOpts) {
-	secure := opts.SecureCookie
-	if secure == nil {
-		secure = middleware.DefaultDashboardSecureCookie
-	}
 	h := &authHandlers{
 		sessionCookie: opts.SessionCookie,
-		secureCookie:  secure,
 		store:         opts.TokenStore,
 		loginLimit:    newLoginRateLimiter(),
 	}
@@ -67,7 +61,6 @@ func RegisterAuthRoutes(mux *http.ServeMux, opts AuthRouteOpts) {
 
 type authHandlers struct {
 	sessionCookie string
-	secureCookie  func(*http.Request) bool
 	store         TokenStore
 	loginLimit    *loginRateLimiter
 }
@@ -176,7 +169,7 @@ func (h *authHandlers) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	middleware.SetDashboardSessionCookie(w, r, h.sessionCookie, h.secureCookie)
+	middleware.SetDashboardSessionCookie(w, r, h.sessionCookie)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
@@ -206,7 +199,7 @@ func (h *authHandlers) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	middleware.ClearDashboardSessionCookie(w, r, h.secureCookie)
+	middleware.ClearDashboardSessionCookie(w, r)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }

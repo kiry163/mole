@@ -13,12 +13,30 @@ func newTestTracker(now time.Time) (*CooldownTracker, *time.Time) {
 	return ct, &current
 }
 
+func errorCountForTest(ct *CooldownTracker, provider string) int {
+	ct.mu.RLock()
+	defer ct.mu.RUnlock()
+	if entry := ct.entries[provider]; entry != nil {
+		return entry.ErrorCount
+	}
+	return 0
+}
+
+func failureCountForTest(ct *CooldownTracker, provider string, reason FailoverReason) int {
+	ct.mu.RLock()
+	defer ct.mu.RUnlock()
+	if entry := ct.entries[provider]; entry != nil {
+		return entry.FailureCounts[reason]
+	}
+	return 0
+}
+
 func TestCooldown_InitiallyAvailable(t *testing.T) {
 	ct := NewCooldownTracker()
 	if !ct.IsAvailable("openai") {
 		t.Error("new provider should be available")
 	}
-	if ct.ErrorCount("openai") != 0 {
+	if errorCountForTest(ct, "openai") != 0 {
 		t.Error("new provider should have 0 errors")
 	}
 }
@@ -114,21 +132,21 @@ func TestCooldown_SuccessReset(t *testing.T) {
 
 	ct.MarkFailure("openai", FailoverRateLimit)
 	ct.MarkFailure("openai", FailoverBilling)
-	if ct.ErrorCount("openai") != 2 {
-		t.Errorf("error count = %d, want 2", ct.ErrorCount("openai"))
+	if errorCountForTest(ct, "openai") != 2 {
+		t.Errorf("error count = %d, want 2", errorCountForTest(ct, "openai"))
 	}
 
 	ct.MarkSuccess("openai")
-	if ct.ErrorCount("openai") != 0 {
-		t.Errorf("error count after success = %d, want 0", ct.ErrorCount("openai"))
+	if errorCountForTest(ct, "openai") != 0 {
+		t.Errorf("error count after success = %d, want 0", errorCountForTest(ct, "openai"))
 	}
 	if !ct.IsAvailable("openai") {
 		t.Error("should be available after success")
 	}
-	if ct.FailureCount("openai", FailoverRateLimit) != 0 {
+	if failureCountForTest(ct, "openai", FailoverRateLimit) != 0 {
 		t.Error("failure counts should be reset after success")
 	}
-	if ct.FailureCount("openai", FailoverBilling) != 0 {
+	if failureCountForTest(ct, "openai", FailoverBilling) != 0 {
 		t.Error("billing failure count should be reset after success")
 	}
 }
@@ -142,8 +160,8 @@ func TestCooldown_FailureWindowReset(t *testing.T) {
 		ct.MarkFailure("openai", FailoverRateLimit)
 		*current = current.Add(2 * time.Second) // small advance between errors
 	}
-	if ct.ErrorCount("openai") != 4 {
-		t.Errorf("error count = %d, want 4", ct.ErrorCount("openai"))
+	if errorCountForTest(ct, "openai") != 4 {
+		t.Errorf("error count = %d, want 4", errorCountForTest(ct, "openai"))
 	}
 
 	// Advance 25 hours (past 24h failure window)
@@ -151,8 +169,8 @@ func TestCooldown_FailureWindowReset(t *testing.T) {
 
 	// Next error should reset counters first, then increment to 1
 	ct.MarkFailure("openai", FailoverRateLimit)
-	if ct.ErrorCount("openai") != 1 {
-		t.Errorf("error count after window reset = %d, want 1 (reset + 1)", ct.ErrorCount("openai"))
+	if errorCountForTest(ct, "openai") != 1 {
+		t.Errorf("error count after window reset = %d, want 1 (reset + 1)", errorCountForTest(ct, "openai"))
 	}
 }
 
@@ -164,17 +182,17 @@ func TestCooldown_PerReasonTracking(t *testing.T) {
 	ct.MarkFailure("openai", FailoverBilling)
 	ct.MarkFailure("openai", FailoverAuth)
 
-	if ct.FailureCount("openai", FailoverRateLimit) != 2 {
-		t.Errorf("rate_limit count = %d, want 2", ct.FailureCount("openai", FailoverRateLimit))
+	if failureCountForTest(ct, "openai", FailoverRateLimit) != 2 {
+		t.Errorf("rate_limit count = %d, want 2", failureCountForTest(ct, "openai", FailoverRateLimit))
 	}
-	if ct.FailureCount("openai", FailoverBilling) != 1 {
-		t.Errorf("billing count = %d, want 1", ct.FailureCount("openai", FailoverBilling))
+	if failureCountForTest(ct, "openai", FailoverBilling) != 1 {
+		t.Errorf("billing count = %d, want 1", failureCountForTest(ct, "openai", FailoverBilling))
 	}
-	if ct.FailureCount("openai", FailoverAuth) != 1 {
-		t.Errorf("auth count = %d, want 1", ct.FailureCount("openai", FailoverAuth))
+	if failureCountForTest(ct, "openai", FailoverAuth) != 1 {
+		t.Errorf("auth count = %d, want 1", failureCountForTest(ct, "openai", FailoverAuth))
 	}
-	if ct.ErrorCount("openai") != 4 {
-		t.Errorf("total error count = %d, want 4", ct.ErrorCount("openai"))
+	if errorCountForTest(ct, "openai") != 4 {
+		t.Errorf("total error count = %d, want 4", errorCountForTest(ct, "openai"))
 	}
 }
 

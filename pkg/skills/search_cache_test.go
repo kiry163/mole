@@ -80,11 +80,11 @@ func TestSearchCacheLRUEviction(t *testing.T) {
 	cache.Put("query-2", []SearchResult{{Slug: "b"}})
 	cache.Put("query-3", []SearchResult{{Slug: "c"}})
 
-	assert.Equal(t, 3, cache.Len())
+	assert.Equal(t, 3, len(cache.entries))
 
 	// Adding a 4th should evict query-1 (oldest)
 	cache.Put("query-4", []SearchResult{{Slug: "d"}})
-	assert.Equal(t, 3, cache.Len())
+	assert.Equal(t, 3, len(cache.entries))
 
 	_, hit := cache.Get("query-1")
 	assert.False(t, hit, "oldest entry should be evicted")

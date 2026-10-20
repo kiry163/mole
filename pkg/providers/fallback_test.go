@@ -17,6 +17,17 @@ func successRun(content string) func(ctx context.Context, provider, model string
 	}
 }
 
+func executeImageForTest(
+	fc *FallbackChain,
+	ctx context.Context,
+	candidates []FallbackCandidate,
+	run func(context.Context, string, string) (*LLMResponse, error),
+) (*FallbackResult, error) {
+	return fc.ExecuteImageCandidate(ctx, candidates, func(ctx context.Context, candidate FallbackCandidate) (*LLMResponse, error) {
+		return run(ctx, candidate.Provider, candidate.Model)
+	})
+}
+
 func TestFallback_SingleCandidate_Success(t *testing.T) {
 	ct := NewCooldownTracker()
 	fc := NewFallbackChain(ct, nil)
@@ -436,7 +447,7 @@ func TestImageFallback_Success(t *testing.T) {
 	fc := NewFallbackChain(ct, nil)
 
 	candidates := []FallbackCandidate{makeCandidate("openai", "gpt-4o")}
-	result, err := fc.ExecuteImage(context.Background(), candidates, successRun("image result"))
+	result, err := executeImageForTest(fc, context.Background(), candidates, successRun("image result"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -460,7 +471,7 @@ func TestImageFallback_DimensionError(t *testing.T) {
 		return nil, errors.New("image dimensions exceed max 4096x4096")
 	}
 
-	_, err := fc.ExecuteImage(context.Background(), candidates, run)
+	_, err := executeImageForTest(fc, context.Background(), candidates, run)
 	if err == nil {
 		t.Fatal("expected error for image dimension error")
 	}
@@ -484,7 +495,7 @@ func TestImageFallback_SizeError(t *testing.T) {
 		return nil, errors.New("image exceeds 20 mb")
 	}
 
-	_, err := fc.ExecuteImage(context.Background(), candidates, run)
+	_, err := executeImageForTest(fc, context.Background(), candidates, run)
 	if err == nil {
 		t.Fatal("expected error for image size error")
 	}
@@ -511,7 +522,7 @@ func TestImageFallback_RetryOnOtherErrors(t *testing.T) {
 		return &LLMResponse{Content: "image ok", FinishReason: "stop"}, nil
 	}
 
-	result, err := fc.ExecuteImage(context.Background(), candidates, run)
+	result, err := executeImageForTest(fc, context.Background(), candidates, run)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -533,7 +544,7 @@ func TestImageFallback_LocalRateLimitSkipsToHealthyFallback(t *testing.T) {
 			candidates []FallbackCandidate,
 			run func(context.Context, string, string) (*LLMResponse, error),
 		) (*FallbackResult, error) {
-			return fc.ExecuteImage(ctx, candidates, run)
+			return executeImageForTest(fc, ctx, candidates, run)
 		},
 		"image fallback ok",
 	)
@@ -543,7 +554,7 @@ func TestImageFallback_NoCandidates(t *testing.T) {
 	ct := NewCooldownTracker()
 	fc := NewFallbackChain(ct, nil)
 
-	_, err := fc.ExecuteImage(context.Background(), nil, successRun("ok"))
+	_, err := executeImageForTest(fc, context.Background(), nil, successRun("ok"))
 	if err == nil {
 		t.Error("expected error for empty candidates")
 	}

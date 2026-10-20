@@ -117,12 +117,3 @@ func TestBuildOpaqueSessionKey_IsStable(t *testing.T) {
 		t.Fatalf("expected opaque session key, got %q", first)
 	}
 }
-
-func containsAlias(aliases []string, want string) bool {
-	for _, alias := range aliases {
-		if alias == want {
-			return true
-		}
-	}
-	return false
-}

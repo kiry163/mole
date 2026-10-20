@@ -20,8 +20,8 @@ func TestResolveContextManager_ReturnsLegacy(t *testing.T) {
 	cfg := testConfig(t)
 	al := newCMTestAgentLoop(cfg)
 
-	if _, ok := al.contextManager.(*legacyContextManager); !ok {
-		t.Fatalf("expected *legacyContextManager, got %T", al.contextManager)
+	if al.contextManager == nil {
+		t.Fatal("expected a context manager")
 	}
 }
 

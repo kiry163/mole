@@ -9,8 +9,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
+func getLevelForTest() LogLevel {
+	mu.RLock()
+	defer mu.RUnlock()
+	return currentLevel
+}
+
 func TestLogLevelFiltering(t *testing.T) {
-	initialLevel := GetLevel()
+	initialLevel := getLevelForTest()
 	defer SetLevel(initialLevel)
 
 	SetLevel(WARN)
@@ -50,7 +56,7 @@ func TestLogLevelFiltering(t *testing.T) {
 }
 
 func TestLoggerWithComponent(t *testing.T) {
-	initialLevel := GetLevel()
+	initialLevel := getLevelForTest()
 	defer SetLevel(initialLevel)
 
 	SetLevel(DEBUG)
@@ -75,7 +81,7 @@ func TestLoggerWithComponent(t *testing.T) {
 			case tt.fields == nil && tt.component != "":
 				InfoC(tt.component, tt.message)
 			case tt.fields != nil:
-				InfoF(tt.message, tt.fields)
+				InfoCF("", tt.message, tt.fields)
 			default:
 				Info(tt.message)
 			}
@@ -108,21 +114,21 @@ func TestLogLevels(t *testing.T) {
 }
 
 func TestSetGetLevel(t *testing.T) {
-	initialLevel := GetLevel()
+	initialLevel := getLevelForTest()
 	defer SetLevel(initialLevel)
 
 	tests := []LogLevel{DEBUG, INFO, WARN, ERROR, FATAL}
 
 	for _, level := range tests {
 		SetLevel(level)
-		if GetLevel() != level {
-			t.Errorf("SetLevel(%v) -> GetLevel() = %v, want %v", level, GetLevel(), level)
+		if getLevelForTest() != level {
+			t.Errorf("SetLevel(%v) -> getLevelForTest() = %v, want %v", level, getLevelForTest(), level)
 		}
 	}
 }
 
 func TestLoggerHelperFunctions(t *testing.T) {
-	initialLevel := GetLevel()
+	initialLevel := getLevelForTest()
 	defer SetLevel(initialLevel)
 
 	SetLevel(INFO)
@@ -134,7 +140,7 @@ func TestLoggerHelperFunctions(t *testing.T) {
 	Error("This should log")
 
 	InfoC("test", "Component message")
-	InfoF("Fields message", map[string]any{"key": "value"})
+	InfoCF("", "Fields message", map[string]any{"key": "value"})
 	Infof("test from %v", "Infof")
 
 	WarnC("test", "Warning with component")
@@ -314,32 +320,32 @@ func TestParseLevelInvalid(t *testing.T) {
 }
 
 func TestSetLevelFromString(t *testing.T) {
-	initialLevel := GetLevel()
+	initialLevel := getLevelForTest()
 	defer SetLevel(initialLevel)
 
 	// Valid string changes the level
 	SetLevel(INFO)
 	SetLevelFromString("error")
-	if got := GetLevel(); got != ERROR {
-		t.Errorf("after SetLevelFromString(\"error\"): GetLevel() = %v, want ERROR", got)
+	if got := getLevelForTest(); got != ERROR {
+		t.Errorf("after SetLevelFromString(\"error\"): getLevelForTest() = %v, want ERROR", got)
 	}
 
 	// Empty string is a no-op
 	SetLevelFromString("")
-	if got := GetLevel(); got != ERROR {
-		t.Errorf("after SetLevelFromString(\"\"): GetLevel() = %v, want ERROR (unchanged)", got)
+	if got := getLevelForTest(); got != ERROR {
+		t.Errorf("after SetLevelFromString(\"\"): getLevelForTest() = %v, want ERROR (unchanged)", got)
 	}
 
 	// Invalid string is a no-op
 	SetLevelFromString("garbage")
-	if got := GetLevel(); got != ERROR {
-		t.Errorf("after SetLevelFromString(\"garbage\"): GetLevel() = %v, want ERROR (unchanged)", got)
+	if got := getLevelForTest(); got != ERROR {
+		t.Errorf("after SetLevelFromString(\"garbage\"): getLevelForTest() = %v, want ERROR (unchanged)", got)
 	}
 
 	// Case-insensitive
 	SetLevelFromString("FATAL")
-	if got := GetLevel(); got != FATAL {
-		t.Errorf("after SetLevelFromString(\"FATAL\"): GetLevel() = %v, want FATAL", got)
+	if got := getLevelForTest(); got != FATAL {
+		t.Errorf("after SetLevelFromString(\"FATAL\"): getLevelForTest() = %v, want FATAL", got)
 	}
 }
 
@@ -364,11 +370,6 @@ func TestAppendFields_ErrorUsesErrorString(t *testing.T) {
 	if got["error"] != "transcription request failed" {
 		t.Fatalf("error field = %#v, want %q", got["error"], "transcription request failed")
 	}
-}
-
-func TestDisableConsole(t *testing.T) {
-	DisableConsole()
-	Info("this should go to nowhere")
 }
 
 func TestGetPackageNameFromFile(t *testing.T) {

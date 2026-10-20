@@ -110,37 +110,18 @@ func formatFieldValue(i any) string {
 	return s
 }
 
+// GetLevel returns the current log level.
+func GetLevel() LogLevel {
+	mu.Lock()
+	defer mu.Unlock()
+	return currentLevel
+}
+
 func SetLevel(level LogLevel) {
 	mu.Lock()
 	defer mu.Unlock()
 	currentLevel = level
 	zerolog.SetGlobalLevel(level)
-}
-
-func SetConsoleLevel(level LogLevel) {
-	mu.Lock()
-	defer mu.Unlock()
-	logger = logger.Level(level)
-}
-
-func DisableConsole() {
-	mu.Lock()
-	defer mu.Unlock()
-	writers[0] = io.Discard
-	logger = logger.Output(io.MultiWriter(writers...))
-}
-
-func EnableConsole() {
-	mu.Lock()
-	defer mu.Unlock()
-	writers[0] = consoleWriter
-	logger = logger.Output(io.MultiWriter(writers...))
-}
-
-func GetLevel() LogLevel {
-	mu.RLock()
-	defer mu.RUnlock()
-	return currentLevel
 }
 
 // ParseLevel converts a case-insensitive level name to a LogLevel.
@@ -340,10 +321,6 @@ func Debugf(message string, ss ...any) {
 	logMessage(DEBUG, "", fmt.Sprintf(message, ss...), nil)
 }
 
-func DebugF(message string, fields map[string]any) {
-	logMessage(DEBUG, "", message, fields)
-}
-
 func DebugCF(component string, message string, fields map[string]any) {
 	logMessage(DEBUG, component, message, fields)
 }
@@ -354,10 +331,6 @@ func Info(message string) {
 
 func InfoC(component string, message string) {
 	logMessage(INFO, component, message, nil)
-}
-
-func InfoF(message string, fields map[string]any) {
-	logMessage(INFO, "", message, fields)
 }
 
 func Infof(message string, ss ...any) {
@@ -412,16 +385,8 @@ func Fatal(message string) {
 	logMessage(FATAL, "", message, nil)
 }
 
-func FatalC(component string, message string) {
-	logMessage(FATAL, component, message, nil)
-}
-
 func Fatalf(message string, ss ...any) {
 	logMessage(FATAL, "", fmt.Sprintf(message, ss...), nil)
-}
-
-func FatalF(message string, fields map[string]any) {
-	logMessage(FATAL, "", message, fields)
 }
 
 func FatalCF(component string, message string, fields map[string]any) {

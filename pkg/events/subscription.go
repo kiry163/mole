@@ -95,7 +95,6 @@ type eventSubscription struct {
 	opts    SubscribeOptions
 	filters []Filter
 	handler Handler
-	once    bool
 
 	ch      chan Event
 	done    chan struct{}
@@ -138,7 +137,6 @@ func newSubscription(
 	filters []Filter,
 	opts SubscribeOptions,
 	handler Handler,
-	once bool,
 ) *eventSubscription {
 	opts = normalizeSubscribeOptions(opts)
 	return &eventSubscription{
@@ -148,7 +146,6 @@ func newSubscription(
 		opts:    opts,
 		filters: append([]Filter(nil), filters...),
 		handler: handler,
-		once:    once,
 		ch:      make(chan Event, opts.Buffer),
 		done:    make(chan struct{}),
 		closing: make(chan struct{}),
@@ -215,10 +212,6 @@ func (s *eventSubscription) run(ctx context.Context) {
 
 	for evt := range s.ch {
 		s.dispatch(ctx, evt)
-		if s.once {
-			_ = s.Close()
-			return
-		}
 	}
 }
 

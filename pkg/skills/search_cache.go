@@ -132,13 +132,6 @@ func (sc *SearchCache) Put(query string, results []SearchResult) {
 	sc.order = append(sc.order, normalized)
 }
 
-// Len returns the number of entries (for testing).
-func (sc *SearchCache) Len() int {
-	sc.mu.RLock()
-	defer sc.mu.RUnlock()
-	return len(sc.entries)
-}
-
 // --- internal ---
 
 func (sc *SearchCache) evictExpiredLocked() {

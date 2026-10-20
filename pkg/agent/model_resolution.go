@@ -29,28 +29,27 @@ func modelConfigResolutionKey(mc *config.ModelConfig) string {
 		apiKeys[i] = mc.APIKeys[i].String()
 	}
 	payload, err := json.Marshal(struct {
-		ModelName           string                      `json:"model_name"`
-		Provider            string                      `json:"provider"`
-		Model               string                      `json:"model"`
-		APIBase             string                      `json:"api_base"`
-		APIKeys             []string                    `json:"api_keys"`
-		Enabled             bool                        `json:"enabled"`
-		UserAgent           string                      `json:"user_agent"`
-		RPM                 int                         `json:"rpm"`
-		RequestTimeout      int                         `json:"request_timeout"`
-		MaxTokensField      string                      `json:"max_tokens_field"`
-		ThinkingLevel       string                      `json:"thinking_level"`
-		ToolSchemaTransform string                      `json:"tool_schema_transform"`
-		Streaming           config.ModelStreamingConfig `json:"streaming"`
-		ExtraBody           map[string]any              `json:"extra_body"`
-		CustomHeaders       map[string]string           `json:"custom_headers"`
+		ModelName      string                      `json:"model_name"`
+		Provider       string                      `json:"provider"`
+		Model          string                      `json:"model"`
+		APIBase        string                      `json:"api_base"`
+		APIKeys        []string                    `json:"api_keys"`
+		Enabled        bool                        `json:"enabled"`
+		UserAgent      string                      `json:"user_agent"`
+		RPM            int                         `json:"rpm"`
+		RequestTimeout int                         `json:"request_timeout"`
+		MaxTokensField string                      `json:"max_tokens_field"`
+		ThinkingLevel  string                      `json:"thinking_level"`
+		Streaming      config.ModelStreamingConfig `json:"streaming"`
+		ExtraBody      map[string]any              `json:"extra_body"`
+		CustomHeaders  map[string]string           `json:"custom_headers"`
 	}{
 		ModelName: mc.ModelName, Provider: providers.NormalizeProvider(mc.Provider), Model: mc.Model,
 		APIBase: mc.APIBase, APIKeys: apiKeys,
 		Enabled: mc.Enabled, UserAgent: mc.UserAgent, RPM: mc.RPM,
 		RequestTimeout: mc.RequestTimeout, MaxTokensField: mc.MaxTokensField,
-		ThinkingLevel: mc.ThinkingLevel, ToolSchemaTransform: mc.ToolSchemaTransform,
-		Streaming: mc.Streaming, ExtraBody: mc.ExtraBody, CustomHeaders: mc.CustomHeaders,
+		ThinkingLevel: mc.ThinkingLevel,
+		Streaming:     mc.Streaming, ExtraBody: mc.ExtraBody, CustomHeaders: mc.CustomHeaders,
 	})
 	if err != nil {
 		return ""

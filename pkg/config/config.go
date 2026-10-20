@@ -14,7 +14,6 @@ import (
 	"github.com/kiry163/mole/pkg/approval"
 	"github.com/kiry163/mole/pkg/fileutil"
 	"github.com/kiry163/mole/pkg/logger"
-	providercommon "github.com/kiry163/mole/pkg/providers/common"
 )
 
 // rrCounter is a global counter for round-robin load balancing across models.
@@ -407,7 +406,6 @@ type WebChatSettings struct {
 	Streaming       StreamingConfig `json:"streaming,omitzero"          yaml:"-"`
 	PingInterval    int             `json:"ping_interval,omitempty"     yaml:"-"`
 	ReadTimeout     int             `json:"read_timeout,omitempty"      yaml:"-"`
-	WriteTimeout    int             `json:"write_timeout,omitempty"     yaml:"-"`
 	MaxConnections  int             `json:"max_connections,omitempty"   yaml:"-"`
 }
 
@@ -438,14 +436,13 @@ type ModelConfig struct {
 	Fallbacks []string `json:"fallbacks,omitempty"` // Fallback model names for failover
 
 	// Optional optimizations
-	RPM                 int                  `json:"rpm,omitempty"`              // Requests per minute limit
-	MaxTokensField      string               `json:"max_tokens_field,omitempty"` // Field name for max tokens (e.g., "max_completion_tokens")
-	RequestTimeout      int                  `json:"request_timeout,omitempty"`
-	ThinkingLevel       string               `json:"thinking_level,omitempty"`        // Extended thinking: off|low|medium|high|xhigh|adaptive
-	ToolSchemaTransform string               `json:"tool_schema_transform,omitempty"` // Optional tool schema compatibility transform (e.g. "simple")
-	Streaming           ModelStreamingConfig `json:"streaming,omitzero"`              // Opt-in for provider streaming on this model entry
-	ExtraBody           map[string]any       `json:"extra_body,omitempty"`            // Additional fields to inject into request body
-	CustomHeaders       map[string]string    `json:"custom_headers,omitempty"`        // Additional headers to inject into every HTTP request
+	RPM            int                  `json:"rpm,omitempty"`              // Requests per minute limit
+	MaxTokensField string               `json:"max_tokens_field,omitempty"` // Field name for max tokens (e.g., "max_completion_tokens")
+	RequestTimeout int                  `json:"request_timeout,omitempty"`
+	ThinkingLevel  string               `json:"thinking_level,omitempty"` // Extended thinking: off|low|medium|high|xhigh|adaptive
+	Streaming      ModelStreamingConfig `json:"streaming,omitzero"`       // Opt-in for provider streaming on this model entry
+	ExtraBody      map[string]any       `json:"extra_body,omitempty"`     // Additional fields to inject into request body
+	CustomHeaders  map[string]string    `json:"custom_headers,omitempty"` // Additional headers to inject into every HTTP request
 
 	APIKeys SecureStrings `json:"api_keys,omitzero" yaml:"api_keys,omitempty"` // API authentication keys (multiple keys for failover)
 
@@ -482,10 +479,6 @@ func (c *ModelConfig) Validate() error {
 	if c.Model == "" {
 		return fmt.Errorf("model is required")
 	}
-	if _, err := providercommon.NormalizeToolSchemaTransform(c.ToolSchemaTransform); err != nil {
-		return err
-	}
-
 	// Reject whitespace in model identifier
 	if strings.ContainsAny(c.Model, " \t\n\r") {
 		return fmt.Errorf("model identifier contains whitespace")
@@ -1042,21 +1035,20 @@ func expandMultiKeyModels(models []*ModelConfig) []*ModelConfig {
 
 			// Create a copy for the additional key
 			additionalEntry := &ModelConfig{
-				ModelName:           expandedName,
-				Provider:            m.Provider,
-				Model:               m.Model,
-				APIBase:             m.APIBase,
-				APIKeys:             SimpleSecureStrings(keys[i]),
-				RPM:                 m.RPM,
-				MaxTokensField:      m.MaxTokensField,
-				RequestTimeout:      m.RequestTimeout,
-				ThinkingLevel:       m.ThinkingLevel,
-				ToolSchemaTransform: m.ToolSchemaTransform,
-				Streaming:           m.Streaming,
-				ExtraBody:           m.ExtraBody,
-				CustomHeaders:       m.CustomHeaders,
-				UserAgent:           m.UserAgent,
-				isVirtual:           true,
+				ModelName:      expandedName,
+				Provider:       m.Provider,
+				Model:          m.Model,
+				APIBase:        m.APIBase,
+				APIKeys:        SimpleSecureStrings(keys[i]),
+				RPM:            m.RPM,
+				MaxTokensField: m.MaxTokensField,
+				RequestTimeout: m.RequestTimeout,
+				ThinkingLevel:  m.ThinkingLevel,
+				Streaming:      m.Streaming,
+				ExtraBody:      m.ExtraBody,
+				CustomHeaders:  m.CustomHeaders,
+				UserAgent:      m.UserAgent,
+				isVirtual:      true,
 			}
 			expanded = append(expanded, additionalEntry)
 			fallbackNames = append(fallbackNames, expandedName)
@@ -1064,20 +1056,19 @@ func expandMultiKeyModels(models []*ModelConfig) []*ModelConfig {
 
 		// Create the primary entry with first key and fallbacks
 		primaryEntry := &ModelConfig{
-			ModelName:           originalName,
-			Provider:            m.Provider,
-			Model:               m.Model,
-			APIBase:             m.APIBase,
-			RPM:                 m.RPM,
-			MaxTokensField:      m.MaxTokensField,
-			RequestTimeout:      m.RequestTimeout,
-			ThinkingLevel:       m.ThinkingLevel,
-			ToolSchemaTransform: m.ToolSchemaTransform,
-			Streaming:           m.Streaming,
-			ExtraBody:           m.ExtraBody,
-			CustomHeaders:       m.CustomHeaders,
-			UserAgent:           m.UserAgent,
-			APIKeys:             SimpleSecureStrings(keys[0]),
+			ModelName:      originalName,
+			Provider:       m.Provider,
+			Model:          m.Model,
+			APIBase:        m.APIBase,
+			RPM:            m.RPM,
+			MaxTokensField: m.MaxTokensField,
+			RequestTimeout: m.RequestTimeout,
+			ThinkingLevel:  m.ThinkingLevel,
+			Streaming:      m.Streaming,
+			ExtraBody:      m.ExtraBody,
+			CustomHeaders:  m.CustomHeaders,
+			UserAgent:      m.UserAgent,
+			APIKeys:        SimpleSecureStrings(keys[0]),
 		}
 
 		// Prepend new fallbacks to existing ones

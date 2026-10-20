@@ -153,35 +153,6 @@ func latestUserContent(messages []providers.Message) string {
 	return ""
 }
 
-func toolFeedbackExplanationFromResponse(
-	response *providers.LLMResponse,
-	messages []providers.Message,
-) string {
-	if response == nil {
-		return ""
-	}
-	explanation := strings.TrimSpace(response.Content)
-	if explanation == "" {
-		explanation = toolFeedbackExplanationFromToolCalls(response.ToolCalls)
-	}
-	if explanation == "" {
-		explanation = toolFeedbackExplanationFromMessages(messages)
-	}
-	return explanation
-}
-
-func toolFeedbackExplanationFromToolCalls(toolCalls []providers.ToolCall) string {
-	for _, tc := range toolCalls {
-		if tc.ExtraContent == nil {
-			continue
-		}
-		if explanation := strings.TrimSpace(tc.ExtraContent.ToolFeedbackExplanation); explanation != "" {
-			return explanation
-		}
-	}
-	return ""
-}
-
 func toolFeedbackExplanationForToolCall(
 	response *providers.LLMResponse,
 	toolCall providers.ToolCall,
@@ -240,87 +211,6 @@ func hookDeniedToolContent(prefix, reason string) string {
 		return prefix
 	}
 	return prefix + ": " + reason
-}
-
-func appendEventContextFields(fields map[string]any, turnCtx *TurnContext) {
-	if turnCtx == nil {
-		return
-	}
-
-	if inbound := turnCtx.Inbound; inbound != nil {
-		if inbound.Channel != "" {
-			fields["inbound_channel"] = inbound.Channel
-		}
-		if inbound.Account != "" {
-			fields["inbound_account"] = inbound.Account
-		}
-		if inbound.ChatID != "" {
-			fields["inbound_chat_id"] = inbound.ChatID
-		}
-		if inbound.ChatType != "" {
-			fields["inbound_chat_type"] = inbound.ChatType
-		}
-		if inbound.TopicID != "" {
-			fields["inbound_topic_id"] = inbound.TopicID
-		}
-		if inbound.SpaceType != "" {
-			fields["inbound_space_type"] = inbound.SpaceType
-		}
-		if inbound.SpaceID != "" {
-			fields["inbound_space_id"] = inbound.SpaceID
-		}
-		if inbound.SenderID != "" {
-			fields["inbound_sender_id"] = inbound.SenderID
-		}
-		if inbound.Mentioned {
-			fields["inbound_mentioned"] = true
-		}
-	}
-
-	if route := turnCtx.Route; route != nil {
-		if route.AgentID != "" {
-			fields["route_agent_id"] = route.AgentID
-		}
-		if route.Channel != "" {
-			fields["route_channel"] = route.Channel
-		}
-		if route.AccountID != "" {
-			fields["route_account_id"] = route.AccountID
-		}
-		if route.MatchedBy != "" {
-			fields["route_matched_by"] = route.MatchedBy
-		}
-		if len(route.SessionPolicy.Dimensions) > 0 {
-			fields["route_dimensions"] = strings.Join(route.SessionPolicy.Dimensions, ",")
-		}
-		if count := len(route.SessionPolicy.IdentityLinks); count > 0 {
-			fields["route_identity_link_count"] = count
-		}
-	}
-
-	if scope := turnCtx.Scope; scope != nil {
-		if scope.Version > 0 {
-			fields["scope_version"] = scope.Version
-		}
-		if scope.AgentID != "" {
-			fields["scope_agent_id"] = scope.AgentID
-		}
-		if scope.Channel != "" {
-			fields["scope_channel"] = scope.Channel
-		}
-		if scope.Account != "" {
-			fields["scope_account"] = scope.Account
-		}
-		if len(scope.Dimensions) > 0 {
-			fields["scope_dimensions"] = strings.Join(scope.Dimensions, ",")
-		}
-		for dim, value := range scope.Values {
-			if dim == "" || value == "" {
-				continue
-			}
-			fields["scope_"+dim] = value
-		}
-	}
 }
 
 func inferMediaType(filename, contentType string) string {
@@ -656,13 +546,6 @@ func mapCommandError(result commands.ExecuteResult) string {
 		return fmt.Sprintf("Failed to execute command: %v", result.Err)
 	}
 	return fmt.Sprintf("Failed to execute /%s: %v", result.Command, result.Err)
-}
-
-func isNativeSearchProvider(p providers.LLMProvider) bool {
-	if ns, ok := p.(providers.NativeSearchCapable); ok {
-		return ns.SupportsNativeSearch()
-	}
-	return false
 }
 
 func filterClientWebSearch(tools []providers.ToolDefinition) []providers.ToolDefinition {

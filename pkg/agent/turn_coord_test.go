@@ -502,7 +502,7 @@ func TestRunTurn_FinalizeSaveErrorEmitsErrorTurnEnd(t *testing.T) {
 	sub, closeSub := subscribeRuntimeEventsForTest(t, al, 8, runtimeevents.KindAgentTurnEnd)
 	defer closeSub()
 
-	if _, err := al.ProcessDirect(context.Background(), "hello", "session-save-fail"); err == nil {
+	if _, err := processDirectForTest(al, context.Background(), "hello", "session-save-fail", "cli", "direct"); err == nil {
 		t.Fatal("expected ProcessDirect to fail")
 	}
 

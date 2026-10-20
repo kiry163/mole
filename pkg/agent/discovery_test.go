@@ -177,7 +177,7 @@ Handle restricted work.
 		t.Fatal("expected main agent")
 	}
 
-	messages := mainAgent.ContextBuilder.BuildMessages(
+	messages := buildMessagesForTest(mainAgent.ContextBuilder,
 		nil,
 		"",
 		"delegate wisely",
@@ -252,7 +252,7 @@ Investigate deeply.
 		t.Fatal("expected main agent")
 	}
 
-	messages := mainAgent.ContextBuilder.BuildMessages(
+	messages := buildMessagesForTest(mainAgent.ContextBuilder,
 		nil,
 		"",
 		"handle locally",
@@ -322,7 +322,7 @@ Investigate deeply.
 		t.Fatal("expected main agent")
 	}
 
-	messages := mainAgent.ContextBuilder.BuildMessages(
+	messages := buildMessagesForTest(mainAgent.ContextBuilder,
 		nil,
 		"",
 		"handle locally",
@@ -372,7 +372,7 @@ Generalist.
 		t.Fatal("expected main agent")
 	}
 
-	messages := mainAgent.ContextBuilder.BuildMessages(
+	messages := buildMessagesForTest(mainAgent.ContextBuilder,
 		nil,
 		"",
 		"handle locally",

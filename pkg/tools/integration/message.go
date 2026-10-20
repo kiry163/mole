@@ -152,13 +152,6 @@ func (t *MessageTool) ResetSentInRound(sessionKey string) {
 	delete(t.sentTargets, sessionKey)
 }
 
-// HasSentInRound returns true if the message tool sent a message during the current round.
-func (t *MessageTool) HasSentInRound(sessionKey string) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return len(t.sentTargets[sessionKey]) > 0
-}
-
 // HasSentTo returns true if the message tool sent to the specific channel+chatID
 // during the current round. Used by PublishResponseIfNeeded to avoid suppressing
 // the final response when the message tool only sent to a different conversation.

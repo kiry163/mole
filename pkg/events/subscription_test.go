@@ -7,37 +7,6 @@ import (
 	"time"
 )
 
-func TestSubscribeOnceClosesAfterFirstEvent(t *testing.T) {
-	t.Parallel()
-
-	bus := NewBus()
-	defer closeBus(t, bus)
-
-	var handled atomic.Uint64
-	sub, err := bus.Channel().SubscribeOnce(
-		context.Background(),
-		SubscribeOptions{Name: "once", Buffer: 2},
-		func(context.Context, Event) error {
-			handled.Add(1)
-			return nil
-		},
-	)
-	if err != nil {
-		t.Fatalf("SubscribeOnce failed: %v", err)
-	}
-
-	bus.Publish(context.Background(), Event{Kind: KindAgentTurnStart})
-	waitForSubscriptionDone(t, sub)
-	bus.Publish(context.Background(), Event{Kind: KindAgentTurnEnd})
-
-	if got := handled.Load(); got != 1 {
-		t.Fatalf("handled = %d, want 1", got)
-	}
-	if got := sub.Stats().Handled; got != 1 {
-		t.Fatalf("subscription handled = %d, want 1", got)
-	}
-}
-
 func TestUnsubscribeClosesChannel(t *testing.T) {
 	t.Parallel()
 

@@ -36,24 +36,7 @@ type publishPolicy struct {
 }
 
 type streamStats struct {
-	dropped       atomic.Uint64
-	lastDropped   atomic.Int64
-	lastWaitNanos atomic.Int64
-}
-
-type MessageBusStats struct {
-	Inbound       StreamStats `json:"inbound"`
-	Outbound      StreamStats `json:"outbound"`
-	OutboundMedia StreamStats `json:"outbound_media"`
-}
-
-type StreamStats struct {
-	Depth              int       `json:"depth"`
-	Capacity           int       `json:"capacity"`
-	DroppedTotal       uint64    `json:"dropped_total"`
-	LastDroppedAt      time.Time `json:"last_dropped_at,omitempty"`
-	LastDropWait       string    `json:"last_drop_wait,omitempty"`
-	LastDropWaitMillis int64     `json:"last_drop_wait_ms,omitempty"`
+	dropped atomic.Uint64
 }
 
 // StreamDelegate is implemented by the channel Manager to provide streaming
@@ -169,9 +152,6 @@ func publish[T any](
 			return ctx.Err()
 		case <-timer.C:
 			droppedTotal := stats.dropped.Add(1)
-			now := time.Now()
-			stats.lastDropped.Store(now.UnixNano())
-			stats.lastWaitNanos.Store(policy.timeout.Nanoseconds())
 			queueDepth := len(ch)
 			queueCap := cap(ch)
 			mb.publishDrop(
@@ -283,60 +263,6 @@ func (mb *MessageBus) GetStreamer(ctx context.Context, channel, chatID, sessionK
 		return d.GetStreamer(ctx, channel, chatID, sessionKey)
 	}
 	return nil, false
-}
-
-func (mb *MessageBus) Stats() MessageBusStats {
-	if mb == nil {
-		return MessageBusStats{}
-	}
-	return MessageBusStats{
-		Inbound:       snapshotStreamStats(mb.inbound, &mb.inboundStats),
-		Outbound:      snapshotStreamStats(mb.outbound, &mb.outboundStats),
-		OutboundMedia: snapshotStreamStats(mb.outboundMedia, &mb.mediaStats),
-	}
-}
-
-// HealthCheck returns a snapshot of queue depths and cumulative drop counts
-// across all streams. It always reports ok=true: backpressure-induced drops are
-// reflected in the message string for telemetry but do not affect the boolean.
-// Callers that need readiness semantics (e.g. returning 503 when drops occur)
-// should inspect Stats() directly and apply their own threshold logic.
-func (mb *MessageBus) HealthCheck() (bool, string) {
-	stats := mb.Stats()
-	totalDropped := stats.Inbound.DroppedTotal +
-		stats.Outbound.DroppedTotal +
-		stats.OutboundMedia.DroppedTotal
-	message := fmt.Sprintf(
-		"in=%d/%d out=%d/%d media=%d/%d dropped=%d",
-		stats.Inbound.Depth,
-		stats.Inbound.Capacity,
-		stats.Outbound.Depth,
-		stats.Outbound.Capacity,
-		stats.OutboundMedia.Depth,
-		stats.OutboundMedia.Capacity,
-		totalDropped,
-	)
-
-	return true, message
-}
-
-func snapshotStreamStats[T any](ch chan T, stats *streamStats) StreamStats {
-	snapshot := StreamStats{
-		DroppedTotal: stats.dropped.Load(),
-	}
-	if ch != nil {
-		snapshot.Depth = len(ch)
-		snapshot.Capacity = cap(ch)
-	}
-	if unixNano := stats.lastDropped.Load(); unixNano > 0 {
-		snapshot.LastDroppedAt = time.Unix(0, unixNano)
-	}
-	if waitNanos := stats.lastWaitNanos.Load(); waitNanos > 0 {
-		wait := time.Duration(waitNanos)
-		snapshot.LastDropWait = wait.String()
-		snapshot.LastDropWaitMillis = wait.Milliseconds()
-	}
-	return snapshot
 }
 
 func (mb *MessageBus) Close() {

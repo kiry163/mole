@@ -17,7 +17,6 @@ import (
 	"github.com/kiry163/mole/pkg/logger"
 	"github.com/kiry163/mole/pkg/providers"
 	"github.com/kiry163/mole/pkg/skills"
-	"github.com/kiry163/mole/pkg/state"
 	"github.com/kiry163/mole/pkg/tools"
 )
 
@@ -25,7 +24,6 @@ func NewAgentLoop(
 	cfg *config.Config,
 	msgBus *bus.MessageBus,
 	provider providers.LLMProvider,
-	opts ...AgentLoopOption,
 ) *AgentLoop {
 	registry := NewAgentRegistry(cfg, provider)
 
@@ -42,13 +40,6 @@ func NewAgentLoop(
 	}
 	fallbackChain := providers.NewFallbackChain(cooldown, rl)
 
-	// Create state manager using default agent's workspace for channel recording
-	defaultAgent := registry.GetDefaultAgent()
-	var stateManager *state.Manager
-	if defaultAgent != nil {
-		stateManager = state.NewManager(defaultAgent.Workspace)
-	}
-
 	// Determine worker pool size from config (default: 1 = sequential)
 	workerPoolSize := cfg.Agents.Defaults.MaxParallelTurns
 	if workerPoolSize <= 0 {
@@ -56,24 +47,14 @@ func NewAgentLoop(
 	}
 
 	al := &AgentLoop{
-		bus:               msgBus,
-		cfg:               cfg,
-		registry:          registry,
-		state:             stateManager,
-		fallback:          fallbackChain,
-		cmdRegistry:       commands.NewRegistry(commands.BuiltinDefinitions()),
-		steering:          newSteeringQueue(parseSteeringMode(cfg.Agents.Defaults.SteeringMode)),
-		workerSem:         make(chan struct{}, workerPoolSize),
-		ownsRuntimeEvents: true,
-	}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(al)
-		}
-	}
-	if al.runtimeEvents == nil {
-		al.runtimeEvents = runtimeevents.NewBus()
-		al.ownsRuntimeEvents = true
+		bus:           msgBus,
+		cfg:           cfg,
+		registry:      registry,
+		fallback:      fallbackChain,
+		cmdRegistry:   commands.NewRegistry(commands.BuiltinDefinitions()),
+		steering:      newSteeringQueue(parseSteeringMode(cfg.Agents.Defaults.SteeringMode)),
+		workerSem:     make(chan struct{}, workerPoolSize),
+		runtimeEvents: runtimeevents.NewBus(),
 	}
 	al.activeReqCond = sync.NewCond(&al.activeReqMu)
 	al.refreshRuntimeEventLogger(cfg)

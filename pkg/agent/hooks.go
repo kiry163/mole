@@ -64,14 +64,6 @@ type HookRegistration struct {
 	Hook     any
 }
 
-func NamedHook(name string, hook any) HookRegistration {
-	return HookRegistration{
-		Name:   name,
-		Source: HookSourceInProcess,
-		Hook:   hook,
-	}
-}
-
 type RuntimeEventObserver interface {
 	OnRuntimeEvent(ctx context.Context, evt runtimeevents.Event) error
 }
@@ -847,10 +839,6 @@ func cloneProviderToolCalls(calls []providers.ToolCall) []providers.ToolCall {
 		}
 		if call.ExtraContent != nil {
 			extra := *call.ExtraContent
-			if call.ExtraContent.Google != nil {
-				google := *call.ExtraContent.Google
-				extra.Google = &google
-			}
 			cloned[i].ExtraContent = &extra
 		}
 	}

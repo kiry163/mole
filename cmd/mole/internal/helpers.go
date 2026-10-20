@@ -6,7 +6,6 @@ import (
 
 	"github.com/kiry163/mole/pkg"
 	"github.com/kiry163/mole/pkg/config"
-	"github.com/kiry163/mole/pkg/logger"
 )
 
 const Logo = pkg.Logo
@@ -22,13 +21,4 @@ func GetConfigPath() string {
 		return configPath
 	}
 	return filepath.Join(GetMoleHome(), "config.json")
-}
-
-func LoadConfig() (*config.Config, error) {
-	cfg, err := config.LoadConfig(GetConfigPath())
-	if err != nil {
-		return nil, err
-	}
-	logger.SetLevelFromString(cfg.Gateway.LogLevel)
-	return cfg, nil
 }

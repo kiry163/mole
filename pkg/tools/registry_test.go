@@ -86,8 +86,8 @@ func newMockTool(name, desc string) *mockRegistryTool {
 
 func TestNewToolRegistry(t *testing.T) {
 	r := NewToolRegistry()
-	if r.Count() != 0 {
-		t.Errorf("expected empty registry, got count %d", r.Count())
+	if len(r.tools) != 0 {
+		t.Errorf("expected empty registry, got count %d", len(r.tools))
 	}
 	if len(r.List()) != 0 {
 		t.Errorf("expected empty list, got %v", r.List())
@@ -204,8 +204,8 @@ func TestToolRegistry_RegisterOverwrite(t *testing.T) {
 	r.Register(newMockTool("dup", "first"))
 	r.Register(newMockTool("dup", "second"))
 
-	if r.Count() != 1 {
-		t.Errorf("expected count 1 after overwrite, got %d", r.Count())
+	if len(r.tools) != 1 {
+		t.Errorf("expected count 1 after overwrite, got %d", len(r.tools))
 	}
 	tool, _ := r.Get("dup")
 	if tool.Description() != "second" {
@@ -338,29 +338,6 @@ func TestToolRegistry_ExecuteWithContext_AsyncCallback(t *testing.T) {
 	}
 }
 
-func TestToolRegistry_GetDefinitions(t *testing.T) {
-	r := NewToolRegistry()
-	r.Register(newMockTool("alpha", "tool A"))
-
-	defs := r.GetDefinitions()
-	if len(defs) != 1 {
-		t.Fatalf("expected 1 definition, got %d", len(defs))
-	}
-	if defs[0]["type"] != "function" {
-		t.Errorf("expected type 'function', got %v", defs[0]["type"])
-	}
-	fn, ok := defs[0]["function"].(map[string]any)
-	if !ok {
-		t.Fatal("expected 'function' key to be a map")
-	}
-	if fn["name"] != "alpha" {
-		t.Errorf("expected name 'alpha', got %v", fn["name"])
-	}
-	if fn["description"] != "tool A" {
-		t.Errorf("expected description 'tool A', got %v", fn["description"])
-	}
-}
-
 func TestToolRegistry_ToProviderDefs(t *testing.T) {
 	r := NewToolRegistry()
 	params := map[string]any{"type": "object", "properties": map[string]any{}}
@@ -421,35 +398,19 @@ func TestToolRegistry_List(t *testing.T) {
 
 func TestToolRegistry_Count(t *testing.T) {
 	r := NewToolRegistry()
-	if r.Count() != 0 {
-		t.Errorf("expected 0, got %d", r.Count())
+	if len(r.tools) != 0 {
+		t.Errorf("expected 0, got %d", len(r.tools))
 	}
 
 	r.Register(newMockTool("a", ""))
 	r.Register(newMockTool("b", ""))
-	if r.Count() != 2 {
-		t.Errorf("expected 2, got %d", r.Count())
+	if len(r.tools) != 2 {
+		t.Errorf("expected 2, got %d", len(r.tools))
 	}
 
 	r.Register(newMockTool("a", "replaced"))
-	if r.Count() != 2 {
-		t.Errorf("expected 2 after overwrite, got %d", r.Count())
-	}
-}
-
-func TestToolRegistry_GetSummaries(t *testing.T) {
-	r := NewToolRegistry()
-	r.Register(newMockTool("read_file", "Reads a file"))
-
-	summaries := r.GetSummaries()
-	if len(summaries) != 1 {
-		t.Fatalf("expected 1 summary, got %d", len(summaries))
-	}
-	if !strings.Contains(summaries[0], "`read_file`") {
-		t.Errorf("expected backtick-quoted name in summary, got %q", summaries[0])
-	}
-	if !strings.Contains(summaries[0], "Reads a file") {
-		t.Errorf("expected description in summary, got %q", summaries[0])
+	if len(r.tools) != 2 {
+		t.Errorf("expected 2 after overwrite, got %d", len(r.tools))
 	}
 }
 
@@ -525,8 +486,8 @@ func TestToolRegistry_Clone(t *testing.T) {
 	clone := r.Clone()
 
 	// Clone should have the same tools
-	if clone.Count() != 3 {
-		t.Errorf("expected clone to have 3 tools, got %d", clone.Count())
+	if len(clone.tools) != 3 {
+		t.Errorf("expected clone to have 3 tools, got %d", len(clone.tools))
 	}
 	for _, name := range []string{"read_file", "exec", "web_search"} {
 		if _, ok := clone.Get(name); !ok {
@@ -536,13 +497,13 @@ func TestToolRegistry_Clone(t *testing.T) {
 
 	// Registering on parent should NOT affect clone
 	r.Register(newMockTool("spawn", "spawns subagent"))
-	if r.Count() != 4 {
-		t.Errorf("expected parent to have 4 tools, got %d", r.Count())
+	if len(r.tools) != 4 {
+		t.Errorf("expected parent to have 4 tools, got %d", len(r.tools))
 	}
-	if clone.Count() != 3 {
+	if len(clone.tools) != 3 {
 		t.Errorf(
 			"expected clone to still have 3 tools after parent mutation, got %d",
-			clone.Count(),
+			len(clone.tools),
 		)
 	}
 	if _, ok := clone.Get("spawn"); ok {
@@ -551,8 +512,8 @@ func TestToolRegistry_Clone(t *testing.T) {
 
 	// Registering on clone should NOT affect parent
 	clone.Register(newMockTool("custom", "custom tool"))
-	if clone.Count() != 4 {
-		t.Errorf("expected clone to have 4 tools, got %d", clone.Count())
+	if len(clone.tools) != 4 {
+		t.Errorf("expected clone to have 4 tools, got %d", len(clone.tools))
 	}
 	if _, ok := r.Get("custom"); ok {
 		t.Error("expected parent NOT to have 'custom' tool registered on clone")
@@ -562,8 +523,8 @@ func TestToolRegistry_Clone(t *testing.T) {
 func TestToolRegistry_Clone_Empty(t *testing.T) {
 	r := NewToolRegistry()
 	clone := r.Clone()
-	if clone.Count() != 0 {
-		t.Errorf("expected empty clone, got count %d", clone.Count())
+	if len(clone.tools) != 0 {
+		t.Errorf("expected empty clone, got count %d", len(clone.tools))
 	}
 }
 
@@ -579,8 +540,8 @@ func TestToolRegistry_Clone_PreservesHiddenToolState(t *testing.T) {
 	}
 
 	// But the entry should exist (count includes hidden tools)
-	if clone.Count() != 1 {
-		t.Errorf("expected clone count 1 (hidden entry exists), got %d", clone.Count())
+	if len(clone.tools) != 1 {
+		t.Errorf("expected clone count 1 (hidden entry exists), got %d", len(clone.tools))
 	}
 }
 
@@ -620,15 +581,14 @@ func TestToolRegistry_ConcurrentAccess(t *testing.T) {
 			name := string(rune('A' + n%26))
 			r.Register(newMockTool(name, "concurrent"))
 			r.Get(name)
-			r.Count()
 			r.List()
-			r.GetDefinitions()
+			r.ToProviderDefs()
 		}(i)
 	}
 
 	wg.Wait()
 
-	if r.Count() == 0 {
+	if len(r.tools) == 0 {
 		t.Error("expected tools to be registered after concurrent access")
 	}
 }

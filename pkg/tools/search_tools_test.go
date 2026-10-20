@@ -162,15 +162,6 @@ func TestSearchRegex_ZeroMaxResults(t *testing.T) {
 	}
 }
 
-func TestSearchBM25_ZeroMaxResults(t *testing.T) {
-	reg := setupPopulatedRegistry()
-
-	res := reg.SearchBM25("read file", 0)
-	if len(res) != 0 {
-		t.Errorf("Expected 0 results with maxSearchResults=0, got %d", len(res))
-	}
-}
-
 func TestSearchRegex_DeterministicOrder(t *testing.T) {
 	reg := NewToolRegistry()
 	for i := 0; i < 20; i++ {
@@ -236,20 +227,6 @@ func TestToolRegistry_SearchLimitsAndCoreFiltering(t *testing.T) {
 		}
 	})
 
-	t.Run("BM25 limits and core filtering", func(t *testing.T) {
-		// Search with BM25 and a limit of maxSearchResults = 3
-		res := reg.SearchBM25("match", 3)
-
-		if len(res) != 3 {
-			t.Errorf("Expected exactly 3 results due to limit, got %d", len(res))
-		}
-
-		for _, r := range res {
-			if r.Name == "core_match" {
-				t.Errorf("SearchBM25 returned a Core tool, which should be excluded")
-			}
-		}
-	})
 }
 
 func TestGet_HiddenToolTTLLifecycle(t *testing.T) {

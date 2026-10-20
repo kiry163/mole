@@ -115,7 +115,7 @@ func TestExtractFrontmatter(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Extract frontmatter
-			frontmatter := sl.extractFrontmatter(tc.content)
+			frontmatter, _ := splitFrontmatter(tc.content)
 			assert.NotEmpty(t, frontmatter, "Frontmatter should be extracted for %s line endings", tc.lineEndingType)
 
 			// Parse YAML to get name and description (parseSimpleYAML now handles all line ending types)

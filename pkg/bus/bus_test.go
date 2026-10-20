@@ -3,7 +3,6 @@ package bus
 import (
 	"context"
 	"errors"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -700,58 +699,8 @@ func TestPublishInbound_FullBufferUsesBusBackpressureBudget(t *testing.T) {
 		t.Fatalf("publish() error = %v, want %v", err, ErrBusBackpressure)
 	}
 
-	stats := mb.Stats()
-	if stats.Inbound.DroppedTotal != 1 {
-		t.Fatalf("Inbound dropped = %d, want 1", stats.Inbound.DroppedTotal)
-	}
-	if stats.Inbound.LastDropWaitMillis != 20 {
-		t.Fatalf("Inbound last wait ms = %d, want 20", stats.Inbound.LastDropWaitMillis)
-	}
-}
-
-func TestMessageBusHealthCheckIncludesQueueDepth(t *testing.T) {
-	mb := NewMessageBus()
-	defer mb.Close()
-
-	ok, msg := mb.HealthCheck()
-	if !ok {
-		t.Fatal("HealthCheck should remain ok for backpressure telemetry")
-	}
-	if msg == "" {
-		t.Fatal("HealthCheck message should not be empty")
-	}
-
-	fillOutboundMediaBuffer(t, mb)
-
-	stats := mb.Stats()
-	if stats.OutboundMedia.Depth != cap(mb.outboundMedia) {
-		t.Fatalf("media depth = %d, want %d", stats.OutboundMedia.Depth, cap(mb.outboundMedia))
-	}
-
-	ok, msg = mb.HealthCheck()
-	if !ok {
-		t.Fatal("HealthCheck should stay ok with a full media buffer")
-	}
-	if !strings.Contains(msg, "media=") {
-		t.Fatalf("HealthCheck message %q should report media depth", msg)
-	}
-}
-
-// fillOutboundMediaBuffer fills the outbound-media queue to capacity. Every bus
-// stream blocks when full (none drops by timeout), so callers must not publish
-// past the capacity.
-func fillOutboundMediaBuffer(t *testing.T, mb *MessageBus) {
-	t.Helper()
-	for i := range cap(mb.outboundMedia) {
-		if err := mb.PublishOutboundMedia(context.Background(), OutboundMediaMessage{
-			Context: InboundContext{
-				Channel: "discord",
-				ChatID:  "voice-room",
-			},
-			Parts: []MediaPart{{Ref: "fill"}},
-		}); err != nil {
-			t.Fatalf("fill media buffer at %d: %v", i, err)
-		}
+	if got := mb.inboundStats.dropped.Load(); got != 1 {
+		t.Fatalf("Inbound dropped = %d, want 1", got)
 	}
 }
 

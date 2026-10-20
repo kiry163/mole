@@ -12,6 +12,14 @@ import (
 	"time"
 )
 
+func newSkillInstallerForTest(workspace, token, proxy string) (*SkillInstaller, error) {
+	return NewSkillInstallerWithBaseURL(workspace, "", token, proxy)
+}
+
+func parseGitHubRefForTest(repo string) (GitHubRef, error) {
+	return parseGitHubRefWithBaseURL(repo, "", "main")
+}
+
 func TestParseGitHubRef(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -99,35 +107,35 @@ func TestParseGitHubRef(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ref, err := parseGitHubRef(tt.repo)
+			ref, err := parseGitHubRefForTest(tt.repo)
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("parseGitHubRef() error = nil, wantErr = true")
+					t.Errorf("parseGitHubRefForTest() error = nil, wantErr = true")
 					return
 				}
 				if tt.wantErrContain != "" && !strings.Contains(err.Error(), tt.wantErrContain) {
-					t.Errorf("parseGitHubRef() error = %v, want error containing %v", err, tt.wantErrContain)
+					t.Errorf("parseGitHubRefForTest() error = %v, want error containing %v", err, tt.wantErrContain)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("parseGitHubRef() unexpected error = %v", err)
+				t.Errorf("parseGitHubRefForTest() unexpected error = %v", err)
 				return
 			}
 
 			if ref.Owner != tt.wantOwner {
-				t.Errorf("parseGitHubRef() owner = %v, want %v", ref.Owner, tt.wantOwner)
+				t.Errorf("parseGitHubRefForTest() owner = %v, want %v", ref.Owner, tt.wantOwner)
 			}
 			if ref.RepoName != tt.wantRepoName {
-				t.Errorf("parseGitHubRef() repoName = %v, want %v", ref.RepoName, tt.wantRepoName)
+				t.Errorf("parseGitHubRefForTest() repoName = %v, want %v", ref.RepoName, tt.wantRepoName)
 			}
 			if ref.Ref != tt.wantRef {
-				t.Errorf("parseGitHubRef() ref = %v, want %v", ref.Ref, tt.wantRef)
+				t.Errorf("parseGitHubRefForTest() ref = %v, want %v", ref.Ref, tt.wantRef)
 			}
 			if ref.SubPath != tt.wantSubPath {
-				t.Errorf("parseGitHubRef() subPath = %v, want %v", ref.SubPath, tt.wantSubPath)
+				t.Errorf("parseGitHubRefForTest() subPath = %v, want %v", ref.SubPath, tt.wantSubPath)
 			}
 		})
 	}
@@ -446,15 +454,15 @@ func TestIsSkillDirectory(t *testing.T) {
 	}
 }
 
-func TestNewSkillInstaller(t *testing.T) {
+func TestNewSkillInstallerForTest(t *testing.T) {
 	tmpDir := t.TempDir()
-	installer, err := NewSkillInstaller(tmpDir, "test-token", "")
+	installer, err := newSkillInstallerForTest(tmpDir, "test-token", "")
 	if err != nil {
-		t.Fatalf("NewSkillInstaller() error = %v", err)
+		t.Fatalf("newSkillInstallerForTest() error = %v", err)
 	}
 
 	if installer == nil {
-		t.Fatal("NewSkillInstaller() returned nil")
+		t.Fatal("newSkillInstallerForTest() returned nil")
 	}
 
 	if installer.workspace != tmpDir {
@@ -488,9 +496,9 @@ func TestNewSkillInstaller(t *testing.T) {
 
 func TestNewSkillInstaller_WithProxy(t *testing.T) {
 	tmpDir := t.TempDir()
-	installer, err := NewSkillInstaller(tmpDir, "test-token", "http://127.0.0.1:7890")
+	installer, err := newSkillInstallerForTest(tmpDir, "test-token", "http://127.0.0.1:7890")
 	if err != nil {
-		t.Fatalf("NewSkillInstaller() error = %v", err)
+		t.Fatalf("newSkillInstallerForTest() error = %v", err)
 	}
 
 	if installer.proxy != "http://127.0.0.1:7890" {
@@ -532,9 +540,9 @@ func TestNewSkillInstaller_WithBaseURL(t *testing.T) {
 
 func TestNewSkillInstaller_InvalidProxy(t *testing.T) {
 	tmpDir := t.TempDir()
-	installer, err := NewSkillInstaller(tmpDir, "test-token", "://invalid-proxy")
+	installer, err := newSkillInstallerForTest(tmpDir, "test-token", "://invalid-proxy")
 	if err == nil {
-		t.Error("NewSkillInstaller() expected error for invalid proxy, got nil")
+		t.Error("newSkillInstallerForTest() expected error for invalid proxy, got nil")
 	}
 	if installer != nil {
 		t.Error("expected nil installer on error")
@@ -554,9 +562,9 @@ func TestSkillInstaller_DownloadFile(t *testing.T) {
 	defer server.Close()
 
 	tmpDir := t.TempDir()
-	installer, err := NewSkillInstaller(tmpDir, "", "")
+	installer, err := newSkillInstallerForTest(tmpDir, "", "")
 	if err != nil {
-		t.Fatalf("NewSkillInstaller() error = %v", err)
+		t.Fatalf("newSkillInstallerForTest() error = %v", err)
 	}
 
 	t.Run("successful download", func(t *testing.T) {
@@ -614,9 +622,9 @@ func TestSkillInstaller_DownloadRaw(t *testing.T) {
 	defer server.Close()
 
 	tmpDir := t.TempDir()
-	installer, err := NewSkillInstaller(tmpDir, "", "")
+	installer, err := newSkillInstallerForTest(tmpDir, "", "")
 	if err != nil {
-		t.Fatalf("NewSkillInstaller() error = %v", err)
+		t.Fatalf("newSkillInstallerForTest() error = %v", err)
 	}
 
 	// Replace the client with one that points to our test server
@@ -650,9 +658,9 @@ func TestSkillInstaller_Uninstall(t *testing.T) {
 	skillsDir := filepath.Join(tmpDir, "skills")
 	os.MkdirAll(skillsDir, 0o755)
 
-	installer, err := NewSkillInstaller(tmpDir, "", "")
+	installer, err := newSkillInstallerForTest(tmpDir, "", "")
 	if err != nil {
-		t.Fatalf("NewSkillInstaller() error = %v", err)
+		t.Fatalf("newSkillInstallerForTest() error = %v", err)
 	}
 
 	t.Run("uninstall existing skill", func(t *testing.T) {
@@ -721,9 +729,9 @@ func TestSkillInstaller_InstallFromGitHub_SkillAlreadyExists(t *testing.T) {
 	skillsDir := filepath.Join(tmpDir, "skills")
 	os.MkdirAll(skillsDir, 0o755)
 
-	installer, err := NewSkillInstaller(tmpDir, "", "")
+	installer, err := newSkillInstallerForTest(tmpDir, "", "")
 	if err != nil {
-		t.Fatalf("NewSkillInstaller() error = %v", err)
+		t.Fatalf("newSkillInstallerForTest() error = %v", err)
 	}
 
 	// Create an existing skill directory
@@ -770,9 +778,9 @@ func TestGitHubContent_Struct(t *testing.T) {
 
 func TestSkillInstaller_GetGithubDirAllFiles(t *testing.T) {
 	tmpDir := t.TempDir()
-	installer, err := NewSkillInstaller(tmpDir, "", "")
+	installer, err := newSkillInstallerForTest(tmpDir, "", "")
 	if err != nil {
-		t.Fatalf("NewSkillInstaller() error = %v", err)
+		t.Fatalf("newSkillInstallerForTest() error = %v", err)
 	}
 
 	// Create a test server that mimics GitHub API
@@ -911,9 +919,9 @@ func TestSkillInstaller_InstallFromGitHub_WithToken(t *testing.T) {
 	serverURL = server.URL
 	defer server.Close()
 
-	installer, err := NewSkillInstaller(tmpDir, "test-github-token", "")
+	installer, err := newSkillInstallerForTest(tmpDir, "test-github-token", "")
 	if err != nil {
-		t.Fatalf("NewSkillInstaller() error = %v", err)
+		t.Fatalf("newSkillInstallerForTest() error = %v", err)
 	}
 
 	// We need to test the token is passed - the actual install will fail
@@ -935,9 +943,9 @@ func TestSkillInstaller_InstallFromGitHub_WithToken(t *testing.T) {
 
 func TestSkillInstaller_ContextCancellation(t *testing.T) {
 	tmpDir := t.TempDir()
-	installer, err := NewSkillInstaller(tmpDir, "", "")
+	installer, err := newSkillInstallerForTest(tmpDir, "", "")
 	if err != nil {
-		t.Fatalf("NewSkillInstaller() error = %v", err)
+		t.Fatalf("newSkillInstallerForTest() error = %v", err)
 	}
 
 	// Create a slow server

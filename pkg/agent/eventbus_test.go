@@ -27,7 +27,7 @@ func TestAgentLoop_PublishesRuntimeEvents(t *testing.T) {
 		}
 	}()
 
-	runtimeSub, runtimeCh, err := al.RuntimeEvents().OfKind(runtimeevents.KindAgentToolExecStart).SubscribeChan(
+	runtimeSub, runtimeCh, err := al.RuntimeEventBus().Channel().OfKind(runtimeevents.KindAgentToolExecStart).SubscribeChan(
 		context.Background(),
 		runtimeevents.SubscribeOptions{Name: "runtime", Buffer: 1},
 	)
@@ -154,7 +154,7 @@ func TestAgentLoop_EmitsMinimalTurnEvents(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 	provider := &scriptedToolProvider{}
 	al := NewAgentLoop(cfg, msgBus, provider)
-	al.RegisterTool(&mockCustomTool{})
+	registerTool(al, &mockCustomTool{})
 	defaultAgent := al.registry.GetDefaultAgent()
 	if defaultAgent == nil {
 		t.Fatal("expected default agent")
@@ -336,8 +336,8 @@ func TestAgentLoop_EmitsSteeringAndSkippedToolEvents(t *testing.T) {
 
 	msgBus := bus.NewMessageBus()
 	al := NewAgentLoop(cfg, msgBus, provider)
-	al.RegisterTool(tool1)
-	al.RegisterTool(tool2)
+	registerTool(al, tool1)
+	registerTool(al, tool2)
 
 	runtimeCh, closeRuntimeEvents := subscribeRuntimeEventsForTest(
 		t,
@@ -351,7 +351,7 @@ func TestAgentLoop_EmitsSteeringAndSkippedToolEvents(t *testing.T) {
 
 	resultCh := make(chan string, 1)
 	go func() {
-		resp, _ := al.ProcessDirectWithChannel(context.Background(), "do something", "test-session", "test", "chat1")
+		resp, _ := processDirectForTest(al, context.Background(), "do something", "test-session", "test", "chat1")
 		resultCh <- resp
 	}()
 
@@ -559,7 +559,7 @@ func TestAgentLoop_EmitsSessionSummarizeEvent(t *testing.T) {
 	)
 	defer closeRuntimeEvents()
 
-	lcm := &legacyContextManager{al: al}
+	lcm := &sessionContextManager{al: al}
 	lcm.summarizeSession(defaultAgent, "session-1")
 
 	events := collectRuntimeEventStream(runtimeCh)
@@ -613,7 +613,7 @@ func TestAgentLoop_EmitsFollowUpQueuedEvent(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 	al := NewAgentLoop(cfg, msgBus, provider)
 	doneCh := make(chan struct{})
-	al.RegisterTool(&asyncFollowUpTool{
+	registerTool(al, &asyncFollowUpTool{
 		name:          "async_followup",
 		followUpText:  "background result",
 		completionSig: doneCh,

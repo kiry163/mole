@@ -1368,7 +1368,7 @@ func TestHandleGetSession_UsesConfiguredToolFeedbackMaxArgsLength(t *testing.T) 
 		t.Fatalf("len(resp.Messages) = %d, want at least 2", len(resp.Messages))
 	}
 
-	wantArgsPreview := visibleAssistantToolArgsPreview(providers.ToolCall{
+	wantArgsPreview := utils.VisibleToolCallArgumentsPreview(providers.ToolCall{
 		Function: &providers.FunctionCall{Arguments: argsJSON},
 	}, 20)
 	toolCall := assertVisibleToolCallMessage(t, resp.Messages[1], "read_file")
@@ -1445,7 +1445,7 @@ func TestHandleGetSession_FallsBackToLegacyToolArgumentsWhenExplanationMissing(t
 		t.Fatalf("len(resp.Messages) = %d, want at least 2", len(resp.Messages))
 	}
 
-	wantPreview := visibleAssistantToolArgsPreview(providers.ToolCall{
+	wantPreview := utils.VisibleToolCallArgumentsPreview(providers.ToolCall{
 		Function: &providers.FunctionCall{Arguments: argsJSON},
 	}, 20)
 	toolCall := assertVisibleToolCallMessage(t, resp.Messages[1], "read_file")

@@ -73,9 +73,5 @@ func finalizeProviderFromConfig(
 	modelID string,
 	cfg *config.ModelConfig,
 ) (LLMProvider, string, error) {
-	wrapped, err := wrapProviderWithToolSchemaTransform(provider, cfg.ToolSchemaTransform)
-	if err != nil {
-		return nil, "", err
-	}
-	return wrapped, modelID, nil
+	return provider, modelID, nil
 }

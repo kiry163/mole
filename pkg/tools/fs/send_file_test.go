@@ -15,9 +15,8 @@ import (
 func TestSendFileTool_MissingPath(t *testing.T) {
 	store := media.NewFileMediaStore()
 	tool := NewSendFileTool("/tmp", false, 0, store)
-	tool.SetContext("feishu", "chat123")
 
-	result := tool.Execute(context.Background(), map[string]any{})
+	result := tool.Execute(WithToolContext(context.Background(), "feishu", "chat123"), map[string]any{})
 	if !result.IsError {
 		t.Fatal("expected error for missing path")
 	}
@@ -26,7 +25,7 @@ func TestSendFileTool_MissingPath(t *testing.T) {
 func TestSendFileTool_NoContext(t *testing.T) {
 	store := media.NewFileMediaStore()
 	tool := NewSendFileTool("/tmp", false, 0, store)
-	// no SetContext call
+	// no channel context injected
 
 	result := tool.Execute(context.Background(), map[string]any{"path": "/tmp/test.txt"})
 	if !result.IsError {
@@ -36,9 +35,8 @@ func TestSendFileTool_NoContext(t *testing.T) {
 
 func TestSendFileTool_NoMediaStore(t *testing.T) {
 	tool := NewSendFileTool("/tmp", false, 0, nil)
-	tool.SetContext("feishu", "chat123")
 
-	result := tool.Execute(context.Background(), map[string]any{"path": "/tmp/test.txt"})
+	result := tool.Execute(WithToolContext(context.Background(), "feishu", "chat123"), map[string]any{"path": "/tmp/test.txt"})
 	if !result.IsError {
 		t.Fatal("expected error when no media store")
 	}
@@ -47,9 +45,8 @@ func TestSendFileTool_NoMediaStore(t *testing.T) {
 func TestSendFileTool_Directory(t *testing.T) {
 	store := media.NewFileMediaStore()
 	tool := NewSendFileTool("/tmp", false, 0, store)
-	tool.SetContext("feishu", "chat123")
 
-	result := tool.Execute(context.Background(), map[string]any{"path": "/tmp"})
+	result := tool.Execute(WithToolContext(context.Background(), "feishu", "chat123"), map[string]any{"path": "/tmp"})
 	if !result.IsError {
 		t.Fatal("expected error for directory path")
 	}
@@ -65,9 +62,8 @@ func TestSendFileTool_FileTooLarge(t *testing.T) {
 
 	store := media.NewFileMediaStore()
 	tool := NewSendFileTool(dir, false, 512, store) // 512 byte limit
-	tool.SetContext("feishu", "chat123")
 
-	result := tool.Execute(context.Background(), map[string]any{"path": testFile})
+	result := tool.Execute(WithToolContext(context.Background(), "feishu", "chat123"), map[string]any{"path": testFile})
 	if !result.IsError {
 		t.Fatal("expected error for oversized file")
 	}
@@ -92,9 +88,8 @@ func TestSendFileTool_Success(t *testing.T) {
 
 	store := media.NewFileMediaStore()
 	tool := NewSendFileTool(dir, false, 0, store)
-	tool.SetContext("feishu", "chat123")
 
-	result := tool.Execute(context.Background(), map[string]any{"path": testFile})
+	result := tool.Execute(WithToolContext(context.Background(), "feishu", "chat123"), map[string]any{"path": testFile})
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", result.ForLLM)
 	}
@@ -126,9 +121,8 @@ func TestSendFileTool_CustomFilename(t *testing.T) {
 
 	store := media.NewFileMediaStore()
 	tool := NewSendFileTool(dir, false, 0, store)
-	tool.SetContext("telegram", "chat456")
 
-	result := tool.Execute(context.Background(), map[string]any{
+	result := tool.Execute(WithToolContext(context.Background(), "telegram", "chat456"), map[string]any{
 		"path":     testFile,
 		"filename": "my-photo.jpg",
 	})
@@ -167,9 +161,8 @@ func TestSendFileTool_AllowsWhitelistedMediaTempPath(t *testing.T) {
 
 	store := media.NewFileMediaStore()
 	tool := NewSendFileTool(workspace, true, 0, store, []*regexp.Regexp{pattern})
-	tool.SetContext("feishu", "chat123")
 
-	result := tool.Execute(context.Background(), map[string]any{"path": testPath})
+	result := tool.Execute(WithToolContext(context.Background(), "feishu", "chat123"), map[string]any{"path": testPath})
 	if result.IsError {
 		t.Fatalf("expected whitelisted temp media file to be sendable, got: %s", result.ForLLM)
 	}

@@ -207,6 +207,6 @@ func (s *Server) Register(mux interface {
 }) {
 	mux.HandleHTTP("/api/", s.chain(s.apiHandler.Routes()))
 	mux.HandleHTTP("/login", s.chain(s.pages))
-	mux.HandleHTTP("/setup", s.chain(s.pages))
+	mux.HandleHTTP(middleware.DashboardSetupPath, s.chain(s.pages))
 	mux.HandleHTTP("/", s.chain(s.spa))
 }

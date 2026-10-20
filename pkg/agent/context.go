@@ -121,14 +121,6 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 	}
 }
 
-func (cb *ContextBuilder) RegisterPromptSource(desc PromptSourceDescriptor) error {
-	err := cb.promptRegistryOrDefault().RegisterSource(desc)
-	if err == nil {
-		cb.InvalidateCache()
-	}
-	return err
-}
-
 func (cb *ContextBuilder) RegisterPromptContributor(contributor PromptContributor) error {
 	err := cb.promptRegistryOrDefault().RegisterContributor(contributor)
 	if err == nil {
@@ -802,27 +794,6 @@ func (cb *ContextBuilder) buildDynamicContext(
 	return sb.String()
 }
 
-func (cb *ContextBuilder) BuildMessages(
-	history []providers.Message,
-	summary string,
-	currentMessage string,
-	media []string,
-	channel, chatID, senderID, senderDisplayName string,
-	activeSkills ...string,
-) []providers.Message {
-	return cb.BuildMessagesFromPrompt(PromptBuildRequest{
-		History:           history,
-		Summary:           summary,
-		CurrentMessage:    currentMessage,
-		Media:             media,
-		Channel:           channel,
-		ChatID:            chatID,
-		SenderID:          senderID,
-		SenderDisplayName: senderDisplayName,
-		ActiveSkills:      append([]string(nil), activeSkills...),
-	})
-}
-
 func (cb *ContextBuilder) BuildMessagesFromPrompt(req PromptBuildRequest) []providers.Message {
 	messages := []providers.Message{}
 
@@ -1170,32 +1141,6 @@ func sanitizeHistoryForProvider(history []providers.Message) []providers.Message
 	}
 
 	return final
-}
-
-func (cb *ContextBuilder) AddToolResult(
-	messages []providers.Message,
-	toolCallID, toolName, result string,
-) []providers.Message {
-	messages = append(messages, providers.Message{
-		Role:       "tool",
-		Content:    result,
-		ToolCallID: toolCallID,
-	})
-	return messages
-}
-
-func (cb *ContextBuilder) AddAssistantMessage(
-	messages []providers.Message,
-	content string,
-	toolCalls []map[string]any,
-) []providers.Message {
-	msg := providers.Message{
-		Role:    "assistant",
-		Content: content,
-	}
-	// Always add assistant message, whether or not it has tool calls
-	messages = append(messages, msg)
-	return messages
 }
 
 func (cb *ContextBuilder) buildActiveSkillsContext(skillNames []string) string {

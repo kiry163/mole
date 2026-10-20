@@ -56,8 +56,6 @@ func NewDashboardSessionCookie(token string) (string, error) {
 // DashboardAuthConfig holds runtime material for dashboard access checks.
 type DashboardAuthConfig struct {
 	ExpectedCookie string
-	// SecureCookie sets the session cookie's Secure flag. If nil, DefaultDashboardSecureCookie is used.
-	SecureCookie func(*http.Request) bool
 }
 
 // DefaultDashboardSecureCookie mirrors typical production HTTPS detection (TLS or X-Forwarded-Proto).
@@ -69,15 +67,7 @@ func DefaultDashboardSecureCookie(r *http.Request) bool {
 }
 
 // SetDashboardSessionCookie writes the HttpOnly session cookie after successful dashboard password login.
-func SetDashboardSessionCookie(
-	w http.ResponseWriter,
-	r *http.Request,
-	sessionValue string,
-	secure func(*http.Request) bool,
-) {
-	if secure == nil {
-		secure = DefaultDashboardSecureCookie
-	}
+func SetDashboardSessionCookie(w http.ResponseWriter, r *http.Request, sessionValue string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     DashboardCookieName,
 		Value:    sessionValue,
@@ -85,15 +75,12 @@ func SetDashboardSessionCookie(
 		MaxAge:   dashboardSessionMaxAgeSec,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   secure(r),
+		Secure:   DefaultDashboardSecureCookie(r),
 	})
 }
 
 // ClearDashboardSessionCookie clears the dashboard session (e.g. logout).
-func ClearDashboardSessionCookie(w http.ResponseWriter, r *http.Request, secure func(*http.Request) bool) {
-	if secure == nil {
-		secure = DefaultDashboardSecureCookie
-	}
+func ClearDashboardSessionCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     DashboardCookieName,
 		Value:    "",
@@ -101,7 +88,7 @@ func ClearDashboardSessionCookie(w http.ResponseWriter, r *http.Request, secure 
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   secure(r),
+		Secure:   DefaultDashboardSecureCookie(r),
 		Expires:  time.Unix(0, 0),
 	})
 }

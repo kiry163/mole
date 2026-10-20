@@ -63,21 +63,6 @@ const (
 	ToolControlFinalize
 )
 
-// LLMPhase indicates which phase the turn is executing in.
-type LLMPhase int
-
-const (
-	LLMPhaseSetup LLMPhase = iota
-	LLMPhasePreLLM
-	LLMPhaseLLMCall
-	LLMPhaseProcessing
-	LLMPhaseToolLoop
-	LLMPhaseTools
-	LLMPhaseFinalizing
-	LLMPhaseCompleted
-	LLMPhaseAborted
-)
-
 // =============================================================================
 // turnResult - returned from runTurn
 // =============================================================================
@@ -149,9 +134,6 @@ type turnExecution struct {
 	useNativeSearch     bool
 	ownedProviders      []providers.LLMProvider
 
-	// Phase tracking
-	phase LLMPhase
-
 	// Abort signaling for coordinator (set by Pipeline methods)
 	abortedByHardAbort bool // true when hard abort triggered during LLM/tools
 	abortedByHook      bool // true when HookActionAbortTurn triggered
@@ -180,7 +162,6 @@ func newTurnExecution(
 		pendingMessages:  append([]providers.Message(nil), opts.InitialSteeringMessages...),
 		currentTurnStart: len(messages),
 		iteration:        0,
-		phase:            LLMPhaseSetup,
 	}
 }
 
@@ -250,9 +231,8 @@ type turnState struct {
 	finishedChan    chan struct{}      // Closed when turn finishes
 
 	// Token budget tracking
-	tokenBudget      *atomic.Int64        // Shared token budget counter
-	lastFinishReason string               // Last LLM finish_reason
-	lastUsage        *providers.UsageInfo // Last LLM usage info
+	tokenBudget *atomic.Int64        // Shared token budget counter
+	lastUsage   *providers.UsageInfo // Last LLM usage info
 
 	// Back-reference to the owning AgentLoop (set for SubTurns only, used for hard abort cascade)
 	al *AgentLoop
@@ -779,12 +759,6 @@ func normalizeMessageForComparison(msg providers.Message) providers.Message {
 		for i := range msg.ToolCalls {
 			msg.ToolCalls[i].Name = ""
 			msg.ToolCalls[i].Arguments = nil
-			msg.ToolCalls[i].ThoughtSignature = ""
-			if msg.ToolCalls[i].Function != nil {
-				fn := *msg.ToolCalls[i].Function
-				fn.ThoughtSignature = ""
-				msg.ToolCalls[i].Function = &fn
-			}
 		}
 	}
 
@@ -865,20 +839,6 @@ func (ts *turnState) IsParentEnded() bool {
 	return ts.parentTurnState.parentEnded.Load()
 }
 
-// GetLastFinishReason returns the last LLM finish_reason
-func (ts *turnState) GetLastFinishReason() string {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
-	return ts.lastFinishReason
-}
-
-// SetLastFinishReason sets the last LLM finish_reason
-func (ts *turnState) SetLastFinishReason(reason string) {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	ts.lastFinishReason = reason
-}
-
 // GetLastUsage returns the last LLM usage info
 func (ts *turnState) GetLastUsage() *providers.UsageInfo {
 	ts.mu.RLock()
@@ -908,9 +868,4 @@ func withTurnState(ctx context.Context, ts *turnState) context.Context {
 func turnStateFromContext(ctx context.Context) *turnState {
 	ts, _ := ctx.Value(turnStateKey).(*turnState)
 	return ts
-}
-
-// TurnStateFromContext retrieves turnState from context (exported for tools)
-func TurnStateFromContext(ctx context.Context) *turnState {
-	return turnStateFromContext(ctx)
 }

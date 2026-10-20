@@ -27,36 +27,36 @@ import (
 func TestSteeringQueue_PushDequeue_OneAtATime(t *testing.T) {
 	sq := newSteeringQueue(SteeringOneAtATime)
 
-	sq.push(providers.Message{Role: "user", Content: "msg1"})
-	sq.push(providers.Message{Role: "user", Content: "msg2"})
-	sq.push(providers.Message{Role: "user", Content: "msg3"})
+	sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: "msg1"})
+	sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: "msg2"})
+	sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: "msg3"})
 
-	if sq.len() != 3 {
-		t.Fatalf("expected 3 messages, got %d", sq.len())
+	if sq.lenScope(manualSteeringScope) != 3 {
+		t.Fatalf("expected 3 messages, got %d", sq.lenScope(manualSteeringScope))
 	}
 
-	msgs := sq.dequeue()
+	msgs := sq.dequeueScope(manualSteeringScope)
 	if len(msgs) != 1 {
 		t.Fatalf("expected 1 message in one-at-a-time mode, got %d", len(msgs))
 	}
 	if msgs[0].Content != "msg1" {
 		t.Fatalf("expected 'msg1', got %q", msgs[0].Content)
 	}
-	if sq.len() != 2 {
-		t.Fatalf("expected 2 remaining, got %d", sq.len())
+	if sq.lenScope(manualSteeringScope) != 2 {
+		t.Fatalf("expected 2 remaining, got %d", sq.lenScope(manualSteeringScope))
 	}
 
-	msgs = sq.dequeue()
+	msgs = sq.dequeueScope(manualSteeringScope)
 	if len(msgs) != 1 || msgs[0].Content != "msg2" {
 		t.Fatalf("expected 'msg2', got %v", msgs)
 	}
 
-	msgs = sq.dequeue()
+	msgs = sq.dequeueScope(manualSteeringScope)
 	if len(msgs) != 1 || msgs[0].Content != "msg3" {
 		t.Fatalf("expected 'msg3', got %v", msgs)
 	}
 
-	msgs = sq.dequeue()
+	msgs = sq.dequeueScope(manualSteeringScope)
 	if msgs != nil {
 		t.Fatalf("expected nil from empty queue, got %v", msgs)
 	}
@@ -65,11 +65,11 @@ func TestSteeringQueue_PushDequeue_OneAtATime(t *testing.T) {
 func TestSteeringQueue_PushDequeue_All(t *testing.T) {
 	sq := newSteeringQueue(SteeringAll)
 
-	sq.push(providers.Message{Role: "user", Content: "msg1"})
-	sq.push(providers.Message{Role: "user", Content: "msg2"})
-	sq.push(providers.Message{Role: "user", Content: "msg3"})
+	sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: "msg1"})
+	sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: "msg2"})
+	sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: "msg3"})
 
-	msgs := sq.dequeue()
+	msgs := sq.dequeueScope(manualSteeringScope)
 	if len(msgs) != 3 {
 		t.Fatalf("expected 3 messages in all mode, got %d", len(msgs))
 	}
@@ -77,11 +77,11 @@ func TestSteeringQueue_PushDequeue_All(t *testing.T) {
 		t.Fatalf("unexpected messages: %v", msgs)
 	}
 
-	if sq.len() != 0 {
-		t.Fatalf("expected 0 remaining, got %d", sq.len())
+	if sq.lenScope(manualSteeringScope) != 0 {
+		t.Fatalf("expected 0 remaining, got %d", sq.lenScope(manualSteeringScope))
 	}
 
-	msgs = sq.dequeue()
+	msgs = sq.dequeueScope(manualSteeringScope)
 	if msgs != nil {
 		t.Fatalf("expected nil from empty queue, got %v", msgs)
 	}
@@ -89,7 +89,7 @@ func TestSteeringQueue_PushDequeue_All(t *testing.T) {
 
 func TestSteeringQueue_EmptyDequeue(t *testing.T) {
 	sq := newSteeringQueue(SteeringOneAtATime)
-	if msgs := sq.dequeue(); msgs != nil {
+	if msgs := sq.dequeueScope(manualSteeringScope); msgs != nil {
 		t.Fatalf("expected nil, got %v", msgs)
 	}
 }
@@ -106,10 +106,10 @@ func TestSteeringQueue_SetMode(t *testing.T) {
 	}
 
 	// Push two messages and verify all-mode drains them
-	sq.push(providers.Message{Role: "user", Content: "a"})
-	sq.push(providers.Message{Role: "user", Content: "b"})
+	sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: "a"})
+	sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: "b"})
 
-	msgs := sq.dequeue()
+	msgs := sq.dequeueScope(manualSteeringScope)
 	if len(msgs) != 2 {
 		t.Fatalf("expected 2 messages after mode switch, got %d", len(msgs))
 	}
@@ -126,13 +126,13 @@ func TestSteeringQueue_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			sq.push(providers.Message{Role: "user", Content: fmt.Sprintf("msg%d", i)})
+			sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: fmt.Sprintf("msg%d", i)})
 		}(i)
 	}
 	wg.Wait()
 
-	if sq.len() != n {
-		t.Fatalf("expected %d messages, got %d", n, sq.len())
+	if sq.lenScope(manualSteeringScope) != n {
+		t.Fatalf("expected %d messages, got %d", n, sq.lenScope(manualSteeringScope))
 	}
 
 	// Drain from multiple goroutines
@@ -142,7 +142,7 @@ func TestSteeringQueue_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if msgs := sq.dequeue(); len(msgs) > 0 {
+			if msgs := sq.dequeueScope(manualSteeringScope); len(msgs) > 0 {
 				mu.Lock()
 				drained += len(msgs)
 				mu.Unlock()
@@ -161,19 +161,19 @@ func TestSteeringQueue_Overflow(t *testing.T) {
 
 	// Fill the queue up to its maximum capacity
 	for i := 0; i < MaxQueueSize; i++ {
-		err := sq.push(providers.Message{Role: "user", Content: fmt.Sprintf("msg%d", i)})
+		err := sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: fmt.Sprintf("msg%d", i)})
 		if err != nil {
 			t.Fatalf("unexpected error pushing message %d: %v", i, err)
 		}
 	}
 
 	// Sanity check: ensure the queue is actually full
-	if sq.len() != MaxQueueSize {
-		t.Fatalf("expected queue length %d, got %d", MaxQueueSize, sq.len())
+	if sq.lenScope(manualSteeringScope) != MaxQueueSize {
+		t.Fatalf("expected queue length %d, got %d", MaxQueueSize, sq.lenScope(manualSteeringScope))
 	}
 
 	// Attempt to push one more message, which MUST fail
-	err := sq.push(providers.Message{Role: "user", Content: "overflow_msg"})
+	err := sq.pushScope(manualSteeringScope, providers.Message{Role: "user", Content: "overflow_msg"})
 
 	// Assert the error happened and is the exact one we expect
 	if err == nil {
@@ -224,11 +224,11 @@ func TestAgentLoop_Steer_Enqueues(t *testing.T) {
 
 	al.Steer(providers.Message{Role: "user", Content: "interrupt me"})
 
-	if al.steering.len() != 1 {
-		t.Fatalf("expected 1 steering message, got %d", al.steering.len())
+	if al.steering.lenScope(manualSteeringScope) != 1 {
+		t.Fatalf("expected 1 steering message, got %d", al.steering.lenScope(manualSteeringScope))
 	}
 
-	msgs := al.dequeueSteeringMessages()
+	msgs := al.steering.dequeueScope(manualSteeringScope)
 	if len(msgs) != 1 || msgs[0].Content != "interrupt me" {
 		t.Fatalf("unexpected dequeued message: %v", msgs)
 	}
@@ -248,13 +248,13 @@ func TestAgentLoop_SteeringMode_GetSet(t *testing.T) {
 		t.Fatal("expected provider to be initialized")
 	}
 
-	if al.SteeringMode() != SteeringOneAtATime {
-		t.Fatalf("expected default mode one-at-a-time, got %v", al.SteeringMode())
+	if al.steering.getMode() != SteeringOneAtATime {
+		t.Fatalf("expected default mode one-at-a-time, got %v", al.steering.getMode())
 	}
 
-	al.SetSteeringMode(SteeringAll)
-	if al.SteeringMode() != SteeringAll {
-		t.Fatalf("expected all mode, got %v", al.SteeringMode())
+	al.steering.setMode(SteeringAll)
+	if al.steering.getMode() != SteeringAll {
+		t.Fatalf("expected all mode, got %v", al.steering.getMode())
 	}
 }
 
@@ -281,8 +281,8 @@ func TestAgentLoop_SteeringMode_ConfiguredFromConfig(t *testing.T) {
 	provider := &mockProvider{}
 	al := NewAgentLoop(cfg, msgBus, provider)
 
-	if al.SteeringMode() != SteeringAll {
-		t.Fatalf("expected 'all' mode from config, got %v", al.SteeringMode())
+	if al.steering.getMode() != SteeringAll {
+		t.Fatalf("expected 'all' mode from config, got %v", al.steering.getMode())
 	}
 }
 
@@ -596,8 +596,8 @@ func TestAgentLoop_Steering_SkipsRemainingTools(t *testing.T) {
 
 	msgBus := bus.NewMessageBus()
 	al := NewAgentLoop(cfg, msgBus, provider)
-	al.RegisterTool(tool1)
-	al.RegisterTool(tool2)
+	registerTool(al, tool1)
+	registerTool(al, tool2)
 
 	// Start processing in a goroutine
 	type result struct {
@@ -607,7 +607,7 @@ func TestAgentLoop_Steering_SkipsRemainingTools(t *testing.T) {
 	resultCh := make(chan result, 1)
 
 	go func() {
-		resp, err := al.ProcessDirectWithChannel(
+		resp, err := processDirectForTest(al,
 			context.Background(),
 			"do something",
 			"test-session",
@@ -689,7 +689,7 @@ func TestAgentLoop_Steering_InitialPoll(t *testing.T) {
 	al.Steer(providers.Message{Role: "user", Content: "pre-enqueued steering"})
 
 	// Process a normal message - the initial steering poll should inject the steering message
-	_, err = al.ProcessDirectWithChannel(
+	_, err = processDirectForTest(al,
 		context.Background(),
 		"initial message",
 		"test-session",
@@ -1059,7 +1059,7 @@ func TestAgentLoop_Steering_DirectResponseContinuesWithQueuedMessage(t *testing.
 		err  error
 	}, 1)
 	go func() {
-		resp, err := al.ProcessDirectWithChannel(
+		resp, err := processDirectForTest(al,
 			context.Background(),
 			"initial request",
 			sessionKey,
@@ -1315,8 +1315,8 @@ func TestAgentLoop_InterruptGraceful_UsesTerminalNoToolCall(t *testing.T) {
 
 	msgBus := bus.NewMessageBus()
 	al := NewAgentLoop(cfg, msgBus, provider)
-	al.RegisterTool(tool1)
-	al.RegisterTool(tool2)
+	registerTool(al, tool1)
+	registerTool(al, tool2)
 	sessionKey := session.BuildMainSessionKey(routing.DefaultAgentID)
 
 	runtimeCh, closeRuntimeEvents := subscribeRuntimeEventsForTest(
@@ -1334,7 +1334,7 @@ func TestAgentLoop_InterruptGraceful_UsesTerminalNoToolCall(t *testing.T) {
 	}
 	resultCh := make(chan result, 1)
 	go func() {
-		resp, err := al.ProcessDirectWithChannel(
+		resp, err := processDirectForTest(al,
 			context.Background(),
 			"do something",
 			sessionKey,
@@ -1476,7 +1476,7 @@ func TestAgentLoop_HardAbort_RestoresSession(t *testing.T) {
 
 	al := NewAgentLoop(cfg, msgBus, provider)
 	started := make(chan struct{})
-	al.RegisterTool(&interruptibleTool{name: "cancel_tool", started: started})
+	registerTool(al, &interruptibleTool{name: "cancel_tool", started: started})
 	sessionKey := session.BuildMainSessionKey(routing.DefaultAgentID)
 
 	defaultAgent := al.registry.GetDefaultAgent()
@@ -1507,7 +1507,7 @@ func TestAgentLoop_HardAbort_RestoresSession(t *testing.T) {
 	}
 	resultCh := make(chan result, 1)
 	go func() {
-		resp, err := al.ProcessDirectWithChannel(
+		resp, err := processDirectForTest(al,
 			context.Background(),
 			"do work",
 			sessionKey,
@@ -1615,7 +1615,7 @@ func TestAgentLoop_StopCommand_AbortsActiveTurnAndClearsQueuedSteering(t *testin
 
 	al := NewAgentLoop(cfg, msgBus, provider)
 	started := make(chan struct{})
-	al.RegisterTool(&interruptibleTool{name: "cancel_tool", started: started})
+	registerTool(al, &interruptibleTool{name: "cancel_tool", started: started})
 	sessionKey := session.BuildMainSessionKey(routing.DefaultAgentID)
 
 	runCtx, cancelRun := context.WithCancel(context.Background())
@@ -1818,12 +1818,12 @@ func TestAgentLoop_Steering_SkippedToolsHaveErrorResults(t *testing.T) {
 
 	msgBus := bus.NewMessageBus()
 	al := NewAgentLoop(cfg, msgBus, wrappedProvider)
-	al.RegisterTool(tool1)
-	al.RegisterTool(tool2)
+	registerTool(al, tool1)
+	registerTool(al, tool2)
 
 	resultCh := make(chan string, 1)
 	go func() {
-		resp, _ := al.ProcessDirectWithChannel(
+		resp, _ := processDirectForTest(al,
 			context.Background(), "go", "test-session", "test", "chat1",
 		)
 		resultCh <- resp

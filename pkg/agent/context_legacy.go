@@ -12,15 +12,13 @@ import (
 	"github.com/kiry163/mole/pkg/providers"
 )
 
-// legacyContextManager wraps the existing summarization/compression logic
-// as a ContextManager implementation. It is the default when no other
-// ContextManager is configured.
-type legacyContextManager struct {
+// sessionContextManager owns conversation assembly and compaction for a turn.
+type sessionContextManager struct {
 	al          *AgentLoop
 	summarizing sync.Map // dedup for async Compact (post-turn)
 }
 
-func (m *legacyContextManager) Assemble(_ context.Context, req *AssembleRequest) (*AssembleResponse, error) {
+func (m *sessionContextManager) Assemble(_ context.Context, req *AssembleRequest) (*AssembleResponse, error) {
 	// Legacy: read history from session, return as-is.
 	// Budget enforcement happens in BuildMessages caller via
 	// isOverContextBudget + forceCompression.
@@ -36,7 +34,7 @@ func (m *legacyContextManager) Assemble(_ context.Context, req *AssembleRequest)
 	}, nil
 }
 
-func (m *legacyContextManager) Compact(_ context.Context, req *CompactRequest) error {
+func (m *sessionContextManager) Compact(_ context.Context, req *CompactRequest) error {
 	switch req.Reason {
 	case ContextCompressReasonProactive, ContextCompressReasonRetry:
 		// Sync emergency compression — budget exceeded.
@@ -57,12 +55,12 @@ func (m *legacyContextManager) Compact(_ context.Context, req *CompactRequest) e
 	return nil
 }
 
-func (m *legacyContextManager) Ingest(_ context.Context, _ *IngestRequest) error {
+func (m *sessionContextManager) Ingest(_ context.Context, _ *IngestRequest) error {
 	// Legacy: no-op. Messages are persisted by Sessions JSONL.
 	return nil
 }
 
-func (m *legacyContextManager) Clear(_ context.Context, sessionKey string) error {
+func (m *sessionContextManager) Clear(_ context.Context, sessionKey string) error {
 	// Routed (non-default) agents keep history in their own session store,
 	// so resolve the owning agent instead of assuming the default one.
 	agent := m.al.agentForSession(sessionKey)
@@ -76,7 +74,7 @@ func (m *legacyContextManager) Clear(_ context.Context, sessionKey string) error
 
 // maybeSummarize triggers summarization if the session history exceeds thresholds.
 // It runs asynchronously in a goroutine.
-func (m *legacyContextManager) maybeSummarize(sessionKey string) {
+func (m *sessionContextManager) maybeSummarize(sessionKey string) {
 	agent := m.al.registry.GetDefaultAgent()
 	if agent == nil {
 		return
@@ -114,7 +112,7 @@ type compressionResult struct {
 // forceCompression aggressively reduces context when the limit is hit.
 // It drops the oldest ~50% of Turns (a Turn is a complete user→LLM→response
 // cycle, as defined in #1316), so tool-call sequences are never split.
-func (m *legacyContextManager) forceCompression(sessionKey string) (compressionResult, bool) {
+func (m *sessionContextManager) forceCompression(sessionKey string) (compressionResult, bool) {
 	agent := m.al.registry.GetDefaultAgent()
 	if agent == nil {
 		return compressionResult{}, false
@@ -171,7 +169,7 @@ func (m *legacyContextManager) forceCompression(sessionKey string) (compressionR
 	}, true
 }
 
-func (m *legacyContextManager) summarizeSession(agent *AgentInstance, sessionKey string) {
+func (m *sessionContextManager) summarizeSession(agent *AgentInstance, sessionKey string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -261,7 +259,7 @@ func (m *legacyContextManager) summarizeSession(agent *AgentInstance, sessionKey
 	}
 }
 
-func (m *legacyContextManager) findNearestUserMessage(messages []providers.Message, mid int) int {
+func (m *sessionContextManager) findNearestUserMessage(messages []providers.Message, mid int) int {
 	originalMid := mid
 
 	for mid > 0 && messages[mid].Role != "user" {
@@ -284,7 +282,7 @@ func (m *legacyContextManager) findNearestUserMessage(messages []providers.Messa
 	return originalMid
 }
 
-func (m *legacyContextManager) retryLLMCall(
+func (m *sessionContextManager) retryLLMCall(
 	ctx context.Context,
 	agent *AgentInstance,
 	prompt string,
@@ -323,7 +321,7 @@ func (m *legacyContextManager) retryLLMCall(
 	return resp, err
 }
 
-func (m *legacyContextManager) summarizeBatch(
+func (m *sessionContextManager) summarizeBatch(
 	ctx context.Context,
 	agent *AgentInstance,
 	batch []providers.Message,
@@ -383,7 +381,7 @@ func (m *legacyContextManager) summarizeBatch(
 	return fallback.String(), nil
 }
 
-func (m *legacyContextManager) estimateTokens(messages []providers.Message) int {
+func (m *sessionContextManager) estimateTokens(messages []providers.Message) int {
 	total := 0
 	for _, msg := range messages {
 		total += EstimateMessageTokens(msg)

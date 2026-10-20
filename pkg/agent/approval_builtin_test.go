@@ -49,7 +49,7 @@ func TestBuiltinApproverAllowsSafeToolsWithoutAsking(t *testing.T) {
 		cfg.Hooks.Defaults.ApprovalTimeoutMS = 5000
 	})
 	defer cleanup()
-	al.RegisterTool(&readOnlyEchoTool{})
+	registerTool(al, &readOnlyEchoTool{})
 
 	response, err := al.runAgentLoop(context.Background(), agentInstance, processOptions{
 		SessionKey: "sess", Channel: "cli", ChatID: "direct", UserMessage: "run it",
@@ -77,7 +77,7 @@ func TestBuiltinApproverQueuesAndHonoursADecision(t *testing.T) {
 		cfg.Hooks.Defaults.ApprovalTimeoutMS = 5000
 	})
 	defer cleanup()
-	al.RegisterTool(&dangerousEchoTool{})
+	registerTool(al, &dangerousEchoTool{})
 
 	type result struct {
 		response string
@@ -127,9 +127,9 @@ func TestBuiltinApproverExpiresWhenNobodyAnswers(t *testing.T) {
 		cfg.Hooks.Defaults.ApprovalTimeoutMS = 300
 	})
 	defer cleanup()
-	al.RegisterTool(&dangerousEchoTool{})
+	registerTool(al, &dangerousEchoTool{})
 
-	sub, decisions, err := al.RuntimeEvents().OfKind(runtimeevents.KindAgentToolApprovalDecided).SubscribeChan(
+	sub, decisions, err := al.RuntimeEventBus().Channel().OfKind(runtimeevents.KindAgentToolApprovalDecided).SubscribeChan(
 		context.Background(),
 		runtimeevents.SubscribeOptions{Name: "approval-expiry-test", Buffer: 2},
 	)
@@ -192,7 +192,7 @@ func TestBuiltinApproverDeniesWithoutAStore(t *testing.T) {
 	if err := al.ensureHooksInitialized(context.Background()); err != nil {
 		t.Fatalf("ensureHooksInitialized() error = %v", err)
 	}
-	al.RegisterTool(&dangerousEchoTool{})
+	registerTool(al, &dangerousEchoTool{})
 
 	response, err := al.runAgentLoop(context.Background(), agentInstance, processOptions{
 		SessionKey: "sess", Channel: "cli", ChatID: "direct", UserMessage: "run it",
@@ -321,7 +321,7 @@ func TestBuiltinApproverStaysMountedWhenAProcessHookFails(t *testing.T) {
 		}
 	})
 	defer cleanup()
-	al.RegisterTool(&dangerousEchoTool{})
+	registerTool(al, &dangerousEchoTool{})
 
 	if degraded := al.hookRuntime.getDegraded(); degraded == nil {
 		t.Fatal("a failed process hook must be reported as a degraded runtime")

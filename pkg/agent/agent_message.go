@@ -33,38 +33,6 @@ func (al *AgentLoop) buildContinuationTarget(msg bus.InboundMessage) (*continuat
 	}, nil
 }
 
-func (al *AgentLoop) ProcessDirect(
-	ctx context.Context,
-	content, sessionKey string,
-) (string, error) {
-	return al.ProcessDirectWithChannel(ctx, content, sessionKey, "cli", "direct")
-}
-
-func (al *AgentLoop) ProcessDirectWithChannel(
-	ctx context.Context,
-	content, sessionKey, channel, chatID string,
-) (string, error) {
-	if err := al.ensureHooksInitialized(ctx); err != nil {
-		return "", err
-	}
-	if err := al.ensureMCPInitialized(ctx); err != nil {
-		return "", err
-	}
-
-	msg := bus.InboundMessage{
-		Context: bus.InboundContext{
-			Channel:  channel,
-			ChatID:   chatID,
-			ChatType: "direct",
-			SenderID: "cli",
-		},
-		Content:    content,
-		SessionKey: sessionKey,
-	}
-
-	return al.processMessage(ctx, msg)
-}
-
 func (al *AgentLoop) prepareInboundMessageForAgent(
 	ctx context.Context,
 	msg bus.InboundMessage,

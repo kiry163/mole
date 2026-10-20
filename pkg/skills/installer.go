@@ -49,12 +49,6 @@ type SkillInstaller struct {
 	proxy            string
 }
 
-// NewSkillInstaller creates a new skill installer.
-// proxy is an optional HTTP/HTTPS/SOCKS5 proxy URL for downloading skills.
-func NewSkillInstaller(workspace, githubToken, proxy string) (*SkillInstaller, error) {
-	return NewSkillInstallerWithBaseURL(workspace, "", githubToken, proxy)
-}
-
 // NewSkillInstallerWithBaseURL creates a new skill installer with a custom GitHub base URL.
 // For github.com this can be left empty. For GitHub Enterprise, set it to the web URL.
 func NewSkillInstallerWithBaseURL(workspace, githubBaseURL, githubToken, proxy string) (*SkillInstaller, error) {
@@ -234,12 +228,8 @@ func isSkillMarkdownPath(subPath string) bool {
 	return subPath == "SKILL.md" || strings.HasSuffix(subPath, "/SKILL.md")
 }
 
-// parseGitHubRef parses a GitHub reference.
+// parseGitHubRefWithBaseURL parses a GitHub reference.
 // Supports: "owner/repo", "owner/repo/path", or full URL like "https://github.com/owner/repo/tree/ref/path"
-func parseGitHubRef(repo string) (GitHubRef, error) {
-	return parseGitHubRefWithBaseURL(repo, "", "main")
-}
-
 func parseGitHubRefWithBaseURL(repo, githubBaseURL, defaultRef string) (GitHubRef, error) {
 	target, err := parseGitHubTargetWithBaseURL(repo, githubBaseURL, defaultRef)
 	if err != nil {

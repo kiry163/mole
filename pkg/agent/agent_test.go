@@ -24,7 +24,6 @@ import (
 	runtimeevents "github.com/kiry163/mole/pkg/events"
 	"github.com/kiry163/mole/pkg/media"
 	"github.com/kiry163/mole/pkg/providers"
-	"github.com/kiry163/mole/pkg/routing"
 	"github.com/kiry163/mole/pkg/session"
 	"github.com/kiry163/mole/pkg/tools"
 	"github.com/kiry163/mole/pkg/utils"
@@ -763,7 +762,7 @@ func TestProcessMessage_BeforeLLMModelRewriteReevaluatesThinkingOff(t *testing.T
 	msgBus := bus.NewMessageBus()
 	provider := &reasoningOptionRecordingProvider{}
 	al := NewAgentLoop(cfg, msgBus, provider)
-	if err := al.MountHook(NamedHook("rewrite-model", modelRewriteHook{model: "off-model"})); err != nil {
+	if err := al.MountHook(namedHook("rewrite-model", modelRewriteHook{model: "off-model"})); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -817,7 +816,7 @@ func TestProcessMessage_BeforeLLMModelRewriteDoesNotLeakThinkingOff(t *testing.T
 	msgBus := bus.NewMessageBus()
 	provider := &reasoningOptionRecordingProvider{}
 	al := NewAgentLoop(cfg, msgBus, provider)
-	if err := al.MountHook(NamedHook("rewrite-model", modelRewriteHook{model: "plain-model"})); err != nil {
+	if err := al.MountHook(namedHook("rewrite-model", modelRewriteHook{model: "plain-model"})); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -938,7 +937,7 @@ func TestProcessMessage_BtwHookModelRewriteReevaluatesThinkingOff(t *testing.T) 
 		}
 		return &sideQuestionFallbackTestProvider{model: model}, model, nil
 	}
-	if err := al.MountHook(NamedHook("rewrite-model", modelRewriteHook{model: "off-model"})); err != nil {
+	if err := al.MountHook(namedHook("rewrite-model", modelRewriteHook{model: "off-model"})); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -996,7 +995,7 @@ func TestProcessMessage_BtwHookModelRewriteDoesNotLeakThinkingOff(t *testing.T) 
 		}
 		return &sideQuestionFallbackTestProvider{model: model}, model, nil
 	}
-	if err := al.MountHook(NamedHook("rewrite-model", modelRewriteHook{model: "plain-model"})); err != nil {
+	if err := al.MountHook(namedHook("rewrite-model", modelRewriteHook{model: "plain-model"})); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -1432,7 +1431,7 @@ func TestProcessMessage_BtwCommandHookModelBypassesFallbackCandidates(t *testing
 	provider := &recordingProvider{}
 	al := NewAgentLoop(cfg, msgBus, provider)
 	useTestSideQuestionProvider(al, provider)
-	if err := al.MountHook(NamedHook("rewrite-model", modelRewriteHook{model: "hook-model"})); err != nil {
+	if err := al.MountHook(namedHook("rewrite-model", modelRewriteHook{model: "hook-model"})); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -1632,77 +1631,6 @@ func TestApplyExplicitSkillCommand_InlineMessageMutatesOptions(t *testing.T) {
 	}
 }
 
-func TestRecordLastChannel(t *testing.T) {
-	al, cfg, msgBus, provider, cleanup := newTestAgentLoop(t)
-	defer cleanup()
-
-	testChannel := "test-channel"
-	if err := al.RecordLastChannel(testChannel); err != nil {
-		t.Fatalf("RecordLastChannel failed: %v", err)
-	}
-	if got := al.state.GetLastChannel(); got != testChannel {
-		t.Errorf("Expected channel '%s', got '%s'", testChannel, got)
-	}
-	al2 := NewAgentLoop(cfg, msgBus, provider)
-	if got := al2.state.GetLastChannel(); got != testChannel {
-		t.Errorf("Expected persistent channel '%s', got '%s'", testChannel, got)
-	}
-}
-
-func TestRecordLastChatID(t *testing.T) {
-	al, cfg, msgBus, provider, cleanup := newTestAgentLoop(t)
-	defer cleanup()
-
-	testChatID := "test-chat-id-123"
-	if err := al.RecordLastChatID(testChatID); err != nil {
-		t.Fatalf("RecordLastChatID failed: %v", err)
-	}
-	if got := al.state.GetLastChatID(); got != testChatID {
-		t.Errorf("Expected chat ID '%s', got '%s'", testChatID, got)
-	}
-	al2 := NewAgentLoop(cfg, msgBus, provider)
-	if got := al2.state.GetLastChatID(); got != testChatID {
-		t.Errorf("Expected persistent chat ID '%s', got '%s'", testChatID, got)
-	}
-}
-
-func TestNewAgentLoop_StateInitialized(t *testing.T) {
-	// Create temp workspace
-	tmpDir, err := os.MkdirTemp("", "agent-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create test config
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace:         tmpDir,
-				ModelName:         "test-model",
-				MaxTokens:         4096,
-				MaxToolIterations: 10,
-			},
-		},
-	}
-
-	// Create agent loop
-	msgBus := bus.NewMessageBus()
-	provider := &mockProvider{}
-	al := NewAgentLoop(cfg, msgBus, provider)
-
-	// Verify state manager is initialized
-	if al.state == nil {
-		t.Error("Expected state manager to be initialized")
-	}
-
-	// Verify state directory was created
-	stateDir := filepath.Join(tmpDir, "state")
-	if _, err := os.Stat(stateDir); os.IsNotExist(err) {
-		t.Error("Expected state directory to exist")
-	}
-}
-
 // TestToolRegistry_ToolRegistration verifies tools can be registered and retrieved
 func TestToolRegistry_ToolRegistration(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "agent-test-*")
@@ -1728,7 +1656,7 @@ func TestToolRegistry_ToolRegistration(t *testing.T) {
 
 	// Register a custom tool
 	customTool := &mockCustomTool{}
-	al.RegisterTool(customTool)
+	registerTool(al, customTool)
 
 	// Verify tool is registered by checking it doesn't panic on GetStartupInfo
 	// (actual tool retrieval is tested in tools package tests)
@@ -1799,7 +1727,7 @@ func TestToolRegistry_GetDefinitions(t *testing.T) {
 
 	// Register a test tool and verify it shows up in startup info
 	testTool := &mockCustomTool{}
-	al.RegisterTool(testTool)
+	registerTool(al, testTool)
 
 	info := al.GetStartupInfo()
 	toolsInfo := info["tools"].(map[string]any)
@@ -1839,7 +1767,7 @@ func TestProcessMessage_MediaToolHandledSkipsFollowUpLLMAndFinalText(t *testing.
 		t.Fatalf("WriteFile(imagePath) error = %v", err)
 	}
 
-	al.RegisterTool(&handledMediaTool{
+	registerTool(al, &handledMediaTool{
 		store: store,
 		path:  imagePath,
 	})
@@ -1941,7 +1869,7 @@ func TestProcessMessage_HandledToolProcessesQueuedSteeringBeforeReturning(t *tes
 		t.Fatalf("WriteFile(imagePath) error = %v", err)
 	}
 
-	al.RegisterTool(&handledMediaWithSteeringTool{
+	registerTool(al, &handledMediaWithSteeringTool{
 		store: store,
 		path:  imagePath,
 		loop:  al,
@@ -1983,7 +1911,7 @@ func TestRunAgentLoop_ResponseHandledToolPublishesForUserWhenSendResponseDisable
 	al.SetMediaStore(store)
 	telegramChannel := &fakeMediaChannel{fakeChannel: fakeChannel{id: "rid-telegram"}}
 	al.SetChannelManager(newStartedTestChannelManager(t, msgBus, store, "telegram", telegramChannel))
-	al.RegisterTool(&handledUserTool{})
+	registerTool(al, &handledUserTool{})
 
 	defaultAgent := al.registry.GetDefaultAgent()
 	if defaultAgent == nil {
@@ -2040,72 +1968,6 @@ func TestRunAgentLoop_ResponseHandledToolPublishesForUserWhenSendResponseDisable
 	if telegramChannel.sentMessages[0].Scope == nil ||
 		telegramChannel.sentMessages[0].Scope.Values["chat"] != "direct:chat1" {
 		t.Fatalf("unexpected sent text scope: %+v", telegramChannel.sentMessages[0].Scope)
-	}
-}
-
-func TestAppendEventContextFields_IncludesInboundRouteAndScope(t *testing.T) {
-	fields := map[string]any{}
-
-	appendEventContextFields(fields, &TurnContext{
-		Inbound: &bus.InboundContext{
-			Channel:   "slack",
-			Account:   "workspace-a",
-			ChatID:    "C123",
-			ChatType:  "channel",
-			TopicID:   "thread-42",
-			SpaceType: "workspace",
-			SpaceID:   "T001",
-			SenderID:  "U123",
-			Mentioned: true,
-		},
-		Route: &routing.ResolvedRoute{
-			AgentID:   "support",
-			Channel:   "slack",
-			AccountID: "workspace-a",
-			MatchedBy: "default",
-			SessionPolicy: routing.SessionPolicy{
-				Dimensions: []string{"chat", "sender"},
-				IdentityLinks: map[string][]string{
-					"canonical-user": {"slack:U123"},
-				},
-			},
-		},
-		Scope: &session.SessionScope{
-			Version:    session.ScopeVersionV1,
-			AgentID:    "support",
-			Channel:    "slack",
-			Account:    "workspace-a",
-			Dimensions: []string{"chat", "sender"},
-			Values: map[string]string{
-				"chat":   "channel:c123",
-				"sender": "u123",
-			},
-		},
-	})
-
-	if fields["inbound_channel"] != "slack" {
-		t.Fatalf("inbound_channel = %v, want slack", fields["inbound_channel"])
-	}
-	if fields["inbound_topic_id"] != "thread-42" {
-		t.Fatalf("inbound_topic_id = %v, want thread-42", fields["inbound_topic_id"])
-	}
-	if fields["route_matched_by"] != "default" {
-		t.Fatalf("route_matched_by = %v, want default", fields["route_matched_by"])
-	}
-	if fields["route_dimensions"] != "chat,sender" {
-		t.Fatalf("route_dimensions = %v, want chat,sender", fields["route_dimensions"])
-	}
-	if fields["route_identity_link_count"] != 1 {
-		t.Fatalf("route_identity_link_count = %v, want 1", fields["route_identity_link_count"])
-	}
-	if fields["scope_dimensions"] != "chat,sender" {
-		t.Fatalf("scope_dimensions = %v, want chat,sender", fields["scope_dimensions"])
-	}
-	if fields["scope_chat"] != "channel:c123" {
-		t.Fatalf("scope_chat = %v, want channel:c123", fields["scope_chat"])
-	}
-	if fields["scope_sender"] != "u123" {
-		t.Fatalf("scope_sender = %v, want u123", fields["scope_sender"])
 	}
 }
 
@@ -2250,7 +2112,7 @@ func TestProcessMessage_MediaArtifactCanBeForwardedBySendFile(t *testing.T) {
 		t.Fatalf("WriteFile(imagePath) error = %v", err)
 	}
 
-	al.RegisterTool(&mediaArtifactTool{
+	registerTool(al, &mediaArtifactTool{
 		store: store,
 		path:  imagePath,
 	})
@@ -2691,23 +2553,6 @@ func (m *toolFeedbackReasoningProvider) GetDefaultModel() string {
 	return "tool-feedback-reasoning-model"
 }
 
-func TestToolFeedbackExplanationFromResponse_UsesCurrentContentFirst(t *testing.T) {
-	response := &providers.LLMResponse{
-		Content:          "Read README.md first",
-		ReasoningContent: "current reasoning fallback",
-	}
-	messages := []providers.Message{
-		{Role: "user", Content: "check file"},
-		{Role: "assistant", Content: "Previous turn explanation"},
-		{Role: "tool", Content: "tool output", ToolCallID: "call_1"},
-	}
-
-	got := toolFeedbackExplanationFromResponse(response, messages)
-	if got != "Read README.md first" {
-		t.Fatalf("toolFeedbackExplanationFromResponse() = %q, want current content", got)
-	}
-}
-
 func TestSideQuestionResponseContent_FallsBackWhenContentIsWhitespace(t *testing.T) {
 	response := &providers.LLMResponse{
 		Content:          " \n\t ",
@@ -2727,28 +2572,6 @@ func TestResponseReasoningContent_FallsBackWhenReasoningIsWhitespace(t *testing.
 
 	if got := responseReasoningContent(response); got != "structured reasoning fallback" {
 		t.Fatalf("responseReasoningContent() = %q, want %q", got, "structured reasoning fallback")
-	}
-}
-
-func TestToolFeedbackExplanationFromResponse_UsesExplicitToolCallExtraContent(t *testing.T) {
-	response := &providers.LLMResponse{
-		ToolCalls: []providers.ToolCall{{
-			ID:   "call_1",
-			Name: "read_file",
-			ExtraContent: &providers.ExtraContent{
-				ToolFeedbackExplanation: "Read README.md first to confirm the current project structure.",
-			},
-		}},
-	}
-	messages := []providers.Message{
-		{Role: "user", Content: "check file"},
-		{Role: "assistant", Content: ""},
-		{Role: "tool", Content: "tool output", ToolCallID: "call_1"},
-	}
-
-	got := toolFeedbackExplanationFromResponse(response, messages)
-	if got != "Read README.md first to confirm the current project structure." {
-		t.Fatalf("toolFeedbackExplanationFromResponse() = %q, want explicit tool feedback explanation", got)
 	}
 }
 
@@ -2807,25 +2630,6 @@ func TestToolFeedbackExplanationForToolCall_DoesNotReuseAnotherToolCallExplanati
 	want := utils.ToolFeedbackContinuationHint + ": inspect the config and update the example"
 	if got != want {
 		t.Fatalf("toolFeedbackExplanationForToolCall() = %q, want %q", got, want)
-	}
-}
-
-func TestToolFeedbackExplanationFromResponse_DoesNotUseReasoningContent(t *testing.T) {
-	response := &providers.LLMResponse{
-		Content:          "",
-		ReasoningContent: "hidden reasoning should not be shown",
-	}
-	messages := []providers.Message{
-		{Role: "user", Content: "check file"},
-		{Role: "assistant", Content: "Previous turn explanation"},
-		{Role: "user", Content: "Inspect README.md and update the config example."},
-		{Role: "tool", Content: "tool output", ToolCallID: "call_1"},
-	}
-
-	got := toolFeedbackExplanationFromResponse(response, messages)
-	want := utils.ToolFeedbackContinuationHint + ": Inspect README.md and update the config example."
-	if got != want {
-		t.Fatalf("toolFeedbackExplanationFromResponse() = %q, want latest user content fallback", got)
 	}
 }
 
@@ -4572,7 +4376,7 @@ func TestAgentLoop_ContextExhaustionRetry(t *testing.T) {
 
 	// Call ProcessDirectWithChannel
 	// Note: ProcessDirectWithChannel calls processMessage which will execute runLLMIteration
-	response, err := al.ProcessDirectWithChannel(
+	response, err := processDirectForTest(al,
 		context.Background(),
 		"Trigger message",
 		sessionKey,
@@ -5479,7 +5283,7 @@ func TestAgentLoop_EmptyModelResponseUsesAccurateFallback(t *testing.T) {
 	provider := &simpleMockProvider{response: ""}
 	al := NewAgentLoop(cfg, msgBus, provider)
 
-	response, err := al.ProcessDirectWithChannel(context.Background(), "hello", "empty-response", "test", "chat1")
+	response, err := processDirectForTest(al, context.Background(), "hello", "empty-response", "test", "chat1")
 	if err != nil {
 		t.Fatalf("ProcessDirectWithChannel failed: %v", err)
 	}
@@ -5509,9 +5313,9 @@ func TestAgentLoop_ToolLimitUsesDedicatedFallback(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 	provider := &toolLimitOnlyProvider{}
 	al := NewAgentLoop(cfg, msgBus, provider)
-	al.RegisterTool(&toolLimitTestTool{})
+	registerTool(al, &toolLimitTestTool{})
 
-	response, err := al.ProcessDirectWithChannel(context.Background(), "hello", "tool-limit", "test", "chat1")
+	response, err := processDirectForTest(al, context.Background(), "hello", "tool-limit", "test", "chat1")
 	if err != nil {
 		t.Fatalf("ProcessDirectWithChannel failed: %v", err)
 	}
@@ -5578,11 +5382,11 @@ func TestProcessDirectWithChannel_TriggersMCPInitialization(t *testing.T) {
 	al := NewAgentLoop(cfg, msgBus, provider)
 	defer al.Close()
 
-	if al.mcp.hasManager() {
+	if al.mcp.getManager() != nil {
 		t.Fatal("expected MCP manager to be nil before first direct processing")
 	}
 
-	_, err = al.ProcessDirectWithChannel(
+	_, err = processDirectForTest(al,
 		context.Background(),
 		"hello",
 		"session-1",
@@ -5594,7 +5398,7 @@ func TestProcessDirectWithChannel_TriggersMCPInitialization(t *testing.T) {
 	}
 
 	// Manager should not be initialized when no servers are configured
-	if al.mcp.hasManager() {
+	if al.mcp.getManager() != nil {
 		t.Fatal("expected MCP manager to be nil when no servers are configured")
 	}
 }
@@ -7258,17 +7062,6 @@ func (p *nativeSearchProvider) GetDefaultModel() string { return "test-model" }
 
 func (p *nativeSearchProvider) SupportsNativeSearch() bool { return p.supported }
 
-type plainProvider struct{}
-
-func (p *plainProvider) Chat(
-	ctx context.Context, msgs []providers.Message, tools []providers.ToolDefinition,
-	model string, opts map[string]any,
-) (*providers.LLMResponse, error) {
-	return &providers.LLMResponse{Content: "ok"}, nil
-}
-
-func (p *plainProvider) GetDefaultModel() string { return "test-model" }
-
 func TestProcessMessage_NativeSearchHandlesHookClearingOptions(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Agents.Defaults.Workspace = t.TempDir()
@@ -7283,7 +7076,7 @@ func TestProcessMessage_NativeSearchHandlesHookClearingOptions(t *testing.T) {
 	agent := al.registry.GetDefaultAgent()
 	agent.Provider = provider
 	agent.Candidates = nil
-	if err := al.MountHook(NamedHook("clear-options", clearOptionsHook{})); err != nil {
+	if err := al.MountHook(namedHook("clear-options", clearOptionsHook{})); err != nil {
 		t.Fatalf("MountHook() error = %v", err)
 	}
 
@@ -7300,24 +7093,6 @@ func TestProcessMessage_NativeSearchHandlesHookClearingOptions(t *testing.T) {
 	}
 	if got := provider.lastOpts["native_search"]; got != true {
 		t.Fatalf("native_search option = %#v, want true", got)
-	}
-}
-
-func TestIsNativeSearchProvider_Supported(t *testing.T) {
-	if !isNativeSearchProvider(&nativeSearchProvider{supported: true}) {
-		t.Fatal("expected true for provider that supports native search")
-	}
-}
-
-func TestIsNativeSearchProvider_NotSupported(t *testing.T) {
-	if isNativeSearchProvider(&nativeSearchProvider{supported: false}) {
-		t.Fatal("expected false for provider that does not support native search")
-	}
-}
-
-func TestIsNativeSearchProvider_NoInterface(t *testing.T) {
-	if isNativeSearchProvider(&plainProvider{}) {
-		t.Fatal("expected false for provider that does not implement NativeSearchCapable")
 	}
 }
 

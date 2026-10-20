@@ -28,8 +28,6 @@ type (
 	Message                = protocoltypes.Message
 	ToolDefinition         = protocoltypes.ToolDefinition
 	ToolFunctionDefinition = protocoltypes.ToolFunctionDefinition
-	ExtraContent           = protocoltypes.ExtraContent
-	GoogleExtra            = protocoltypes.GoogleExtra
 	ReasoningDetail        = protocoltypes.ReasoningDetail
 )
 
@@ -98,12 +96,6 @@ func WithExtraBody(extraBody map[string]any) Option {
 func WithCustomHeaders(customHeaders map[string]string) Option {
 	return func(p *Provider) {
 		p.customHeaders = customHeaders
-	}
-}
-
-func WithProviderName(providerName string) Option {
-	return func(p *Provider) {
-		p.providerName = strings.ToLower(strings.TrimSpace(providerName))
 	}
 }
 

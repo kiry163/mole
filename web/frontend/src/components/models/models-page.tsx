@@ -83,7 +83,9 @@ export function ModelsPage() {
   const chainDirty =
     defaultModelDraft !== defaultModelBaseline ||
     JSON.stringify(fallbackChainDraft) !== JSON.stringify(fallbackChainBaseline)
-  chainDirtyRef.current = chainDirty
+  useEffect(() => {
+    chainDirtyRef.current = chainDirty
+  }, [chainDirty])
 
   const refresh = useCallback(async () => {
     setLoading(true)

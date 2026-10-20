@@ -17,7 +17,7 @@ import (
 
 func TestRuntimeEventLoggerFiltering(t *testing.T) {
 	cfg := config.DefaultConfig()
-	eventLogger := newRuntimeEventLogger(cfg)
+	eventLogger := newRuntimeEventLoggerForTest(cfg)
 	if eventLogger == nil {
 		t.Fatal("default runtime event logger is nil")
 	}
@@ -37,7 +37,7 @@ func TestRuntimeEventLoggerFiltering(t *testing.T) {
 
 	cfg.Events.Logging.Include = []string{"*"}
 	cfg.Events.Logging.Exclude = []string{"mcp.*"}
-	eventLogger = newRuntimeEventLogger(cfg)
+	eventLogger = newRuntimeEventLoggerForTest(cfg)
 	if !eventLogger.shouldLog(runtimeevents.Event{
 		Kind:     runtimeevents.KindGatewayReady,
 		Severity: runtimeevents.SeverityInfo,
@@ -53,7 +53,7 @@ func TestRuntimeEventLoggerFiltering(t *testing.T) {
 
 	cfg.Events.Logging.Exclude = nil
 	cfg.Events.Logging.MinSeverity = "warn"
-	eventLogger = newRuntimeEventLogger(cfg)
+	eventLogger = newRuntimeEventLoggerForTest(cfg)
 	if eventLogger.shouldLog(runtimeevents.Event{
 		Kind:     runtimeevents.KindGatewayReady,
 		Severity: runtimeevents.SeverityInfo,
@@ -68,7 +68,7 @@ func TestRuntimeEventLoggerFiltering(t *testing.T) {
 	}
 
 	cfg.Events.Logging.Enabled = false
-	if newRuntimeEventLogger(cfg) != nil {
+	if newRuntimeEventLoggerForTest(cfg) != nil {
 		t.Fatal("disabled config should not create runtime event logger")
 	}
 }

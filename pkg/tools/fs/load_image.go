@@ -27,9 +27,6 @@ type LoadImageTool struct {
 	maxFileSize int
 	mediaStore  media.MediaStore
 	allowPaths  []*regexp.Regexp
-
-	defaultChannel string
-	defaultChatID  string
 }
 
 func NewLoadImageTool(
@@ -76,11 +73,6 @@ func (t *LoadImageTool) Parameters() map[string]any {
 	}
 }
 
-func (t *LoadImageTool) SetContext(channel, chatID string) {
-	t.defaultChannel = channel
-	t.defaultChatID = chatID
-}
-
 func (t *LoadImageTool) SetMediaStore(store media.MediaStore) {
 	t.mediaStore = store
 }
@@ -91,15 +83,8 @@ func (t *LoadImageTool) Execute(ctx context.Context, args map[string]any) *ToolR
 		return ErrorResult("path is required")
 	}
 
-	// Prefer context-injected channel/chatID (set by ExecuteWithContext), fall back to SetContext values.
 	channel := ToolChannel(ctx)
-	if channel == "" {
-		channel = t.defaultChannel
-	}
 	chatID := ToolChatID(ctx)
-	if chatID == "" {
-		chatID = t.defaultChatID
-	}
 	if channel == "" || chatID == "" {
 		return ErrorResult("no target channel/chat available")
 	}

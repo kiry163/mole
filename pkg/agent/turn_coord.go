@@ -339,8 +339,8 @@ func (al *AgentLoop) selectCandidates(
 	return agent.LightCandidates, resolvedCandidateModel(agent.LightCandidates, agent.Router.LightModel()), true
 }
 
-func (al *AgentLoop) resolveContextManager() ContextManager {
-	return &legacyContextManager{al: al}
+func (al *AgentLoop) resolveContextManager() *sessionContextManager {
+	return &sessionContextManager{al: al}
 }
 
 func (al *AgentLoop) askSideQuestion(

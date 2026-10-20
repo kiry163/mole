@@ -63,11 +63,6 @@ func normalizeSteeringScope(scope string) string {
 	return scope
 }
 
-// push enqueues a steering message in the legacy fallback scope.
-func (sq *steeringQueue) push(msg providers.Message) error {
-	return sq.pushScope(manualSteeringScope, msg)
-}
-
 // pushScope enqueues a steering message for the provided scope.
 func (sq *steeringQueue) pushScope(scope string, msg providers.Message) error {
 	sq.mu.Lock()
@@ -80,12 +75,6 @@ func (sq *steeringQueue) pushScope(scope string, msg providers.Message) error {
 	}
 	sq.queues[scope] = append(queue, msg)
 	return nil
-}
-
-// dequeue removes and returns pending steering messages from the legacy
-// fallback scope according to the configured mode.
-func (sq *steeringQueue) dequeue() []providers.Message {
-	return sq.dequeueScope(manualSteeringScope)
 }
 
 // dequeueScope removes and returns pending steering messages for the provided
@@ -135,18 +124,6 @@ func (sq *steeringQueue) dequeueLocked(scope string) []providers.Message {
 		}
 		return []providers.Message{msg}
 	}
-}
-
-// len returns the number of queued messages across all scopes.
-func (sq *steeringQueue) len() int {
-	sq.mu.Lock()
-	defer sq.mu.Unlock()
-
-	total := 0
-	for _, queue := range sq.queues {
-		total += len(queue)
-	}
-	return total
 }
 
 // lenScope returns the number of queued messages for a specific scope.
@@ -254,31 +231,6 @@ func (al *AgentLoop) enqueueSteeringMessage(scope, agentID string, msg providers
 	)
 
 	return nil
-}
-
-// SteeringMode returns the current steering mode.
-func (al *AgentLoop) SteeringMode() SteeringMode {
-	if al.steering == nil {
-		return SteeringOneAtATime
-	}
-	return al.steering.getMode()
-}
-
-// SetSteeringMode updates the steering mode.
-func (al *AgentLoop) SetSteeringMode(mode SteeringMode) {
-	if al.steering == nil {
-		return
-	}
-	al.steering.setMode(mode)
-}
-
-// dequeueSteeringMessages is the internal method called by the agent loop
-// to poll for steering messages in the legacy fallback scope.
-func (al *AgentLoop) dequeueSteeringMessages() []providers.Message {
-	if al.steering == nil {
-		return nil
-	}
-	return al.steering.dequeue()
 }
 
 func (al *AgentLoop) dequeueSteeringMessagesForScope(scope string) []providers.Message {
@@ -531,35 +483,4 @@ func (al *AgentLoop) HardAbort(sessionKey string) error {
 	}
 
 	return nil
-}
-
-// ====================== Follow-Up Injection ======================
-
-// InjectFollowUp enqueues a message to be automatically processed after the current
-// turn completes. Unlike Steer(), which interrupts the current execution, InjectFollowUp
-// waits for the current turn to finish naturally before processing the message.
-//
-// This is useful for:
-// - Automated workflows that need to chain multiple turns
-// - Background tasks that should run after the main task completes
-// - Scheduled follow-up actions
-//
-// The message will be processed via Continue() when the agent becomes idle.
-func (al *AgentLoop) InjectFollowUp(msg providers.Message) error {
-	// InjectFollowUp uses the same steering queue mechanism as Steer(),
-	// but the semantic difference is in when it's called:
-	// - Steer() is called during active execution to interrupt
-	// - InjectFollowUp() is called when planning future work
-	//
-	// Both end up in the same queue and are processed by Continue()
-	// when the agent is idle.
-	return al.Steer(msg)
-}
-
-// ====================== API Aliases for Design Document Compatibility ======================
-
-// InjectSteering is an alias for Steer() to match the design document naming.
-// It injects a steering message into the currently running agent loop.
-func (al *AgentLoop) InjectSteering(msg providers.Message) error {
-	return al.Steer(msg)
 }

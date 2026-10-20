@@ -20,7 +20,6 @@ import (
 // registerModelRoutes binds model list management endpoints to the ServeMux.
 func (h *Handler) registerModelRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/models", h.handleListModels)
-	mux.HandleFunc("GET /api/models/default-chain", h.handleGetDefaultChain)
 	mux.HandleFunc("POST /api/models/fetch", h.handleFetchModels)
 	mux.HandleFunc("GET /api/models/catalog", h.handleListCatalogs)
 	mux.HandleFunc("DELETE /api/models/catalog/{id}", h.handleDeleteCatalog)
@@ -43,14 +42,13 @@ type modelResponse struct {
 	APIBase   string `json:"api_base,omitempty"`
 	APIKey    string `json:"api_key"`
 	// Advanced fields
-	RPM                 int                         `json:"rpm,omitempty"`
-	MaxTokensField      string                      `json:"max_tokens_field,omitempty"`
-	RequestTimeout      int                         `json:"request_timeout,omitempty"`
-	ThinkingLevel       string                      `json:"thinking_level,omitempty"`
-	ToolSchemaTransform string                      `json:"tool_schema_transform,omitempty"`
-	Streaming           config.ModelStreamingConfig `json:"streaming,omitempty"`
-	ExtraBody           map[string]any              `json:"extra_body,omitempty"`
-	CustomHeaders       map[string]string           `json:"custom_headers,omitempty"`
+	RPM            int                         `json:"rpm,omitempty"`
+	MaxTokensField string                      `json:"max_tokens_field,omitempty"`
+	RequestTimeout int                         `json:"request_timeout,omitempty"`
+	ThinkingLevel  string                      `json:"thinking_level,omitempty"`
+	Streaming      config.ModelStreamingConfig `json:"streaming,omitempty"`
+	ExtraBody      map[string]any              `json:"extra_body,omitempty"`
+	CustomHeaders  map[string]string           `json:"custom_headers,omitempty"`
 	// Meta
 	Enabled   bool   `json:"enabled"`
 	Available bool   `json:"available"`
@@ -411,25 +409,24 @@ func (h *Handler) handleListModels(w http.ResponseWriter, r *http.Request) {
 	for i, m := range cfg.ModelList {
 		provider, modelID := providers.ExtractProtocol(m)
 		models = append(models, modelResponse{
-			Index:               i,
-			ModelName:           m.ModelName,
-			Provider:            provider,
-			Model:               modelID,
-			APIBase:             m.APIBase,
-			APIKey:              maskAPIKey(m.APIKey()),
-			RPM:                 m.RPM,
-			MaxTokensField:      m.MaxTokensField,
-			RequestTimeout:      m.RequestTimeout,
-			ThinkingLevel:       m.ThinkingLevel,
-			ToolSchemaTransform: m.ToolSchemaTransform,
-			Streaming:           m.Streaming,
-			ExtraBody:           m.ExtraBody,
-			CustomHeaders:       m.CustomHeaders,
-			Enabled:             m.Enabled,
-			Available:           modelStatuses[i].Available,
-			Status:              modelStatuses[i].Status,
-			IsDefault:           m.ModelName == defaultModel,
-			IsVirtual:           m.IsVirtual(),
+			Index:          i,
+			ModelName:      m.ModelName,
+			Provider:       provider,
+			Model:          modelID,
+			APIBase:        m.APIBase,
+			APIKey:         maskAPIKey(m.APIKey()),
+			RPM:            m.RPM,
+			MaxTokensField: m.MaxTokensField,
+			RequestTimeout: m.RequestTimeout,
+			ThinkingLevel:  m.ThinkingLevel,
+			Streaming:      m.Streaming,
+			ExtraBody:      m.ExtraBody,
+			CustomHeaders:  m.CustomHeaders,
+			Enabled:        m.Enabled,
+			Available:      modelStatuses[i].Available,
+			Status:         modelStatuses[i].Status,
+			IsDefault:      m.ModelName == defaultModel,
+			IsVirtual:      m.IsVirtual(),
 		})
 	}
 
@@ -440,27 +437,6 @@ func (h *Handler) handleListModels(w http.ResponseWriter, r *http.Request) {
 		"default_model":  defaultModel,
 		"fallback_chain": fallbackChain,
 	})
-}
-
-// handleGetDefaultChain returns the persisted default model and fallback chain.
-//
-//	GET /api/models/default-chain
-func (h *Handler) handleGetDefaultChain(w http.ResponseWriter, r *http.Request) {
-	cfg, err := config.LoadConfig(h.configPath)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
-		return
-	}
-	normalizeStoredModels(cfg)
-	normalizeDefaultChainReferences(cfg)
-
-	resp := defaultChainResponse{
-		DefaultModel:  strings.TrimSpace(cfg.Agents.Defaults.GetModelName()),
-		FallbackChain: trimModelNameList(cfg.Agents.Defaults.ModelFallbacks),
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
 }
 
 // handleAddModel appends a new model configuration entry.
@@ -598,9 +574,6 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 		mc.CustomHeaders = cfg.ModelList[idx].CustomHeaders
 	} else if len(mc.CustomHeaders) == 0 {
 		mc.CustomHeaders = nil
-	}
-	if _, ok := rawFields["tool_schema_transform"]; !ok {
-		mc.ToolSchemaTransform = cfg.ModelList[idx].ToolSchemaTransform
 	}
 	if _, ok := rawFields["streaming"]; !ok {
 		mc.Streaming = cfg.ModelList[idx].Streaming

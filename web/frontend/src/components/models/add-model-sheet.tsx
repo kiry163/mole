@@ -45,7 +45,6 @@ interface AddForm {
   maxTokensField: string
   requestTimeout: string
   thinkingLevel: string
-  toolSchemaTransform: string
   streamingEnabled: boolean
   extraBody: string
   customHeaders: string
@@ -61,7 +60,6 @@ const EMPTY_ADD_FORM: AddForm = {
   maxTokensField: "",
   requestTimeout: "",
   thinkingLevel: "",
-  toolSchemaTransform: "",
   streamingEnabled: false,
   extraBody: "",
   customHeaders: "",
@@ -231,7 +229,6 @@ export function AddModelSheet({
           ? Number(form.requestTimeout)
           : undefined,
         thinking_level: form.thinkingLevel.trim() || undefined,
-        tool_schema_transform: form.toolSchemaTransform.trim() || undefined,
         streaming: form.streamingEnabled ? { enabled: true } : undefined,
         extra_body: extraBody,
         custom_headers: customHeaders,
@@ -462,16 +459,6 @@ export function AddModelSheet({
                   />
                 </Field>
 
-                <Field
-                  label={t("models.field.toolSchemaTransform")}
-                  hint={t("models.field.toolSchemaTransformHint")}
-                >
-                  <Input
-                    value={form.toolSchemaTransform}
-                    onChange={setField("toolSchemaTransform")}
-                    placeholder="google"
-                  />
-                </Field>
 
                 <SwitchCardField
                   label={t("models.field.streamingEnabled")}

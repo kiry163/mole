@@ -425,7 +425,6 @@ func TestFailoverError_IsRetriable(t *testing.T) {
 		{FailoverOverloaded, true},
 		{FailoverFormat, false},
 		{FailoverContextOverflow, false},
-		{FailoverUnknown, true},
 	}
 
 	for _, tt := range tests {

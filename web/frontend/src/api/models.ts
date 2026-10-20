@@ -15,7 +15,6 @@ export interface ModelInfo {
   max_tokens_field?: string
   request_timeout?: number
   thinking_level?: string
-  tool_schema_transform?: string
   streaming?: {
     enabled?: boolean
   }
@@ -113,10 +112,6 @@ export async function setDefaultModel(
 
   await refreshGatewayState()
   return response
-}
-
-export async function getDefaultChain(): Promise<DefaultChain> {
-  return request<DefaultChain>("/api/models/default-chain")
 }
 
 export async function updateDefaultChain(

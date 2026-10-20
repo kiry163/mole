@@ -138,30 +138,6 @@ func (ct *CooldownTracker) CooldownRemaining(provider string) time.Duration {
 	return remaining
 }
 
-// ErrorCount returns the current error count for a provider.
-func (ct *CooldownTracker) ErrorCount(provider string) int {
-	ct.mu.RLock()
-	defer ct.mu.RUnlock()
-
-	entry := ct.entries[provider]
-	if entry == nil {
-		return 0
-	}
-	return entry.ErrorCount
-}
-
-// FailureCount returns the failure count for a specific reason.
-func (ct *CooldownTracker) FailureCount(provider string, reason FailoverReason) int {
-	ct.mu.RLock()
-	defer ct.mu.RUnlock()
-
-	entry := ct.entries[provider]
-	if entry == nil {
-		return 0
-	}
-	return entry.FailureCounts[reason]
-}
-
 func (ct *CooldownTracker) getOrCreate(provider string) *cooldownEntry {
 	entry := ct.entries[provider]
 	if entry == nil {

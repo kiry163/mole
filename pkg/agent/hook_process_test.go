@@ -73,7 +73,7 @@ func TestAgentLoop_MountProcessHook_ToolRewrite(t *testing.T) {
 	al, agent, cleanup := newHookTestLoop(t, provider)
 	defer cleanup()
 
-	al.RegisterTool(&echoTextTool{})
+	registerTool(al, &echoTextTool{})
 	if err := al.MountProcessHook(context.Background(), "ipc-tool", ProcessHookOptions{
 		Command:       processHookHelperCommand(),
 		Env:           processHookHelperEnv("rewrite", ""),

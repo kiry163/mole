@@ -82,7 +82,7 @@ func TestSingleSystemMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msgs := cb.BuildMessages(tt.history, tt.summary, tt.message, nil, "test", "chat1", "", "")
+			msgs := buildMessagesForTest(cb, tt.history, tt.summary, tt.message, nil, "test", "chat1", "", "")
 
 			systemCount := 0
 			for _, m := range msgs {
@@ -168,7 +168,7 @@ func TestBuildMessages_CurrentSenderDynamicContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msgs := cb.BuildMessages(nil, "", "hello", nil, "discord", "chat1", tt.senderID, tt.senderDisplayName)
+			msgs := buildMessagesForTest(cb, nil, "", "hello", nil, "discord", "chat1", tt.senderID, tt.senderDisplayName)
 			sys := msgs[0].Content
 
 			if tt.wantSection {
@@ -638,7 +638,7 @@ func TestConcurrentBuildSystemPromptWithCache(t *testing.T) {
 				}
 
 				// Also exercise BuildMessages concurrently
-				msgs := cb.BuildMessages(nil, "", "hello", nil, "test", "chat", "", "")
+				msgs := buildMessagesForTest(cb, nil, "", "hello", nil, "test", "chat", "", "")
 				if len(msgs) < 2 {
 					errs <- "BuildMessages returned fewer than 2 messages"
 					return
@@ -712,7 +712,7 @@ func TestBuildMessages_IncludesMediaOnlyCurrentMessage(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	cb := NewContextBuilder(tmpDir)
-	msgs := cb.BuildMessages(
+	msgs := buildMessagesForTest(cb,
 		nil,
 		"",
 		"",
@@ -758,6 +758,6 @@ func BenchmarkBuildMessagesWithCache(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = cb.BuildMessages(history, "summary", "new message", nil, "cli", "test", "", "")
+		_ = buildMessagesForTest(cb, history, "summary", "new message", nil, "cli", "test", "", "")
 	}
 }

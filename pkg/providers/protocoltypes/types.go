@@ -3,28 +3,21 @@ package protocoltypes
 import "time"
 
 type ToolCall struct {
-	ID               string         `json:"id"`
-	Type             string         `json:"type,omitempty"`
-	Function         *FunctionCall  `json:"function,omitempty"`
-	Name             string         `json:"-"`
-	Arguments        map[string]any `json:"-"`
-	ThoughtSignature string         `json:"-"` // Internal use only
-	ExtraContent     *ExtraContent  `json:"extra_content,omitempty"`
+	ID           string         `json:"id"`
+	Type         string         `json:"type,omitempty"`
+	Function     *FunctionCall  `json:"function,omitempty"`
+	Name         string         `json:"-"`
+	Arguments    map[string]any `json:"-"`
+	ExtraContent *ExtraContent  `json:"extra_content,omitempty"`
 }
 
 type ExtraContent struct {
-	Google                  *GoogleExtra `json:"google,omitempty"`
-	ToolFeedbackExplanation string       `json:"tool_feedback_explanation,omitempty"`
-}
-
-type GoogleExtra struct {
-	ThoughtSignature string `json:"thought_signature,omitempty"`
+	ToolFeedbackExplanation string `json:"tool_feedback_explanation,omitempty"`
 }
 
 type FunctionCall struct {
-	Name             string `json:"name"`
-	Arguments        string `json:"arguments"`
-	ThoughtSignature string `json:"thought_signature,omitempty"`
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 type LLMResponse struct {

@@ -201,15 +201,6 @@ func TestModelConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid tool schema transform",
-			config: ModelConfig{
-				ModelName:           "test",
-				Model:               "openai/gpt-4o",
-				ToolSchemaTransform: "simple",
-			},
-			wantErr: false,
-		},
-		{
 			name: "missing model_name",
 			config: ModelConfig{
 				Model: "openai/gpt-4o",
@@ -226,15 +217,6 @@ func TestModelConfig_Validate(t *testing.T) {
 		{
 			name:    "empty config",
 			config:  ModelConfig{},
-			wantErr: true,
-		},
-		{
-			name: "invalid tool schema transform",
-			config: ModelConfig{
-				ModelName:           "test",
-				Model:               "openai/gpt-4o",
-				ToolSchemaTransform: "invalid",
-			},
 			wantErr: true,
 		},
 	}

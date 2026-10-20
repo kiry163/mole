@@ -113,15 +113,3 @@ func TestCreateProviderFromConfig_EmptyModel(t *testing.T) {
 		t.Fatal("expected error for empty model")
 	}
 }
-
-func TestCreateProviderFromConfig_InvalidToolSchemaTransform(t *testing.T) {
-	cfg := &config.ModelConfig{
-		Provider:            "custom",
-		Model:               "model",
-		APIBase:             "https://example.com/v1",
-		ToolSchemaTransform: "not-a-transform",
-	}
-	if _, _, err := CreateProviderFromConfig(cfg); err == nil {
-		t.Fatal("expected error for invalid tool schema transform")
-	}
-}

@@ -240,8 +240,6 @@
       "providerDefault": "Provider 默认",
       "maxTokensField": "Max Tokens 字段名",
       "maxTokensFieldHint": "覆盖请求中 max_tokens 的字段名，例如 max_completion_tokens。",
-      "toolSchemaTransform": "工具 Schema 转换",
-      "toolSchemaTransformHint": "可选的工具 JSON Schema 兼容性转换。留空表示保持原生行为。当前支持值：simple。",
       "streamingEnabled": "流式输出",
       "streamingEnabledHint": "允许此模型条目尝试 Provider 流式请求；还需要当前频道的流式开关同时开启。",
       "extraBody": "Extra Body",

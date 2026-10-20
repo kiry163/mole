@@ -82,7 +82,7 @@ func TestAgentLoop_ProcessDirectWithChannel_AutoMountsBuiltinHook(t *testing.T) 
 		t.Fatalf("RegisterBuiltinHook failed: %v", err)
 	}
 	t.Cleanup(func() {
-		unregisterBuiltinHook(hookName)
+		unregisterTestBuiltinHook(hookName)
 	})
 
 	rawCfg, err := json.Marshal(builtinAutoHookConfig{
@@ -105,7 +105,7 @@ func TestAgentLoop_ProcessDirectWithChannel_AutoMountsBuiltinHook(t *testing.T) 
 	})
 	defer al.Close()
 
-	resp, err := al.ProcessDirectWithChannel(context.Background(), "hello", "session-1", "cli", "direct")
+	resp, err := processDirectForTest(al, context.Background(), "hello", "session-1", "cli", "direct")
 	if err != nil {
 		t.Fatalf("ProcessDirectWithChannel failed: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestAgentLoop_ProcessDirectWithChannel_AutoMountsProcessHook(t *testing.T) 
 	})
 	defer al.Close()
 
-	resp, err := al.ProcessDirectWithChannel(context.Background(), "hello", "session-1", "cli", "direct")
+	resp, err := processDirectForTest(al, context.Background(), "hello", "session-1", "cli", "direct")
 	if err != nil {
 		t.Fatalf("ProcessDirectWithChannel failed: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestAgentLoop_ProcessDirectWithChannel_InvalidConfiguredHookDegrades(t *tes
 	// An invalid process hook is skipped, not fatal: it must not fail the turn
 	// nor take down any hook already mounted. The runtime reports it as degraded
 	// and names the hook.
-	resp, err := al.ProcessDirectWithChannel(context.Background(), "hello", "session-1", "cli", "direct")
+	resp, err := processDirectForTest(al, context.Background(), "hello", "session-1", "cli", "direct")
 	if err != nil {
 		t.Fatalf("ProcessDirectWithChannel() error = %v, want the turn to run with the bad hook skipped", err)
 	}

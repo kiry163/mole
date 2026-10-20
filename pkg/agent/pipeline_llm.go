@@ -530,17 +530,13 @@ func (p *Pipeline) CallLLM(
 		}
 	}
 
-	// Save finishReason and usage on the turn state. Use ts directly (the
-	// authoritative turn state for this call) rather than a context lookup:
-	// the raw ctx passed to CallLLM is not seeded with turnState (only turnCtx
-	// is), so turnStateFromContext(ctx) returns nil here and silently dropped
-	// both the finish reason and the per-turn token usage. ts is also exactly
-	// what the streaming publisher reads via GetLastUsage at finalize.
-	if ts != nil {
-		ts.SetLastFinishReason(exec.response.FinishReason)
-		if exec.response.Usage != nil {
-			ts.SetLastUsage(exec.response.Usage)
-		}
+	// Save usage on the turn state. Use ts directly (the authoritative turn
+	// state for this call) rather than a context lookup: the raw ctx passed to
+	// CallLLM is not seeded with turnState (only turnCtx is), so
+	// turnStateFromContext(ctx) returns nil here. ts is also exactly what the
+	// streaming publisher reads via GetLastUsage at finalize.
+	if ts != nil && exec.response.Usage != nil {
+		ts.SetLastUsage(exec.response.Usage)
 	}
 
 	if exec.suppressReasoning {
@@ -670,21 +666,15 @@ func (p *Pipeline) CallLLM(
 			}
 			extraContent.ToolFeedbackExplanation = toolFeedbackExplanation
 		}
-		thoughtSignature := ""
-		if tc.Function != nil {
-			thoughtSignature = tc.Function.ThoughtSignature
-		}
 		assistantMsg.ToolCalls = append(assistantMsg.ToolCalls, providers.ToolCall{
 			ID:   tc.ID,
 			Type: "function",
 			Name: tc.Name,
 			Function: &providers.FunctionCall{
-				Name:             tc.Name,
-				Arguments:        string(argumentsJSON),
-				ThoughtSignature: thoughtSignature,
+				Name:      tc.Name,
+				Arguments: string(argumentsJSON),
 			},
-			ExtraContent:     extraContent,
-			ThoughtSignature: thoughtSignature,
+			ExtraContent: extraContent,
 		})
 	}
 	exec.messages = append(exec.messages, assistantMsg)

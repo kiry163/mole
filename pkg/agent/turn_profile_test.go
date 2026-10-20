@@ -308,7 +308,7 @@ func TestTurnProfile_BtwCommandDoesNotAddToolFallbackWhenSystemPromptOff(t *test
 	t.Setenv("MOLE_BUILTIN_SKILLS", t.TempDir())
 	sideProvider := &turnProfileSideQuestionCaptureProvider{}
 	al := NewAgentLoop(cfg, bus.NewMessageBus(), &turnProfileCaptureProvider{})
-	al.RegisterTool(&echoTextTool{})
+	registerTool(al, &echoTextTool{})
 	al.providerFactory = func(mc *config.ModelConfig) (providers.LLMProvider, string, error) {
 		return sideProvider, "test-model", nil
 	}
@@ -358,7 +358,7 @@ func TestTurnProfile_BtwHookCannotReenableNativeSearchWhenToolsOff(t *testing.T)
 	al.providerFactory = func(mc *config.ModelConfig) (providers.LLMProvider, string, error) {
 		return provider, "test-model", nil
 	}
-	if err := al.MountHook(NamedHook("enable-native-search", turnProfileEnableNativeSearchHook{})); err != nil {
+	if err := al.MountHook(namedHook("enable-native-search", turnProfileEnableNativeSearchHook{})); err != nil {
 		t.Fatalf("MountHook() error = %v", err)
 	}
 
@@ -403,8 +403,8 @@ func TestTurnProfile_SubTurnInheritsParentToolProfile(t *testing.T) {
 	}
 	provider := &turnProfileCaptureProvider{}
 	al := newTurnProfileAgentLoop(t, cfg, provider)
-	al.RegisterTool(&echoTextTool{})
-	al.RegisterTool(&echoTextRewrittenTool{})
+	registerTool(al, &echoTextTool{})
+	registerTool(al, &echoTextRewrittenTool{})
 	agent := al.GetRegistry().GetDefaultAgent()
 	profile, ok, err := cfg.Agents.Defaults.ResolveTurnProfile()
 	if err != nil {
@@ -531,7 +531,7 @@ func TestTurnProfile_SystemPromptOffAddsToolFallbackWhenToolsVisible(t *testing.
 	}
 	provider := &turnProfileCaptureProvider{}
 	al := newTurnProfileAgentLoop(t, cfg, provider)
-	al.RegisterTool(&echoTextTool{})
+	registerTool(al, &echoTextTool{})
 	agent := al.GetRegistry().GetDefaultAgent()
 
 	_, err := al.runAgentLoop(context.Background(), agent, processOptions{
@@ -732,9 +732,9 @@ func TestTurnProfile_ToolsCustomFiltersProviderToolsAndHookAdditions(t *testing.
 	}
 	provider := &turnProfileCaptureProvider{}
 	al := newTurnProfileAgentLoop(t, cfg, provider)
-	al.RegisterTool(&echoTextTool{})
-	al.RegisterTool(&echoTextRewrittenTool{})
-	if err := al.MountHook(NamedHook("add-disallowed-tool", turnProfileAddToolHook{})); err != nil {
+	registerTool(al, &echoTextTool{})
+	registerTool(al, &echoTextRewrittenTool{})
+	if err := al.MountHook(namedHook("add-disallowed-tool", turnProfileAddToolHook{})); err != nil {
 		t.Fatalf("MountHook() error = %v", err)
 	}
 
@@ -814,7 +814,7 @@ func TestTurnProfile_ToolsOffSuppressesToolUsePromptRule(t *testing.T) {
 	}
 	provider := &turnProfileCaptureProvider{}
 	al := newTurnProfileAgentLoop(t, cfg, provider)
-	al.RegisterTool(&echoTextTool{})
+	registerTool(al, &echoTextTool{})
 
 	_, err := al.runAgentLoop(
 		context.Background(),
@@ -857,7 +857,7 @@ func TestTurnProfile_ToolsCustomMissingToolSuppressesToolUsePromptRule(t *testin
 	}
 	provider := &turnProfileCaptureProvider{}
 	al := newTurnProfileAgentLoop(t, cfg, provider)
-	al.RegisterTool(&echoTextTool{})
+	registerTool(al, &echoTextTool{})
 
 	_, err := al.runAgentLoop(
 		context.Background(),
@@ -1002,7 +1002,7 @@ func TestTurnProfile_BeforeLLMHookCannotReenableNativeSearchWhenToolsOff(t *test
 	}
 	provider := &nativeSearchCaptureProvider{}
 	al := NewAgentLoop(cfg, bus.NewMessageBus(), provider)
-	if err := al.MountHook(NamedHook("enable-native-search", turnProfileEnableNativeSearchHook{})); err != nil {
+	if err := al.MountHook(namedHook("enable-native-search", turnProfileEnableNativeSearchHook{})); err != nil {
 		t.Fatalf("MountHook() error = %v", err)
 	}
 
@@ -1052,7 +1052,7 @@ func TestTurnProfile_BeforeLLMHookCannotReenableNativeSearchWhenCustomToolsResol
 	}
 	provider := &nativeSearchCaptureProvider{}
 	al := NewAgentLoop(cfg, bus.NewMessageBus(), provider)
-	if err := al.MountHook(NamedHook("enable-native-search", turnProfileEnableNativeSearchHook{})); err != nil {
+	if err := al.MountHook(namedHook("enable-native-search", turnProfileEnableNativeSearchHook{})); err != nil {
 		t.Fatalf("MountHook() error = %v", err)
 	}
 
@@ -1093,8 +1093,8 @@ func TestTurnProfile_ToolExecutionRejectsDisallowedToolCalls(t *testing.T) {
 	}
 	provider := &turnProfileToolCallProvider{}
 	al := NewAgentLoop(cfg, bus.NewMessageBus(), provider)
-	al.RegisterTool(&echoTextTool{})
-	al.RegisterTool(&echoTextRewrittenTool{})
+	registerTool(al, &echoTextTool{})
+	registerTool(al, &echoTextRewrittenTool{})
 
 	response, err := al.runAgentLoop(
 		context.Background(),
@@ -1144,9 +1144,9 @@ func TestTurnProfile_BeforeToolRespondCannotBypassDisallowedTool(t *testing.T) {
 	}
 	provider := &turnProfileToolCallProvider{}
 	al := NewAgentLoop(cfg, bus.NewMessageBus(), provider)
-	al.RegisterTool(&echoTextTool{})
-	al.RegisterTool(&echoTextRewrittenTool{})
-	if err := al.MountHook(NamedHook("respond-tool", turnProfileRespondToolHook{})); err != nil {
+	registerTool(al, &echoTextTool{})
+	registerTool(al, &echoTextRewrittenTool{})
+	if err := al.MountHook(namedHook("respond-tool", turnProfileRespondToolHook{})); err != nil {
 		t.Fatalf("MountHook() error = %v", err)
 	}
 

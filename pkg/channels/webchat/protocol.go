@@ -1,7 +1,6 @@
 package webchat
 
 import (
-	"strings"
 	"time"
 )
 
@@ -16,7 +15,6 @@ const (
 	TypeMessageCreate = "message.create"
 	TypeMessageUpdate = "message.update"
 	TypeMessageDelete = "message.delete"
-	TypeMediaCreate   = "media.create"
 	TypeTypingStart   = "typing.start"
 	TypeTypingStop    = "typing.stop"
 	TypeError         = "error"
@@ -49,11 +47,6 @@ func newMessage(msgType string, payload map[string]any) WebChatMessage {
 		Timestamp: time.Now().UnixMilli(),
 		Payload:   payload,
 	}
-}
-
-func isThoughtPayload(payload map[string]any) bool {
-	kind, _ := payload[PayloadKeyKind].(string)
-	return strings.EqualFold(strings.TrimSpace(kind), MessageKindThought)
 }
 
 func newErrorWithPayload(code, message string, extra map[string]any) WebChatMessage {

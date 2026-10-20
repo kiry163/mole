@@ -6,17 +6,7 @@ import (
 	"github.com/kiry163/mole/pkg/channels"
 	"github.com/kiry163/mole/pkg/config"
 	"github.com/kiry163/mole/pkg/media"
-	"github.com/kiry163/mole/pkg/tools"
 )
-
-func (al *AgentLoop) RegisterTool(tool tools.Tool) {
-	registry := al.GetRegistry()
-	for _, agentID := range registry.ListAgentIDs() {
-		if agent, ok := registry.GetAgent(agentID); ok {
-			agent.Tools.Register(tool)
-		}
-	}
-}
 
 func (al *AgentLoop) SetChannelManager(cm *channels.Manager) {
 	al.channelManager = cm
@@ -48,20 +38,6 @@ func (al *AgentLoop) SetMediaStore(s media.MediaStore) {
 
 func (al *AgentLoop) SetReloadFunc(fn func() error) {
 	al.reloadFunc = fn
-}
-
-func (al *AgentLoop) RecordLastChannel(channel string) error {
-	if al.state == nil {
-		return nil
-	}
-	return al.state.SetLastChannel(channel)
-}
-
-func (al *AgentLoop) RecordLastChatID(chatID string) error {
-	if al.state == nil {
-		return nil
-	}
-	return al.state.SetLastChatID(chatID)
 }
 
 func (al *AgentLoop) GetStartupInfo() map[string]any {

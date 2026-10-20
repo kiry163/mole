@@ -168,14 +168,13 @@ func (b *EventBus) subscribe(
 	filters []Filter,
 	opts SubscribeOptions,
 	handler Handler,
-	once bool,
 ) (Subscription, error) {
 	if b == nil {
 		return nil, ErrBusClosed
 	}
 
 	id := b.nextSubID.Add(1)
-	sub := newSubscription(b, id, filters, opts, handler, once)
+	sub := newSubscription(b, id, filters, opts, handler)
 
 	b.mu.Lock()
 	if b.closed {

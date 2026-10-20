@@ -50,7 +50,6 @@ interface EditForm {
   maxTokensField: string
   requestTimeout: string
   thinkingLevel: string
-  toolSchemaTransform: string
   streamingEnabled: boolean
   extraBody: string
   customHeaders: string
@@ -78,7 +77,6 @@ function buildInitialEditForm(model: ModelInfo): EditForm {
     maxTokensField: model.max_tokens_field ?? "",
     requestTimeout: model.request_timeout ? String(model.request_timeout) : "",
     thinkingLevel: model.thinking_level ?? "",
-    toolSchemaTransform: model.tool_schema_transform ?? "",
     streamingEnabled: model.streaming?.enabled === true,
     extraBody: model.extra_body
       ? JSON.stringify(model.extra_body, null, 2)
@@ -99,7 +97,6 @@ const EMPTY_EDIT_FORM: EditForm = {
   maxTokensField: "",
   requestTimeout: "",
   thinkingLevel: "",
-  toolSchemaTransform: "",
   streamingEnabled: false,
   extraBody: "",
   customHeaders: "",
@@ -253,7 +250,6 @@ export function EditModelSheet({
           ? Number(form.requestTimeout)
           : undefined,
         thinking_level: form.thinkingLevel.trim() || undefined,
-        tool_schema_transform: form.toolSchemaTransform.trim() || undefined,
         streaming: form.streamingEnabled ? { enabled: true } : undefined,
         extra_body: extraBody,
         custom_headers: customHeaders,
@@ -485,16 +481,6 @@ export function EditModelSheet({
                   />
                 </Field>
 
-                <Field
-                  label={t("models.field.toolSchemaTransform")}
-                  hint={t("models.field.toolSchemaTransformHint")}
-                >
-                  <Input
-                    value={form.toolSchemaTransform}
-                    onChange={setField("toolSchemaTransform")}
-                    placeholder="google"
-                  />
-                </Field>
 
                 <SwitchCardField
                   label={t("models.field.streamingEnabled")}

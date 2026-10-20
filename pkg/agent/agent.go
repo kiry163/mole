@@ -19,14 +19,12 @@ import (
 	"github.com/kiry163/mole/pkg/bus"
 	"github.com/kiry163/mole/pkg/commands"
 	"github.com/kiry163/mole/pkg/config"
-	"github.com/kiry163/mole/pkg/constants"
 	runtimeevents "github.com/kiry163/mole/pkg/events"
 	"github.com/kiry163/mole/pkg/logger"
 	"github.com/kiry163/mole/pkg/media"
 	"github.com/kiry163/mole/pkg/providers"
 	"github.com/kiry163/mole/pkg/routing"
 	"github.com/kiry163/mole/pkg/session"
-	"github.com/kiry163/mole/pkg/state"
 	"github.com/kiry163/mole/pkg/utils"
 )
 
@@ -35,11 +33,9 @@ type AgentLoop struct {
 	bus      interfaces.MessageBus
 	cfg      *config.Config
 	registry *AgentRegistry
-	state    *state.Manager
 
 	// Runtime event system
 	runtimeEvents      runtimeevents.Bus
-	ownsRuntimeEvents  bool
 	runtimeEventLogMu  sync.RWMutex
 	runtimeEventLogger *runtimeEventLogger
 	runtimeEventLogSub runtimeevents.Subscription
@@ -50,7 +46,7 @@ type AgentLoop struct {
 
 	// Runtime state
 	running        atomic.Bool
-	contextManager ContextManager
+	contextManager *sessionContextManager
 	fallback       *providers.FallbackChain
 	channelManager interfaces.ChannelManager
 	mediaStore     media.MediaStore
@@ -338,7 +334,7 @@ func (al *AgentLoop) Close() {
 		al.hooks.Close()
 	}
 	al.closeRuntimeEventLogger()
-	if al.runtimeEvents != nil && al.ownsRuntimeEvents {
+	if al.runtimeEvents != nil {
 		if err := al.runtimeEvents.Close(); err != nil {
 			logger.ErrorCF("agent", "Failed to close runtime event bus",
 				map[string]any{
@@ -466,23 +462,6 @@ func (al *AgentLoop) ReloadProviderAndConfig(
 	return nil
 }
 
-// GetRegistry returns the current registry (thread-safe)
-
-// GetConfig returns the current config (thread-safe)
-
-// SetMediaStore injects a MediaStore for media lifecycle management.
-
-// SetReloadFunc sets the callback function for triggering config reload.
-
-// inferMediaType determines the media type ("image", "audio", "video", "file")
-// from a filename and MIME content type.
-
-// RecordLastChannel records the last active channel for this workspace.
-// This uses the atomic state save mechanism to prevent data loss on crash.
-
-// RecordLastChatID records the last active chat ID for this workspace.
-// This uses the atomic state save mechanism to prevent data loss on crash.
-
 // runAgentLoop remains the top-level shell that starts a turn and publishes
 // any post-turn work. runTurn owns the full turn lifecycle.
 func (al *AgentLoop) runAgentLoop(
@@ -495,20 +474,6 @@ func (al *AgentLoop) runAgentLoop(
 	opts, err = resolveTurnProfileOptions(al.GetConfig(), opts)
 	if err != nil {
 		return "", err
-	}
-
-	// Record last channel for notifications (skip internal channels and cli)
-	if opts.Dispatch.Channel() != "" &&
-		opts.Dispatch.ChatID() != "" &&
-		!constants.IsInternalChannel(opts.Dispatch.Channel()) {
-		channelKey := fmt.Sprintf("%s:%s", opts.Dispatch.Channel(), opts.Dispatch.ChatID())
-		if recordErr := al.RecordLastChannel(channelKey); recordErr != nil {
-			logger.WarnCF(
-				"agent",
-				"Failed to record last channel",
-				map[string]any{"error": recordErr.Error()},
-			)
-		}
 	}
 
 	ensureSessionMetadata(

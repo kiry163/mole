@@ -272,22 +272,6 @@ func (b *Channel) SetName(name string) {
 	b.name = name
 }
 
-// SetSecretField sets a secure field value by field name in the Settings JSON.
-// NOTE: This only operates on raw Settings. If Decode() has been called,
-// prefer modifying the typed struct directly — MarshalJSON serializes from extend.
-func (b *Channel) SetSecretField(fieldName string, value SecureString) {
-	var m map[string]any
-	if err := json.Unmarshal(b.Settings, &m); err != nil {
-		return
-	}
-	m[fieldName] = value
-	data, err := json.Marshal(m)
-	if err != nil {
-		return
-	}
-	b.Settings = data
-}
-
 // Decode decodes the Settings node into the given target struct and stores
 // the pointer internally. Subsequent modifications to the target are
 // automatically reflected in MarshalJSON (no explicit Encode needed).
@@ -316,11 +300,6 @@ func (b *Channel) GetDecoded() (any, error) {
 		}
 	}
 	return b.extend, nil
-}
-
-// SettingsIsEmpty returns true if Settings has not been populated.
-func (b *Channel) SettingsIsEmpty() bool {
-	return b.Settings.IsEmpty()
 }
 
 // CollectSensitiveValues returns all sensitive string values from this Channel's
@@ -428,122 +407,7 @@ func validateSingletonChannels(channels ChannelsConfig) error {
 	return nil
 }
 
-// BaseFieldNames are JSON keys that belong to Channel, not to channel-specific settings.
-var BaseFieldNames = map[string]struct{}{
-	"enabled":              {},
-	"type":                 {},
-	"allow_from":           {},
-	"reasoning_channel_id": {},
-	"group_trigger":        {},
-	"typing":               {},
-	"placeholder":          {},
-}
-
 // ─── Internal helpers ───
-
-// extractSecureFieldNames uses reflection to find exported fields of type
-// SecureString or SecureStrings and returns their JSON field names.
-func extractSecureFieldNames(target any) map[string]struct{} {
-	v := reflect.ValueOf(target)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return nil
-	}
-	t := v.Type()
-	names := make(map[string]struct{})
-	for i := range t.NumField() {
-		f := t.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-		ft := f.Type
-		if ft == reflect.TypeOf(SecureString{}) || ft == reflect.TypeOf(&SecureString{}) ||
-			ft == reflect.TypeOf(SecureStrings{}) || ft == reflect.TypeOf(&SecureStrings{}) {
-			jsonTag := f.Tag.Get("json")
-			name := strings.Split(jsonTag, ",")[0]
-			if name == "" || name == "-" {
-				name = f.Name
-			}
-			names[name] = struct{}{}
-		}
-	}
-	return names
-}
-
-// mergeRawJSON merges two JSON objects (flat key-value) at the raw byte level.
-// Overlay values override base values.
-func mergeRawJSON(base, overlay RawNode) (RawNode, error) {
-	var baseMap, overlayMap map[string]any
-	if len(base) > 0 {
-		if err := json.Unmarshal(base, &baseMap); err != nil {
-			return base, err
-		}
-	}
-	if len(overlay) > 0 {
-		if err := json.Unmarshal(overlay, &overlayMap); err != nil {
-			return base, err
-		}
-	}
-	if baseMap == nil {
-		baseMap = make(map[string]any)
-	}
-	for k, v := range overlayMap {
-		baseMap[k] = v
-	}
-	data, err := json.Marshal(baseMap)
-	if err != nil {
-		return base, err
-	}
-	return RawNode(data), nil
-}
-
-// removeSecureFields removes secure fields from the raw JSON.
-// If secureFields is nil or empty, returns the raw node as-is.
-func removeSecureFields(r RawNode, secureFields map[string]struct{}) RawNode {
-	if len(r) == 0 || len(secureFields) == 0 {
-		return r
-	}
-	var m map[string]any
-	if err := json.Unmarshal(r, &m); err != nil {
-		return r
-	}
-	for name := range secureFields {
-		delete(m, name)
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return r
-	}
-	return RawNode(data)
-}
-
-// filterSecureFields keeps only secure fields in the raw JSON.
-// If secureFields is nil or empty, returns nil (so omitzero/omitempty can omit it).
-func filterSecureFields(r RawNode, secureFields map[string]struct{}) RawNode {
-	if len(r) == 0 || len(secureFields) == 0 {
-		return nil
-	}
-	var m map[string]any
-	if err := json.Unmarshal(r, &m); err != nil {
-		return nil
-	}
-	secureMap := make(map[string]any)
-	for name := range secureFields {
-		if val, ok := m[name]; ok {
-			secureMap[name] = val
-		}
-	}
-	if len(secureMap) == 0 {
-		return nil
-	}
-	data, err := json.Marshal(secureMap)
-	if err != nil {
-		return nil
-	}
-	return data
-}
 
 // channelSettingsFactory maps channel type to a zero-value prototype of the
 // corresponding Settings struct. InitChannelList uses reflect.New to create
@@ -556,18 +420,6 @@ var channelSettingsFactory = map[string]any{
 	ChannelFeishu:   (FeishuSettings{}),
 	ChannelWeixin:   (WeixinSettings{}),
 	ChannelQQ:       (QQSettings{}),
-}
-
-// RegisterChannelSettings registers a settings struct prototype for a custom
-// channel type. External packages (out-of-tree channels registered via
-// channels.RegisterFactory) call this from an init() so their channel type
-// passes config validation (isValidChannelType) and its settings block decodes
-// into the right struct (newChannelSettings). The prototype must be a struct
-// value, e.g. RegisterChannelSettings("my_channel", MyChannelSettings{}).
-func RegisterChannelSettings(channelType string, prototype any) {
-	channelSettingsMu.Lock()
-	defer channelSettingsMu.Unlock()
-	channelSettingsFactory[channelType] = prototype
 }
 
 // newChannelSettings creates a fresh zero-value pointer for the given channel type.

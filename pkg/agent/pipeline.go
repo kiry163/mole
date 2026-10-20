@@ -15,12 +15,10 @@ import (
 type Pipeline struct {
 	Bus            interfaces.MessageBus
 	Cfg            *config.Config
-	ContextManager ContextManager
+	ContextManager *sessionContextManager
 	Hooks          *HookManager
 	Fallback       *providers.FallbackChain
-	ChannelManager interfaces.ChannelManager
 	MediaStore     media.MediaStore
-	Steering       any // TODO: *Steering
 	al             *AgentLoop
 }
 
@@ -32,9 +30,7 @@ func NewPipeline(al *AgentLoop) *Pipeline {
 		ContextManager: al.contextManager,
 		Hooks:          al.hooks,
 		Fallback:       al.fallback,
-		ChannelManager: al.channelManager,
 		MediaStore:     al.mediaStore,
-		Steering:       al.steering,
 		al:             al,
 	}
 }

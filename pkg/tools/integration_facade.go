@@ -48,10 +48,6 @@ func NewReactionTool() *ReactionTool {
 	return integrationtools.NewReactionTool()
 }
 
-func NewAPIKeyPool(keys []string) *APIKeyPool {
-	return integrationtools.NewAPIKeyPool(keys)
-}
-
 func WebSearchToolOptionsFromConfig(cfg *config.Config) WebSearchToolOptions {
 	return integrationtools.WebSearchToolOptionsFromConfig(cfg)
 }
@@ -68,10 +64,6 @@ func NewWebSearchTool(opts WebSearchToolOptions) (*WebSearchTool, error) {
 	return integrationtools.NewWebSearchTool(opts)
 }
 
-func NewWebFetchTool(maxChars int, format string, fetchLimitBytes int64) (*WebFetchTool, error) {
-	return integrationtools.NewWebFetchTool(maxChars, format, fetchLimitBytes)
-}
-
 func NewWebFetchToolWithProxy(
 	maxChars int,
 	proxy string,
@@ -80,14 +72,4 @@ func NewWebFetchToolWithProxy(
 	privateHostWhitelist []string,
 ) (*WebFetchTool, error) {
 	return integrationtools.NewWebFetchToolWithProxy(maxChars, proxy, format, fetchLimitBytes, privateHostWhitelist)
-}
-
-func NewWebFetchToolWithConfig(
-	maxChars int,
-	proxy string,
-	format string,
-	fetchLimitBytes int64,
-	privateHostWhitelist []string,
-) (*WebFetchTool, error) {
-	return integrationtools.NewWebFetchToolWithConfig(maxChars, proxy, format, fetchLimitBytes, privateHostWhitelist)
 }

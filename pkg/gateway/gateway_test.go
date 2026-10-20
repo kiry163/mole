@@ -304,16 +304,16 @@ func TestCollectGatewayStartupStatusHandlesMalformedInfo(t *testing.T) {
 }
 
 func TestPublishGatewayEvent(t *testing.T) {
-	eventBus := runtimeevents.NewBus()
-	t.Cleanup(func() {
-		if err := eventBus.Close(); err != nil {
-			t.Fatalf("Close runtime event bus: %v", err)
-		}
-	})
+	al := agent.NewAgentLoop(
+		config.DefaultConfig(),
+		bus.NewMessageBus(),
+		&startupBlockedProvider{reason: "not used"},
+	)
+	t.Cleanup(al.Close)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	sub, eventsCh, err := eventBus.Channel().OfKind(runtimeevents.KindGatewayStart).SubscribeChan(
+	sub, eventsCh, err := al.RuntimeEventBus().Channel().OfKind(runtimeevents.KindGatewayStart).SubscribeChan(
 		ctx,
 		runtimeevents.SubscribeOptions{Name: "gateway-test", Buffer: 4},
 	)
@@ -325,14 +325,6 @@ func TestPublishGatewayEvent(t *testing.T) {
 			t.Fatalf("Close subscription: %v", err)
 		}
 	})
-
-	al := agent.NewAgentLoop(
-		config.DefaultConfig(),
-		bus.NewMessageBus(),
-		&startupBlockedProvider{reason: "not used"},
-		agent.WithRuntimeEvents(eventBus),
-	)
-	t.Cleanup(al.Close)
 
 	startedAt := time.Now().Add(-1500 * time.Millisecond)
 	publishGatewayEvent(al, runtimeevents.KindGatewayStart, startedAt, nil)

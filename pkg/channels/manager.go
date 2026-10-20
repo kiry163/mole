@@ -1086,13 +1086,6 @@ func (m *Manager) initChannels(channels *config.ChannelsConfig) error {
 	return nil
 }
 
-// SetupHTTPServer creates a shared HTTP server with the given listen address.
-// It registers health endpoints from the health server and discovers channels
-// that implement WebhookHandler and/or HealthChecker to register their handlers.
-func (m *Manager) SetupHTTPServer(addr string, healthServer *health.Server) {
-	m.SetupHTTPServerListeners(nil, addr, healthServer)
-}
-
 // SetupHTTPServerListeners creates a shared HTTP server on pre-opened listeners.
 // When listeners is empty it falls back to Addr-based ListenAndServe behavior.
 func (m *Manager) SetupHTTPServerListeners(listeners []net.Listener, addr string, healthServer *health.Server) {
@@ -1123,14 +1116,6 @@ func (m *Manager) HandleHTTP(pattern string, h http.Handler) {
 		return
 	}
 	m.mux.Handle(pattern, h)
-}
-
-// UnhandleHTTP removes a handler previously registered with HandleHTTP.
-func (m *Manager) UnhandleHTTP(pattern string) {
-	if m.mux == nil {
-		return
-	}
-	m.mux.Unhandle(pattern)
 }
 
 // registerHTTPHandlersLocked registers webhook and health-check handlers for
@@ -1858,20 +1843,6 @@ func (m *Manager) GetChannel(name string) (Channel, bool) {
 	return channel, ok
 }
 
-func (m *Manager) GetStatus() map[string]any {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	status := make(map[string]any)
-	for name, channel := range m.channels {
-		status[name] = map[string]any{
-			"enabled": true,
-			"running": channel.IsRunning(),
-		}
-	}
-	return status
-}
-
 func (m *Manager) GetEnabledChannels() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -2077,37 +2048,5 @@ func (m *Manager) SendMedia(ctx context.Context, msg bus.OutboundMediaMessage) e
 	}
 
 	_, err := m.sendMediaWithRetry(ctx, channelName, w, msg)
-	return err
-}
-
-func (m *Manager) SendToChannel(ctx context.Context, channelName, chatID, content string) error {
-	m.mu.RLock()
-	_, exists := m.channels[channelName]
-	w, wExists := m.workers[channelName]
-	m.mu.RUnlock()
-
-	if !exists {
-		return fmt.Errorf("channel %s not found", channelName)
-	}
-
-	msg := bus.OutboundMessage{
-		Context: bus.NewOutboundContext(channelName, chatID, ""),
-		Content: content,
-	}
-	msg = bus.NormalizeOutboundMessage(msg)
-
-	if wExists && w != nil {
-		select {
-		case w.queue <- msg:
-			m.publishOutboundQueued(channelName, msg)
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-
-	// Fallback: direct send (should not happen)
-	channel, _ := m.channels[channelName]
-	_, err := channel.Send(ctx, msg)
 	return err
 }

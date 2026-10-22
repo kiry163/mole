@@ -36,7 +36,6 @@ const (
 	PromptSlotSummary      PromptSlot = "summary"
 	PromptSlotMessage      PromptSlot = "message"
 	PromptSlotSteering     PromptSlot = "steering"
-	PromptSlotSubTurn      PromptSlot = "subturn"
 	PromptSlotToolResult   PromptSlot = "tool_result"
 	PromptSlotInterrupt    PromptSlot = "interrupt"
 	PromptSlotOutput       PromptSlot = "output"
@@ -45,24 +44,21 @@ const (
 type PromptSourceID string
 
 const (
-	PromptSourceKernel         PromptSourceID = "runtime.kernel"
-	PromptSourceHierarchy      PromptSourceID = "runtime.hierarchy"
-	PromptSourceWorkspace      PromptSourceID = "workspace.definition"
-	PromptSourceRuntime        PromptSourceID = "runtime.context"
-	PromptSourceSummary        PromptSourceID = "context.summary"
-	PromptSourceMemory         PromptSourceID = "memory:workspace"
-	PromptSourceSkillCatalog   PromptSourceID = "skill:index"
-	PromptSourceActiveSkills   PromptSourceID = "skill:active"
-	PromptSourceAgentDiscovery PromptSourceID = "agent:discovery"
-	PromptSourceToolRegistry   PromptSourceID = "tool_registry:native"
-	PromptSourceToolDiscovery  PromptSourceID = "tool_registry:discovery"
-	PromptSourceOutputPolicy   PromptSourceID = "runtime.output"
-	PromptSourceSubTurnProfile PromptSourceID = "subturn.profile"
-	PromptSourceUserMessage    PromptSourceID = "turn:user_message"
-	PromptSourceSteering       PromptSourceID = "turn:steering"
-	PromptSourceSubTurnResult  PromptSourceID = "turn:subturn_result"
-	PromptSourceToolResult     PromptSourceID = "turn:tool_result"
-	PromptSourceInterrupt      PromptSourceID = "turn:interrupt"
+	PromptSourceKernel        PromptSourceID = "runtime.kernel"
+	PromptSourceHierarchy     PromptSourceID = "runtime.hierarchy"
+	PromptSourceWorkspace     PromptSourceID = "workspace.definition"
+	PromptSourceRuntime       PromptSourceID = "runtime.context"
+	PromptSourceSummary       PromptSourceID = "context.summary"
+	PromptSourceMemory        PromptSourceID = "memory:workspace"
+	PromptSourceSkillCatalog  PromptSourceID = "skill:index"
+	PromptSourceActiveSkills  PromptSourceID = "skill:active"
+	PromptSourceToolRegistry  PromptSourceID = "tool_registry:native"
+	PromptSourceToolDiscovery PromptSourceID = "tool_registry:discovery"
+	PromptSourceOutputPolicy  PromptSourceID = "runtime.output"
+	PromptSourceUserMessage   PromptSourceID = "turn:user_message"
+	PromptSourceSteering      PromptSourceID = "turn:steering"
+	PromptSourceToolResult    PromptSourceID = "turn:tool_result"
+	PromptSourceInterrupt     PromptSourceID = "turn:interrupt"
 )
 
 type PromptPlacement struct {
@@ -107,13 +103,10 @@ type PromptBuildRequest struct {
 	SenderDisplayName string
 
 	ActiveSkills []string
-	Overlays     []PromptPart
 
 	SuppressDefaultSystemPrompt bool
 	SuppressSkillContext        bool
 	SuppressToolUseRule         bool
-	AllowedSkills               []string
-	AllowedTools                []string
 	ToolUseFallback             bool
 }
 
@@ -196,13 +189,7 @@ func builtinPromptSources() []PromptSourceDescriptor {
 			Allowed:         []PromptPlacement{{Layer: PromptLayerCapability, Slot: PromptSlotActiveSkill}},
 			StableByDefault: false,
 		},
-		{
-			ID:              PromptSourceAgentDiscovery,
-			Owner:           "agent",
-			Description:     "Structured multi-agent discovery registry",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerCapability, Slot: PromptSlotTooling}},
-			StableByDefault: false,
-		},
+
 		{
 			ID:              PromptSourceMemory,
 			Owner:           "memory",
@@ -231,13 +218,7 @@ func builtinPromptSources() []PromptSourceDescriptor {
 			Allowed:         []PromptPlacement{{Layer: PromptLayerContext, Slot: PromptSlotOutput}},
 			StableByDefault: true,
 		},
-		{
-			ID:              PromptSourceSubTurnProfile,
-			Owner:           "subturn",
-			Description:     "Child agent profile instructions",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerInstruction, Slot: PromptSlotWorkspace}},
-			StableByDefault: false,
-		},
+
 		{
 			ID:              PromptSourceUserMessage,
 			Owner:           "turn",
@@ -252,13 +233,7 @@ func builtinPromptSources() []PromptSourceDescriptor {
 			Allowed:         []PromptPlacement{{Layer: PromptLayerTurn, Slot: PromptSlotSteering}},
 			StableByDefault: false,
 		},
-		{
-			ID:              PromptSourceSubTurnResult,
-			Owner:           "turn",
-			Description:     "SubTurn result injected into a parent turn",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerTurn, Slot: PromptSlotSubTurn}},
-			StableByDefault: false,
-		},
+
 		{
 			ID:              PromptSourceInterrupt,
 			Owner:           "turn",
@@ -494,11 +469,13 @@ func slotPriority(slot PromptSlot) int {
 		return 600
 	case PromptSlotSteering:
 		return 590
-	case PromptSlotSubTurn:
-		return 580
 	case PromptSlotInterrupt:
 		return 570
 	default:
 		return 0
 	}
+}
+
+func toolUseSystemPromptRule() string {
+	return "**ALWAYS use tools** - When you need to perform an action (schedule reminders, send messages, execute commands, etc.), you MUST call the appropriate tool. Do NOT just say you'll do it or pretend to do it."
 }

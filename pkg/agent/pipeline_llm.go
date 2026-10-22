@@ -16,7 +16,7 @@ import (
 	"github.com/kiry163/mole/pkg/providers"
 )
 
-// CallLLM performs an LLM call with fallback support, hook invocation, and retry logic.
+// CallLLM performs an LLM call with fallback support and retry logic.
 // It handles PreLLM setup, the actual LLM invocation with retry, and AfterLLM processing.
 // Returns Control indicating what the coordinator should do next.
 func (p *Pipeline) CallLLM(
@@ -37,26 +37,6 @@ func (p *Pipeline) CallLLM(
 	// PreLLM: graceful terminal handling
 	exec.gracefulTerminal, _ = ts.gracefulInterruptRequested()
 	exec.providerToolDefs = ts.agent.Tools.ToProviderDefs()
-	exec.providerToolDefs = filterToolsByTurnProfile(exec.providerToolDefs, ts.profile)
-
-	// Native web search support
-	webSearchEnabled := al.cfg.Tools.IsToolEnabled("web") && turnProfileToolAllowed(ts.profile, "web_search")
-	exec.useNativeSearch = webSearchEnabled && al.cfg.Tools.Web.PreferNative &&
-		func() bool {
-			if ns, ok := exec.activeProvider.(providers.NativeSearchCapable); ok {
-				return ns.SupportsNativeSearch()
-			}
-			return false
-		}()
-	if exec.useNativeSearch {
-		filtered := make([]providers.ToolDefinition, 0, len(exec.providerToolDefs))
-		for _, td := range exec.providerToolDefs {
-			if td.Function.Name != "web_search" {
-				filtered = append(filtered, td)
-			}
-		}
-		exec.providerToolDefs = filtered
-	}
 
 	exec.callMessages = exec.messages
 	if exec.gracefulTerminal {
@@ -73,75 +53,9 @@ func (p *Pipeline) CallLLM(
 		"temperature":      ts.agent.Temperature,
 		"prompt_cache_key": ts.agent.ID,
 	}
-	if exec.useNativeSearch {
-		exec.llmOpts["native_search"] = true
-	}
 	applyTurnThinkingOptions(exec, ts.agent, exec.activeProvider, true)
 
 	exec.llmModel = exec.activeModel
-	nativeSearchBeforeHook := exec.useNativeSearch
-
-	// BeforeLLM hook
-	if p.Hooks != nil {
-		llmReq, decision := p.Hooks.BeforeLLM(turnCtx, &LLMHookRequest{
-			Meta:             ts.eventMeta("runTurn", "turn.llm.request"),
-			Context:          cloneTurnContext(ts.turnCtx),
-			Model:            exec.llmModel,
-			Messages:         exec.callMessages,
-			Tools:            exec.providerToolDefs,
-			Options:          exec.llmOpts,
-			GracefulTerminal: exec.gracefulTerminal,
-		})
-		switch decision.normalizedAction() {
-		case HookActionContinue, HookActionModify:
-			if llmReq != nil {
-				prevModel := exec.llmModel
-				exec.llmModel = llmReq.Model
-				exec.callMessages = llmReq.Messages
-				exec.providerToolDefs = filterToolsByTurnProfile(llmReq.Tools, ts.profile)
-				exec.llmOpts = llmReq.Options
-				if strings.TrimSpace(exec.llmModel) != "" && exec.llmModel != prevModel {
-					if err := p.applyBeforeLLMModelRewrite(ts, exec); err != nil {
-						return ControlBreak, err
-					}
-					applyTurnThinkingOptions(exec, ts.agent, exec.activeProvider, true)
-				}
-			}
-		case HookActionAbortTurn:
-			cancelConfiguredStreamingLLM(turnCtx, exec)
-			exec.abortedByHook = true
-			return ControlBreak, nil
-		case HookActionHardAbort:
-			cancelConfiguredStreamingLLM(turnCtx, exec)
-			_ = ts.requestHardAbort()
-			exec.abortedByHardAbort = true
-			return ControlBreak, nil
-		}
-	}
-	exec.useNativeSearch = webSearchEnabled && al.cfg.Tools.Web.PreferNative &&
-		func() bool {
-			if ns, ok := exec.activeProvider.(providers.NativeSearchCapable); ok {
-				return ns.SupportsNativeSearch()
-			}
-			return false
-		}()
-	if nativeSearchBeforeHook && !exec.useNativeSearch {
-		exec.providerToolDefs = restoreToolDefinition(
-			exec.providerToolDefs,
-			filterToolsByTurnProfile(ts.agent.Tools.ToProviderDefs(), ts.profile),
-			"web_search",
-		)
-	}
-	if exec.useNativeSearch {
-		exec.providerToolDefs = filterClientWebSearch(exec.providerToolDefs)
-		if exec.llmOpts == nil {
-			exec.llmOpts = make(map[string]any)
-		}
-		exec.llmOpts["native_search"] = true
-	} else {
-		delete(exec.llmOpts, "native_search")
-	}
-
 	al.emitEvent(
 		runtimeevents.KindAgentLLMRequest,
 		ts.eventMeta("runTurn", "turn.llm.request"),
@@ -213,26 +127,6 @@ func (p *Pipeline) CallLLM(
 			callOpts := shallowCloneLLMOptions(exec.llmOpts)
 			delete(callOpts, "thinking_level")
 			candidateTools := toolDefsForCall
-			candidateNativeSearch := webSearchEnabled && al.cfg.Tools.Web.PreferNative &&
-				func() bool {
-					if ns, ok := candidateProvider.(providers.NativeSearchCapable); ok {
-						return ns.SupportsNativeSearch()
-					}
-					return false
-				}()
-			if candidateNativeSearch {
-				candidateTools = filterClientWebSearch(candidateTools)
-				callOpts["native_search"] = true
-			} else {
-				delete(callOpts, "native_search")
-				if exec.useNativeSearch {
-					candidateTools = restoreToolDefinition(
-						candidateTools,
-						filterToolsByTurnProfile(ts.agent.Tools.ToProviderDefs(), ts.profile),
-						"web_search",
-					)
-				}
-			}
 			candidateCfg := resolveActiveModelConfig(
 				p.Cfg,
 				[]providers.FallbackCandidate{candidate},
@@ -364,7 +258,7 @@ func (p *Pipeline) CallLLM(
 			continue
 		}
 
-		if isContextError && retry < maxRetries && !ts.opts.NoHistory {
+		if isContextError && retry < maxRetries {
 			al.emitEvent(
 				runtimeevents.KindAgentLLMRetry,
 				ts.eventMeta("runTurn", "turn.llm.retry"),
@@ -503,31 +397,6 @@ func (p *Pipeline) CallLLM(
 				"error":     err.Error(),
 			})
 		return ControlBreak, fmt.Errorf("LLM call failed after retries: %w", err)
-	}
-
-	// AfterLLM hook
-	if p.Hooks != nil {
-		llmResp, decision := p.Hooks.AfterLLM(turnCtx, &LLMHookResponse{
-			Meta:     ts.eventMeta("runTurn", "turn.llm.response"),
-			Context:  cloneTurnContext(ts.turnCtx),
-			Model:    exec.llmModel,
-			Response: exec.response,
-		})
-		switch decision.normalizedAction() {
-		case HookActionContinue, HookActionModify:
-			if llmResp != nil && llmResp.Response != nil {
-				exec.response = llmResp.Response
-			}
-		case HookActionAbortTurn:
-			cancelConfiguredStreamingLLM(turnCtx, exec)
-			exec.abortedByHook = true
-			return ControlBreak, nil
-		case HookActionHardAbort:
-			cancelConfiguredStreamingLLM(turnCtx, exec)
-			_ = ts.requestHardAbort()
-			exec.abortedByHardAbort = true
-			return ControlBreak, nil
-		}
 	}
 
 	// Save usage on the turn state. Use ts directly (the authoritative turn
@@ -678,11 +547,9 @@ func (p *Pipeline) CallLLM(
 		})
 	}
 	exec.messages = append(exec.messages, assistantMsg)
-	if !ts.opts.NoHistory {
-		ts.agent.Sessions.AddFullMessage(ts.sessionKey, assistantMsg)
-		ts.recordPersistedMessage(assistantMsg)
-		ts.ingestMessage(turnCtx, al, assistantMsg)
-	}
+	ts.agent.Sessions.AddFullMessage(ts.sessionKey, assistantMsg)
+	ts.recordPersistedMessage(assistantMsg)
+	ts.ingestMessage(turnCtx, al, assistantMsg)
 	if shouldPublishWebChatToolCallInterim {
 		al.publishWebChatToolCallInterim(
 			turnCtx,
@@ -695,87 +562,6 @@ func (p *Pipeline) CallLLM(
 	}
 
 	return ControlToolLoop, nil
-}
-
-func restoreToolDefinition(
-	current,
-	available []providers.ToolDefinition,
-	name string,
-) []providers.ToolDefinition {
-	for _, tool := range current {
-		if strings.EqualFold(tool.Function.Name, name) {
-			return current
-		}
-	}
-	for _, tool := range available {
-		if strings.EqualFold(tool.Function.Name, name) {
-			return append(current, tool)
-		}
-	}
-	return current
-}
-
-func (p *Pipeline) applyBeforeLLMModelRewrite(ts *turnState, exec *turnExecution) error {
-	if p == nil || ts == nil || ts.agent == nil || exec == nil {
-		return nil
-	}
-	rawModel := strings.TrimSpace(exec.llmModel)
-	if rawModel == "" {
-		return nil
-	}
-
-	candidates := resolveModelCandidates(p.Cfg, rawModel, nil)
-	if len(candidates) == 0 {
-		// Hooks may select a raw upstream model that is not in model_list.
-		// Continue on the active provider with that identifier.
-		if exec.activeProvider == nil {
-			return fmt.Errorf("hook-selected model %q could not be resolved", rawModel)
-		}
-		exec.activeModel = rawModel
-		exec.llmModel = rawModel
-		exec.activeModelConfig = nil
-		return nil
-	}
-	candidate := candidates[0]
-	provider := ts.agent.CandidateProviders[candidateProviderKey(candidate)]
-	if provider == nil {
-		if candidate.ConfigKey == "" && candidate.ConfigIndex == 0 {
-			if len(exec.activeCandidates) > 0 &&
-				providers.NormalizeProvider(exec.activeCandidates[0].Provider) !=
-					providers.NormalizeProvider(candidate.Provider) {
-				return fmt.Errorf("hook-selected model %q has no configured provider %q", rawModel, candidate.Provider)
-			}
-			provider = exec.activeProvider
-		} else if len(exec.activeCandidates) > 0 &&
-			providers.NormalizeProvider(exec.activeCandidates[0].Provider) ==
-				providers.NormalizeProvider(candidate.Provider) &&
-			candidateCanInheritProvider(p.Cfg, candidate) {
-			provider = exec.activeProvider
-		} else {
-			modelCfg, err := resolvedCandidateModelConfig(p.Cfg, candidate)
-			if err != nil {
-				return fmt.Errorf("resolve hook-selected model %q: %w", rawModel, err)
-			}
-			factory := providers.CreateProviderFromConfig
-			if p.al != nil && p.al.providerFactory != nil {
-				factory = p.al.providerFactory
-			}
-			provider, _, err = factory(modelCfg)
-			if err != nil {
-				return fmt.Errorf("initialize hook-selected model %q: %w", rawModel, err)
-			}
-			exec.ownedProviders = append(exec.ownedProviders, provider)
-		}
-	}
-	if provider == nil {
-		return fmt.Errorf("hook-selected model %q has no active provider", rawModel)
-	}
-	exec.activeCandidates = candidates
-	exec.activeProvider = provider
-	exec.activeModel = resolvedCandidateModel(candidates, rawModel)
-	exec.llmModel = exec.activeModel
-	exec.activeModelConfig = resolveActiveModelConfig(p.Cfg, candidates, rawModel)
-	return nil
 }
 
 func providerForFallbackCandidate(

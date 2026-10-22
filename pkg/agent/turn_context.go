@@ -7,7 +7,7 @@ import (
 )
 
 // TurnContext carries normalized turn-scoped facts that can be shared across
-// events, hooks, and other runtime observers without re-parsing legacy fields.
+// events and other runtime observers without re-parsing legacy fields.
 type TurnContext struct {
 	Inbound *bus.InboundContext    `json:"inbound,omitempty"`
 	Route   *routing.ResolvedRoute `json:"route,omitempty"`
@@ -61,7 +61,7 @@ func cloneStringMap(src map[string]string) map[string]string {
 	return cloned
 }
 
-func cloneHookMeta(meta HookMeta) HookMeta {
+func cloneEventMeta(meta EventMeta) EventMeta {
 	meta.turnContext = cloneTurnContext(meta.turnContext)
 	return meta
 }

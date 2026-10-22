@@ -95,7 +95,7 @@ homes append an 8-character path hash; on Windows every home, including the defa
 
 The console and the `webchat` channel share a single HTTP server. It binds to loopback by default — `127.0.0.1:18790` (the `gateway.host` setting defaults to `localhost`). The bind address has no command-line override: to listen elsewhere, edit `gateway.host` and `gateway.port` in `~/.mole/config.json` and restart the process — `mole service restart` for an installed service, or relaunch `mole serve`.
 
-The other channels are not served on that port: `telegram`, `qq`, `feishu` and `weixin` connect outbound to their platforms (long polling, WebSocket, or REST) and never listen on it.
+The other channels are not served on that port: `qq` and `weixin` connect outbound to their platforms (long polling, WebSocket, or REST) and never listen on it.
 
 ## CLI
 
@@ -130,7 +130,7 @@ Sessions recorded under the old channel prefix are no longer listed. WebChat cli
 
 ## Channels
 
-`telegram`, `qq`, `feishu`, `weixin` and `webchat` (the console's own channel).
+`qq`, `weixin` and `webchat` (the console's own channel).
 
 ## Providers
 

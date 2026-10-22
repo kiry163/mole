@@ -4,7 +4,6 @@
     "model_group": "模型",
     "models": "模型",
     "agent_group": "智能体",
-    "hub": "Hub",
     "skills": "技能",
     "tools": "工具",
     "services": "服务",
@@ -12,8 +11,7 @@
     "show_more_channels": "更多",
     "show_less_channels": "收起",
     "config": "配置",
-    "logs": "日志",
-    "approvals": "审批"
+    "logs": "日志"
   },
   "login": {
     "title": "登录",
@@ -312,8 +310,6 @@
   "channels": {
     "loadError": "加载频道列表失败",
     "name": {
-      "telegram": "Telegram",
-      "feishu": "飞书",
       "qq": "QQ",
       "webchat": "Web",
       "weixin": "微信"
@@ -483,28 +479,6 @@
         "dropzone_label": "将技能文件拖到这里",
         "dropzone_active": "松开即可导入该技能",
         "dropzone_release": "导入后会自动规范化内容，并保存到工作区技能目录。",
-        "marketplace_title": "安装技能",
-        "marketplace_description": "搜索第三方技能源，并将技能安装到当前工作区",
-        "marketplace_search_placeholder": "搜索 github、docker、database 等技能",
-        "marketplace_search_action": "搜索",
-        "marketplace_search_status": "搜索状态",
-        "marketplace_install_status": "安装状态",
-        "marketplace_notice_title": "安全提示",
-        "marketplace_notice_body": "搜索结果中的 skills 属于第三方内容。安装前请先确认作者、页面 URL、说明文档，以及它要求执行的代码或使用的凭据是否可信。",
-        "marketplace_status_disabled": "当前未启用，请先在工具页启用对应工具。",
-        "marketplace_status_enable_hint": "请先在工具页启用相关工具。",
-        "marketplace_search_error": "搜索技能源失败。",
-        "marketplace_loading_results": "正在搜索技能...",
-        "marketplace_loading_more": "正在加载更多技能...",
-        "marketplace_results_title": "“{{query}}” 共找到 {{count}} 个结果",
-        "marketplace_results_hint": "搜索结果会安装到当前工作区。",
-        "marketplace_install_action": "安装",
-        "marketplace_installed": "已安装",
-        "marketplace_view_installed": "查看本地技能",
-        "marketplace_installed_hint": "该技能已在当前工作区中可用，名称为「{{name}}」。",
-        "marketplace_empty_results": "没有找到与“{{query}}”匹配的可安装技能。",
-        "marketplace_idle": "输入一个关键词，搜索可安装的第三方技能。",
-        "marketplace_unavailable": "当前无法使用技能搜索，请检查 Skills 相关工具配置。",
         "sort": {
           "name_asc": "名称（A-Z）",
           "name_desc": "名称（Z-A）",
@@ -513,7 +487,6 @@
         "origin": {
           "all": "全部类型",
           "builtin": "内置",
-          "third_party": "第三方",
           "manual": "手动导入"
         },
         "summary": {
@@ -527,16 +500,8 @@
         "metadata": {
           "name": "名称",
           "description": "描述",
-          "registry": "来源平台",
-          "url": "链接地址",
-          "version": "已安装版本",
           "lines": "行数",
           "characters": "字符数"
-        },
-        "marketplace_installDisabled": {
-          "installing": "正在安装...",
-          "installed": "已安装",
-          "cannotInstall": "无法安装：相关工具未启用"
         }
       },
       "tools": {
@@ -596,8 +561,6 @@
         "reasons": {
           "requires_linux": "该工具仅在 Linux 主机上可用，并且需要暴露对应的设备文件。",
           "requires_serial_platform": "该工具当前支持 Linux、macOS 和 Windows，且要求主机可访问对应串口。",
-          "requires_skills": "需要先启用 `tools.skills`，该技能注册表工具才能使用。",
-          "requires_subagent": "需要先启用 `tools.subagent`，`spawn` 才能委派任务。",
           "requires_mcp_discovery": "需要先启用 `tools.mcp.discovery`，MCP 发现工具才会可用。",
           "requires_web_search_provider": "请至少配置一个可用的外部网络搜索 provider。"
         }
@@ -648,22 +611,6 @@
       "summarize_token_percent": "摘要目标 Token 百分比",
       "summarize_token_percent_hint": "在触发会话摘要时使用",
       "turn_profile": "请求上下文策略",
-      "turn_profile_hint": "控制每次请求会带入哪些上下文。保持关闭时，普通对话完全沿用原逻辑。",
-      "turn_profile_enabled": "启用策略",
-      "turn_profile_enabled_hint": "启用后，每个新回合都会应用下面的设置；关闭时，Mole 使用原来的上下文行为。",
-      "turn_profile_mode_default": "默认",
-      "turn_profile_mode_off": "关闭",
-      "turn_profile_mode_custom": "只允许列表",
-      "turn_profile_history": "历史上下文",
-      "turn_profile_history_hint": "默认会带上这段会话之前的消息；关闭后，本轮像一次新对话，也不会把结果写回历史。",
-      "turn_profile_system_prompt": "系统上下文",
-      "turn_profile_system_prompt_hint": "默认会带上 Mole 的身份、工作区、记忆和运行时说明；关闭后只保留外部明确传入的 system prompt。",
-      "turn_profile_skills": "技能提示",
-      "turn_profile_skills_hint": "默认会把可用技能和已激活技能写入提示；关闭后不写入；只允许列表时每行填写一个技能名。",
-      "turn_profile_skills_allow_placeholder": "skill-name\nanother-skill",
-      "turn_profile_tools": "可调用工具",
-      "turn_profile_tools_hint": "默认暴露正常工具；关闭后模型不能调用工具；只允许列表时每行填写一个工具名，例如 web_search。",
-      "turn_profile_tools_allow_placeholder": "web_search\nweb_fetch",
       "session_scope": "会话隔离范围",
       "session_scope_hint": "定义不同用户/频道之间如何隔离会话上下文",
       "session_scope_per_channel_peer": "按频道+用户隔离",
@@ -741,62 +688,11 @@
       "factory_reset_confirm_desc": "这将把所有配置重置为出厂默认值。API 密钥和安全凭证将被保留。当前配置将被备份。",
       "factory_reset_confirm": "确认重置",
       "factory_reset_success": "配置已重置为出厂默认值。",
-      "factory_reset_error": "重置配置失败。",
-      "hooks_hint": "进程内内置钩子与外部 stdio 钩子进程。非法条目会在保存时被拒——它会让之后每一轮都失败。",
-      "hooks_enabled": "启用钩子",
-      "hooks_enabled_hint": "总开关：关闭后不挂载任何内置或外部钩子。",
-      "hooks_observer_timeout": "观察者超时（毫秒）",
-      "hooks_interceptor_timeout": "拦截器超时（毫秒）",
-      "hooks_approval_timeout": "审批超时（毫秒）",
-      "hooks_approval_timeout_hint": "工具审批允许的毫秒数；超时即拒绝该工具。必须大于 0。",
-      "hooks_timeout_hint": "毫秒；必须大于 0。",
-      "hooks_builtins": "内置钩子",
-      "hooks_builtins_hint": "编译进本版本的内置钩子。名字必须已注册，因此只能启用服务端提供的项。",
-      "hooks_add_builtin": "添加内置钩子",
-      "hooks_no_builtins": "本版本没有注册任何内置钩子。",
-      "hooks_processes": "外部钩子进程",
-      "hooks_processes_hint": "由 agent 启动、通过 stdio 通信的进程；每条至少需要命令，以及一个 observe 事件或 intercept 模式。进程启动失败同样会让之后每一轮都失败，直到修好或删除——具体原因在运行日志里。",
-      "hooks_add_process": "添加进程",
-      "hooks_remove": "移除",
-      "hooks_process_enabled": "启用钩子",
-      "hooks_process_name": "名称",
-      "hooks_process_command": "命令",
-      "hooks_command_hint": "只填可执行文件；参数写在下一栏。",
-      "hooks_process_args": "参数",
-      "hooks_args_hint": "以空格分隔。",
-      "hooks_process_intercept": "拦截点",
-      "hooks_intercept_hint": "逗号或换行分隔：before_llm、after_llm、before_tool、after_tool、approve_tool。",
-      "hooks_process_observe": "观察事件",
-      "hooks_observe_hint": "事件类型用逗号或换行分隔，例如 turn_start、turn_end；* 表示观察全部。",
-      "hooks_process_env": "环境变量",
-      "hooks_env_hint": "JSON 对象，例如 {\"HOOK_MODE\":\"rewrite\"}。",
-      "hooks_process_dir": "工作目录"
+      "factory_reset_error": "重置配置失败。"
     },
     "logs": {
       "log_level_error": "更新日志等级失败。",
       "empty": "等待日志中..."
-    },
-    "approvals": {
-      "title": "工具审批",
-      "subtitle": "需要你决定的工具调用。",
-      "empty": "没有待审批的请求。",
-      "pending_badge": "待决",
-      "allow": "允许",
-      "always_allow": "总是允许",
-      "deny": "拒绝",
-      "remember_hint": "将记住 `{{tool}}` 的 `{{arg}}` = `{{value}}`",
-      "allowed": "已允许",
-      "denied": "已拒绝",
-      "always_allowed": "已允许并记住",
-      "decide_error": "发送决定失败",
-      "recent_title": "最近的决定",
-      "outcome_allowed": "已允许",
-      "outcome_always_allowed": "已记住",
-      "outcome_denied": "已拒绝",
-      "outcome_expired": "已超时",
-      "outcome_cancelled": "已取消",
-      "origin_chat": "对话",
-      "origin_console": "控制台"
     }
   },
   "tour": {

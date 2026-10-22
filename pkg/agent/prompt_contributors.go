@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/kiry163/mole/pkg/tools"
 )
 
 type toolDiscoveryPromptContributor struct {
@@ -30,8 +28,8 @@ func (c toolDiscoveryPromptContributor) ContributePrompt(
 	if req.SuppressToolUseRule {
 		return nil, nil
 	}
-	useBM25 := c.useBM25 && promptAllowsTool(req, tools.BM25SearchToolName)
-	useRegex := c.useRegex && promptAllowsTool(req, tools.RegexSearchToolName)
+	useBM25 := c.useBM25
+	useRegex := c.useRegex
 	if !useBM25 && !useRegex {
 		return nil, nil
 	}
@@ -80,10 +78,6 @@ func (c mcpServerPromptContributor) ContributePrompt(
 	if serverName == "" || c.toolCount <= 0 {
 		return nil, nil
 	}
-	if len(req.AllowedTools) > 0 &&
-		!promptAllowsToolPrefix(req, "mcp_"+promptSourceComponent(serverName)+"_") {
-		return nil, nil
-	}
 
 	availability := "available as native tools"
 	if c.deferred {
@@ -104,52 +98,6 @@ func (c mcpServerPromptContributor) ContributePrompt(
 				availability,
 			),
 			Stable: true,
-		},
-	}, nil
-}
-
-type agentDiscoveryPromptContributor struct {
-	agentID  string
-	discover func(agentID string) []AgentDescriptor
-}
-
-func (c agentDiscoveryPromptContributor) PromptSource() PromptSourceDescriptor {
-	return PromptSourceDescriptor{
-		ID:              PromptSourceAgentDiscovery,
-		Owner:           "agent",
-		Description:     "Structured multi-agent discovery registry",
-		Allowed:         []PromptPlacement{{Layer: PromptLayerCapability, Slot: PromptSlotTooling}},
-		StableByDefault: false,
-	}
-}
-
-func (c agentDiscoveryPromptContributor) ContributePrompt(
-	_ context.Context,
-	req PromptBuildRequest,
-) ([]PromptPart, error) {
-	if req.SuppressToolUseRule {
-		return nil, nil
-	}
-	if !promptAllowsTool(req, "spawn") {
-		return nil, nil
-	}
-	if c.discover == nil {
-		return nil, nil
-	}
-	content := formatAgentDiscoverySection(c.discover(c.agentID))
-	if strings.TrimSpace(content) == "" {
-		return nil, nil
-	}
-
-	return []PromptPart{
-		{
-			ID:      "capability.agent_discovery",
-			Layer:   PromptLayerCapability,
-			Slot:    PromptSlotTooling,
-			Source:  PromptSource{ID: PromptSourceAgentDiscovery, Name: "agent:discovery"},
-			Title:   "agent discovery",
-			Content: content,
-			Stable:  false,
 		},
 	}, nil
 }
@@ -197,29 +145,4 @@ func promptSourceComponent(value string) string {
 		return result[:maxLen]
 	}
 	return result
-}
-
-func promptAllowsTool(req PromptBuildRequest, name string) bool {
-	if len(req.AllowedTools) == 0 {
-		return true
-	}
-	allowed := cleanAllowedSet(req.AllowedTools)
-	_, ok := allowed[strings.ToLower(strings.TrimSpace(name))]
-	return ok
-}
-
-func promptAllowsToolPrefix(req PromptBuildRequest, prefix string) bool {
-	if len(req.AllowedTools) == 0 {
-		return true
-	}
-	prefix = strings.ToLower(strings.TrimSpace(prefix))
-	if prefix == "" {
-		return false
-	}
-	for _, name := range req.AllowedTools {
-		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(name)), prefix) {
-			return true
-		}
-	}
-	return false
 }

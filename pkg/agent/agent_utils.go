@@ -206,13 +206,6 @@ func cloneEventArguments(args map[string]any) map[string]any {
 	return cloned
 }
 
-func hookDeniedToolContent(prefix, reason string) string {
-	if reason == "" {
-		return prefix
-	}
-	return prefix + ": " + reason
-}
-
 func inferMediaType(filename, contentType string) string {
 	ct := strings.ToLower(contentType)
 	fn := strings.ToLower(filename)
@@ -348,10 +341,6 @@ func activeSkillNames(agent *AgentInstance, opts processOptions) []string {
 	if agent == nil {
 		return nil
 	}
-	if turnProfileSkillsOff(opts.TurnProfile) {
-		return nil
-	}
-
 	combined := make([]string, 0, len(agent.SkillsFilter)+len(opts.ForcedSkills))
 	combined = append(combined, agent.SkillsFilter...)
 	combined = append(combined, opts.ForcedSkills...)
@@ -379,9 +368,6 @@ func activeSkillNames(agent *AgentInstance, opts processOptions) []string {
 		resolved = append(resolved, name)
 	}
 
-	if turnProfileCustomSkills(opts.TurnProfile) {
-		return filterNamesByTurnProfile(resolved, opts.TurnProfile.AllowedSkills)
-	}
 	return resolved
 }
 
@@ -421,15 +407,6 @@ func hasMediaRefs(messages []providers.Message) bool {
 		}
 	}
 	return false
-}
-
-func sideQuestionModelName(agent *AgentInstance, usedLight bool) string {
-	if usedLight && len(agent.LightCandidates) > 0 {
-		if name := resolvedCandidateModelName(agent.LightCandidates, ""); name != "" {
-			return name
-		}
-	}
-	return agent.Model
 }
 
 func modelAliasFromCandidateIdentityKey(identityKey string) string {
@@ -548,17 +525,6 @@ func mapCommandError(result commands.ExecuteResult) string {
 	return fmt.Sprintf("Failed to execute /%s: %v", result.Command, result.Err)
 }
 
-func filterClientWebSearch(tools []providers.ToolDefinition) []providers.ToolDefinition {
-	result := make([]providers.ToolDefinition, 0, len(tools))
-	for _, t := range tools {
-		if strings.EqualFold(t.Function.Name, "web_search") {
-			continue
-		}
-		result = append(result, t)
-	}
-	return result
-}
-
 func extractProvider(registry *AgentRegistry) (providers.LLMProvider, bool) {
 	if registry == nil {
 		return nil, false
@@ -569,4 +535,15 @@ func extractProvider(registry *AgentRegistry) (providers.LLMProvider, bool) {
 		return nil, false
 	}
 	return defaultAgent.Provider, true
+}
+
+func cloneStringAnyMap(src map[string]any) map[string]any {
+	if src == nil {
+		return nil
+	}
+	clone := make(map[string]any, len(src))
+	for key, value := range src {
+		clone[key] = value
+	}
+	return clone
 }

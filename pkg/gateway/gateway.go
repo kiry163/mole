@@ -12,12 +12,9 @@ import (
 	"time"
 
 	"github.com/kiry163/mole/pkg/agent"
-	"github.com/kiry163/mole/pkg/approval"
 	"github.com/kiry163/mole/pkg/bus"
 	"github.com/kiry163/mole/pkg/channels"
-	_ "github.com/kiry163/mole/pkg/channels/feishu"
 	_ "github.com/kiry163/mole/pkg/channels/qq"
-	_ "github.com/kiry163/mole/pkg/channels/telegram"
 	_ "github.com/kiry163/mole/pkg/channels/webchat"
 	_ "github.com/kiry163/mole/pkg/channels/weixin"
 	"github.com/kiry163/mole/pkg/config"
@@ -90,9 +87,6 @@ type RuntimeEnv struct {
 	Config        *config.Config
 	Address       string // actual bind address (host:port)
 	RequestReload func()
-	// Approvals returns the process-wide approval store. It is a provider
-	// because the gateway hands it to the console at mount time.
-	Approvals func() *approval.Store
 }
 
 // mount hands the runtime environment to the configured mount function.
@@ -216,12 +210,6 @@ func Run(ctx context.Context, opts Options) (runErr error) {
 
 	msgBus := bus.NewMessageBus()
 	agentLoop := agent.NewAgentLoop(cfg, msgBus, provider)
-	// One approval store per process: the builtin approver waits on it and the
-	// console answers it. It must outlive config reloads, which remount hooks
-	// while a human may be looking at a pending request, so only the final
-	// shutdown closes it (never the reload path).
-	approvalStore := approval.NewStore()
-	agentLoop.SetApprovalStore(approvalStore)
 	msgBus.SetEventPublisher(agentLoop.RuntimeEventBus())
 	publishGatewayEvent(agentLoop, runtimeevents.KindGatewayStart, startedAt, nil)
 
@@ -232,7 +220,7 @@ func Run(ctx context.Context, opts Options) (runErr error) {
 
 	logger.InfoCF("agent", "Agent initialized", startupStatus.logFields)
 
-	runningServices, err := setupAndStartServices(cfg, agentLoop, msgBus, approvalStore, pidData.Token, listenResult, opts)
+	runningServices, err := setupAndStartServices(cfg, agentLoop, msgBus, pidData.Token, listenResult, opts)
 	if err != nil {
 		return err
 	}
@@ -265,11 +253,6 @@ func Run(ctx context.Context, opts Options) (runErr error) {
 		case <-ctx.Done():
 			logger.Info("Shutting down...")
 			shutdownGateway(runningServices, agentLoop, provider, msgBus, true)
-			// Close only here, never on the reload path: a reload remounts the
-			// hooks while a human may still be looking at a pending request, so
-			// the store and its waiters must survive it. The final shutdown is
-			// where every waiter gets resolved.
-			approvalStore.Close()
 			return nil
 		case newCfg := <-configReloadChan:
 			if !runningServices.reloading.CompareAndSwap(false, true) {
@@ -443,7 +426,6 @@ func setupAndStartServices(
 	cfg *config.Config,
 	agentLoop *agent.AgentLoop,
 	msgBus *bus.MessageBus,
-	approvalStore *approval.Store,
 	authToken string,
 	listenResult netbind.OpenResult,
 	opts Options,
@@ -513,7 +495,6 @@ func setupAndStartServices(
 		Config:        cfg,
 		Address:       listenAddr,
 		RequestReload: func() { _ = reloadTrigger() },
-		Approvals:     func() *approval.Store { return approvalStore },
 	}); err != nil {
 		return nil, fmt.Errorf("error mounting HTTP handlers: %w", err)
 	}

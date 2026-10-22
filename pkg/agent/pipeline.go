@@ -16,7 +16,6 @@ type Pipeline struct {
 	Bus            interfaces.MessageBus
 	Cfg            *config.Config
 	ContextManager *sessionContextManager
-	Hooks          *HookManager
 	Fallback       *providers.FallbackChain
 	MediaStore     media.MediaStore
 	al             *AgentLoop
@@ -28,7 +27,6 @@ func NewPipeline(al *AgentLoop) *Pipeline {
 		Bus:            al.bus,
 		Cfg:            al.GetConfig(),
 		ContextManager: al.contextManager,
-		Hooks:          al.hooks,
 		Fallback:       al.fallback,
 		MediaStore:     al.mediaStore,
 		al:             al,

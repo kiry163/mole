@@ -154,36 +154,36 @@ func TestSaveConfigPromotesChannelToken(t *testing.T) {
 	path := filepath.Join(dir, "config.json")
 	cfg := DefaultConfig()
 	cfg.ModelList = SecureModelList{}
-	telegram := cfg.Channels.Get("telegram")
-	if telegram == nil {
-		t.Fatal("DefaultConfig() missing telegram channel")
+	qq := cfg.Channels.Get("qq")
+	if qq == nil {
+		t.Fatal("DefaultConfig() missing qq channel")
 	}
-	if err := telegram.Decode(&TelegramSettings{Token: *NewSecureString("bot-secret")}); err != nil {
+	if err := qq.Decode(&QQSettings{AppSecret: *NewSecureString("bot-secret")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := SaveConfig(path, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
 	rawConfig, _ := os.ReadFile(path)
-	if !strings.Contains(string(rawConfig), `"$TELEGRAM_TOKEN"`) {
+	if !strings.Contains(string(rawConfig), `"$QQ_APPSECRET"`) {
 		t.Fatalf("config missing channel reference:\n%s", rawConfig)
 	}
 	if strings.Contains(string(rawConfig), "bot-secret") {
 		t.Fatalf("config leaked channel secret:\n%s", rawConfig)
 	}
 	rawEnv, _ := os.ReadFile(EnvFilePath(path))
-	if !strings.Contains(string(rawEnv), "TELEGRAM_TOKEN=bot-secret") {
+	if !strings.Contains(string(rawEnv), "QQ_APPSECRET=bot-secret") {
 		t.Fatalf(".env missing channel secret:\n%s", rawEnv)
 	}
 	reloaded, err := LoadConfig(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := reloaded.Channels.Get("telegram").GetDecoded()
+	decoded, err := reloaded.Channels.Get("qq").GetDecoded()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := decoded.(*TelegramSettings).Token.String(); got != "bot-secret" {
+	if got := decoded.(*QQSettings).AppSecret.String(); got != "bot-secret" {
 		t.Fatalf("reloaded token = %q", got)
 	}
 }
@@ -193,11 +193,11 @@ func TestSecurityCopyFromCopiesChannelToken(t *testing.T) {
 	path := filepath.Join(dir, "config.json")
 	existing := DefaultConfig()
 	existing.ModelList = SecureModelList{}
-	telegram := existing.Channels.Get("telegram")
-	if telegram == nil {
-		t.Fatal("DefaultConfig() missing telegram channel")
+	qq := existing.Channels.Get("qq")
+	if qq == nil {
+		t.Fatal("DefaultConfig() missing qq channel")
 	}
-	if err := telegram.Decode(&TelegramSettings{Token: *NewSecureString("bot-secret")}); err != nil {
+	if err := qq.Decode(&QQSettings{AppSecret: *NewSecureString("bot-secret")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := SaveConfig(path, existing); err != nil {
@@ -208,20 +208,20 @@ func TestSecurityCopyFromCopiesChannelToken(t *testing.T) {
 	fresh := DefaultConfig()
 	fresh.ModelList = SecureModelList{}
 	fresh.Channels = ChannelsConfig{
-		"telegram": {
+		"qq": {
 			Enabled:  true,
-			Type:     ChannelTelegram,
-			Settings: mustParseRawNode(`{"base_url":"https://api.telegram.org"}`),
+			Type:     ChannelQQ,
+			Settings: mustParseRawNode(`{"app_id":"123"}`),
 		},
 	}
 	if err := fresh.SecurityCopyFrom(path); err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := fresh.Channels.Get("telegram").GetDecoded()
+	decoded, err := fresh.Channels.Get("qq").GetDecoded()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := decoded.(*TelegramSettings).Token.String(); got != "bot-secret" {
+	if got := decoded.(*QQSettings).AppSecret.String(); got != "bot-secret" {
 		t.Fatalf("copied channel token = %q, want bot-secret", got)
 	}
 }

@@ -10,7 +10,7 @@ func (al *AgentLoop) publishRuntimeEvent(evt runtimeevents.Event) {
 	al.runtimeEvents.PublishNonBlocking(evt)
 }
 
-func runtimeScopeFromHookMeta(meta HookMeta, eventCtx *TurnContext) runtimeevents.Scope {
+func runtimeScopeFromEventMeta(meta EventMeta, eventCtx *TurnContext) runtimeevents.Scope {
 	scope := runtimeevents.Scope{
 		AgentID:    meta.AgentID,
 		SessionKey: meta.SessionKey,
@@ -34,7 +34,7 @@ func runtimeScopeFromHookMeta(meta HookMeta, eventCtx *TurnContext) runtimeevent
 	return scope
 }
 
-func runtimeCorrelationFromHookMeta(meta HookMeta) runtimeevents.Correlation {
+func runtimeCorrelationFromEventMeta(meta EventMeta) runtimeevents.Correlation {
 	return runtimeevents.Correlation{
 		TraceID:      meta.TracePath,
 		ParentTurnID: meta.ParentTurnID,
@@ -43,7 +43,7 @@ func runtimeCorrelationFromHookMeta(meta HookMeta) runtimeevents.Correlation {
 
 func runtimeSeverityForAgentEvent(kind runtimeevents.Kind, payload any) runtimeevents.Severity {
 	switch kind {
-	case runtimeevents.KindAgentError, runtimeevents.KindAgentSubTurnOrphan:
+	case runtimeevents.KindAgentError:
 		return runtimeevents.SeverityError
 	case runtimeevents.KindAgentLLMRetry,
 		runtimeevents.KindAgentContextCompress,
@@ -73,7 +73,7 @@ func runtimeSeverityForAgentEvent(kind runtimeevents.Kind, payload any) runtimee
 	}
 }
 
-func runtimeAttrsFromHookMeta(meta HookMeta) map[string]any {
+func runtimeAttrsFromEventMeta(meta EventMeta) map[string]any {
 	attrs := make(map[string]any, 2)
 	if meta.Source != "" {
 		attrs["agent_source"] = meta.Source

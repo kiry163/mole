@@ -1,7 +1,6 @@
 import {
   IconFileCode,
   IconSparkles,
-  IconWorld,
   IconX,
 } from "@tabler/icons-react"
 import type { ReactNode } from "react"
@@ -27,8 +26,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
-import { OriginBadge } from "./origin-badge"
-import { getOriginLabel, getSkillOriginKind } from "./origin-utils"
 import type { SkillDetailView } from "./types"
 
 const DETAIL_VIEWS = [
@@ -61,9 +58,6 @@ export function DetailSheet({
   const { t } = useTranslation()
 
   const activeSkillDetail = selectedSkillDetail ?? selectedSkill
-  const activeSkillOrigin = activeSkillDetail
-    ? getSkillOriginKind(activeSkillDetail)
-    : null
   const detailLineCount = selectedSkillDetail
     ? selectedSkillDetail.content.split("\n").length
     : 0
@@ -80,8 +74,6 @@ export function DetailSheet({
             <div className="bg-primary/10 string-1 ring-primary/20 text-primary flex size-10 items-center justify-center rounded-xl">
               {activeSkillDetail?.origin_kind === "builtin" ? (
                 <IconSparkles className="size-5" />
-              ) : activeSkillDetail?.registry_name ? (
-                <IconWorld className="size-5" />
               ) : (
                 <IconFileCode className="size-5" />
               )}
@@ -115,48 +107,6 @@ export function DetailSheet({
             </div>
           ) : selectedSkillDetail ? (
             <div className="space-y-6">
-              {activeSkillOrigin === "third_party" ? (
-                <div className="border-border/40 bg-card/40 space-y-4 rounded-xl border p-4 shadow-sm">
-                  <div className="flex flex-wrap items-center gap-2 px-1">
-                    <OriginBadge
-                      origin={activeSkillOrigin}
-                      label={getOriginLabel(activeSkillOrigin, t)}
-                    />
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {selectedSkillDetail.registry_name ? (
-                      <MetadataItem
-                        label={t("pages.agent.skills.metadata.registry")}
-                        value={selectedSkillDetail.registry_name}
-                      />
-                    ) : null}
-                    {selectedSkillDetail.installed_version ? (
-                      <MetadataItem
-                        label={t("pages.agent.skills.metadata.version")}
-                        value={selectedSkillDetail.installed_version}
-                      />
-                    ) : null}
-                    {selectedSkillDetail.registry_url ? (
-                      <MetadataItem
-                        label={t("pages.agent.skills.metadata.url")}
-                        value={
-                          <a
-                            href={selectedSkillDetail.registry_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary hover:text-primary/80 inline break-all underline-offset-4 hover:underline"
-                          >
-                            {selectedSkillDetail.registry_url}
-                          </a>
-                        }
-                        mono
-                      />
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-
               <div className="border-border/70 bg-muted/20 inline-flex rounded-lg border p-1 shadow-sm">
                 {DETAIL_VIEWS.map((view) => (
                   <button

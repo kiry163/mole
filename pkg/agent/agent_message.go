@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/kiry163/mole/pkg/bus"
-	"github.com/kiry163/mole/pkg/constants"
 	"github.com/kiry163/mole/pkg/logger"
 	"github.com/kiry163/mole/pkg/routing"
 	"github.com/kiry163/mole/pkg/session"
@@ -16,10 +15,6 @@ import (
 )
 
 func (al *AgentLoop) buildContinuationTarget(msg bus.InboundMessage) (*continuationTarget, error) {
-	if msg.Channel == "system" {
-		return nil, nil
-	}
-
 	route, _, err := al.resolveMessageRoute(msg)
 	if err != nil {
 		return nil, err
@@ -63,11 +58,6 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		},
 	)
 
-	// Route system messages to processSystemMessage
-	if msg.Channel == "system" {
-		return al.processSystemMessage(ctx, msg)
-	}
-
 	route, agent, routeErr := al.resolveMessageRoute(msg)
 	if routeErr != nil {
 		return "", routeErr
@@ -92,8 +82,6 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 			"agent_id":           agent.ID,
 			"scope_key":          scopeKey,
 			"session_key":        sessionKey,
-			"matched_by":         route.MatchedBy,
-			"route_agent":        route.AgentID,
 			"route_channel":      route.Channel,
 			"route_main_session": allocation.MainSessionKey,
 		})
@@ -113,11 +101,6 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		EnableSummary:              true,
 		SendResponse:               false,
 		AllowInterimWebChatPublish: true,
-	}
-	var err error
-	opts, err = resolveTurnProfileOptions(al.GetConfig(), opts)
-	if err != nil {
-		return "", err
 	}
 
 	// context-dependent commands check their own Runtime fields and report
@@ -143,12 +126,9 @@ func (al *AgentLoop) resolveMessageRoute(msg bus.InboundMessage) (routing.Resolv
 	inboundCtx := normalizedInboundContext(msg)
 	route := registry.ResolveRoute(inboundCtx)
 
-	agent, ok := registry.GetAgent(route.AgentID)
-	if !ok {
-		agent = registry.GetDefaultAgent()
-	}
+	agent := registry.GetDefaultAgent()
 	if agent == nil {
-		return routing.ResolvedRoute{}, nil, fmt.Errorf("no agent available for route (agent_id=%s)", route.AgentID)
+		return routing.ResolvedRoute{}, nil, fmt.Errorf("no agent available")
 	}
 
 	return route, agent, nil
@@ -156,82 +136,8 @@ func (al *AgentLoop) resolveMessageRoute(msg bus.InboundMessage) (routing.Resolv
 
 func (al *AgentLoop) allocateRouteSession(route routing.ResolvedRoute, msg bus.InboundMessage) session.Allocation {
 	return session.AllocateRouteSession(session.AllocationInput{
-		AgentID:       route.AgentID,
+		AgentID:       routing.DefaultAgentID,
 		Context:       normalizedInboundContext(msg),
 		SessionPolicy: route.SessionPolicy,
-	})
-}
-
-func (al *AgentLoop) processSystemMessage(
-	ctx context.Context,
-	msg bus.InboundMessage,
-) (string, error) {
-	if msg.Channel != "system" {
-		return "", fmt.Errorf(
-			"processSystemMessage called with non-system message channel: %s",
-			msg.Channel,
-		)
-	}
-
-	logger.InfoCF("agent", "Processing system message",
-		map[string]any{
-			"sender_id": msg.SenderID,
-			"chat_id":   msg.ChatID,
-		})
-
-	// Parse origin channel from chat_id (format: "channel:chat_id")
-	var originChannel, originChatID string
-	if idx := strings.Index(msg.ChatID, ":"); idx > 0 {
-		originChannel = msg.ChatID[:idx]
-		originChatID = msg.ChatID[idx+1:]
-	} else {
-		originChannel = "cli"
-		originChatID = msg.ChatID
-	}
-
-	// Extract subagent result from message content
-	// Format: "Task 'label' completed.\n\nResult:\n<actual content>"
-	content := msg.Content
-	if idx := strings.Index(content, "Result:\n"); idx >= 0 {
-		content = content[idx+8:] // Extract just the result part
-	}
-
-	// Skip internal channels - only log, don't send to user
-	if constants.IsInternalChannel(originChannel) {
-		logger.InfoCF("agent", "Subagent completed (internal channel)",
-			map[string]any{
-				"sender_id":   msg.SenderID,
-				"content_len": len(content),
-				"channel":     originChannel,
-			})
-		return "", nil
-	}
-
-	// Use default agent for system messages
-	agent := al.GetRegistry().GetDefaultAgent()
-	if agent == nil {
-		return "", fmt.Errorf("no default agent for system message")
-	}
-
-	// Use the origin session for context
-	sessionKey := session.BuildMainSessionKey(agent.ID)
-	dispatch := DispatchRequest{
-		SessionKey:  sessionKey,
-		UserMessage: fmt.Sprintf("[System: %s] %s", msg.SenderID, msg.Content),
-	}
-	if originChannel != "" || originChatID != "" {
-		dispatch.InboundContext = &bus.InboundContext{
-			Channel:  originChannel,
-			ChatID:   originChatID,
-			ChatType: "direct",
-			SenderID: msg.SenderID,
-		}
-	}
-
-	return al.runAgentLoop(ctx, agent, processOptions{
-		Dispatch:        dispatch,
-		DefaultResponse: "Background task completed.",
-		EnableSummary:   false,
-		SendResponse:    true,
 	})
 }

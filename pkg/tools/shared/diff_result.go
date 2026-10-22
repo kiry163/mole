@@ -53,7 +53,6 @@ func DiffResult(path string, before, after []byte) *ToolResult {
 		ForUser: userContent,
 		Silent:  false,
 		IsError: false,
-		Async:   false,
 	}
 }
 

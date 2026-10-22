@@ -199,16 +199,6 @@ func TestInitChannelList_RejectsNegativeStreamingDeliveryValues(t *testing.T) {
 			channelType: ChannelWebChat,
 			settings:    `{"token":"webchat-token","streaming":{"enabled":true,"min_growth_chars":-1}}`,
 		},
-		{
-			name:        "telegram throttle",
-			channelType: ChannelTelegram,
-			settings:    `{"token":"telegram-token","streaming":{"enabled":true,"throttle_seconds":-1}}`,
-		},
-		{
-			name:        "telegram growth",
-			channelType: ChannelTelegram,
-			settings:    `{"token":"telegram-token","streaming":{"enabled":true,"min_growth_chars":-1}}`,
-		},
 	}
 
 	for _, tt := range tests {
@@ -238,7 +228,7 @@ func TestInitChannelList_RejectsNegativeStreamingDeliveryValues(t *testing.T) {
 func TestChannel_JSON_Marshal_KeepsSecureValues(t *testing.T) {
 	ch := Channel{
 		Enabled: true,
-		Type:    ChannelTelegram,
+		Type:    "telegram",
 		name:    "my_telegram",
 		Settings: mustParseRawNode(
 			`{"base_url": "https://api.telegram.org", "proxy": "socks5://127.0.0.1:1080", "token": "123456:SECRET"}`,

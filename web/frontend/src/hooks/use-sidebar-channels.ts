@@ -1,7 +1,6 @@
 import {
   IconBrandChrome,
   IconBrandQq,
-  IconBrandTelegram,
   IconBrandWechat,
   IconPlug,
 } from "@tabler/icons-react"
@@ -19,34 +18,12 @@ import { getChannelDisplayName } from "@/components/channels/channel-display-nam
 import { gatewayAtom } from "@/store/gateway"
 
 const DEFAULT_VISIBLE_CHANNELS = 4
-const CHANNEL_IMPORTANCE_TAIL = ["qq", "webchat"]
-
-function getChannelImportanceOrder(language: string): string[] {
-  const priority = language.startsWith("zh")
-    ? ["feishu", "weixin", "telegram"]
-    : ["telegram", "feishu", "weixin"]
-  return [...priority, ...CHANNEL_IMPORTANCE_TAIL]
-}
-
-function IconLark({ className }: { className?: string }) {
-  return React.createElement("span", {
-    className,
-    "aria-hidden": "true",
-    style: {
-      display: "inline-block",
-      backgroundColor: "currentColor",
-      mask: "url(/lark.svg) center / contain no-repeat",
-      WebkitMask: "url(/lark.svg) center / contain no-repeat",
-    } as React.CSSProperties,
-  })
-}
+const CHANNEL_IMPORTANCE = ["qq", "weixin", "webchat"]
 
 const CHANNEL_ICON_MAP: Record<
   string,
   React.ComponentType<{ className?: string }>
 > = {
-  telegram: IconBrandTelegram,
-  feishu: IconLark,
   qq: IconBrandQq,
   weixin: IconBrandWechat,
   webchat: IconBrandChrome,
@@ -80,11 +57,10 @@ export interface SidebarChannelNavItem {
 }
 
 interface UseSidebarChannelsOptions {
-  language: string
   t: TFunction
 }
 
-export function useSidebarChannels({ language, t }: UseSidebarChannelsOptions) {
+export function useSidebarChannels({ t }: UseSidebarChannelsOptions) {
   const gateway = useAtomValue(gatewayAtom)
   const [channels, setChannels] = React.useState<SupportedChannel[]>([])
   const [enabledMap, setEnabledMap] = React.useState<Record<string, boolean>>(
@@ -132,9 +108,9 @@ export function useSidebarChannels({ language, t }: UseSidebarChannelsOptions) {
 
   const channelImportanceIndex = React.useMemo(() => {
     return new Map(
-      getChannelImportanceOrder(language).map((name, index) => [name, index]),
+      CHANNEL_IMPORTANCE.map((name, index) => [name, index]),
     )
-  }, [language])
+  }, [])
 
   const sortedChannels = React.useMemo(() => {
     const list = [...channels]

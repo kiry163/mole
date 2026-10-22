@@ -22,10 +22,8 @@ import {
   isSecretField,
 } from "@/components/channels/channel-config-fields"
 import { getChannelDisplayName } from "@/components/channels/channel-display-name"
-import { FeishuForm } from "@/components/channels/channel-forms/feishu-form"
 import { GenericForm } from "@/components/channels/channel-forms/generic-form"
 import { QqForm } from "@/components/channels/channel-forms/qq-form"
-import { TelegramForm } from "@/components/channels/channel-forms/telegram-form"
 import { WeixinForm } from "@/components/channels/channel-forms/weixin-form"
 import { ConfigChangeNotice } from "@/components/config-change-notice"
 import { PageHeader } from "@/components/page-header"
@@ -156,10 +154,6 @@ function isConfigured(
     )
 
   switch (channel.name) {
-    case "telegram":
-      return hasValue("token")
-    case "feishu":
-      return hasValue("app_id") && hasValue("app_secret")
     case "qq":
       return hasValue("app_id") && hasValue("app_secret")
     case "weixin":
@@ -173,10 +167,6 @@ function isConfigured(
 
 function getRequiredFieldKeys(channelName: string): string[] {
   switch (channelName) {
-    case "telegram":
-      return ["token"]
-    case "feishu":
-      return ["app_id", "app_secret"]
     case "qq":
       return ["app_id", "app_secret"]
     case "webchat":
@@ -447,28 +437,6 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
       case "qq":
         return (
           <QqForm
-            config={editConfig}
-            onChange={handleChange}
-            configuredSecrets={configuredSecrets}
-            fieldErrors={fieldErrors}
-            registerArrayFieldFlusher={registerArrayFieldFlusher}
-            arrayFieldResetVersion={arrayFieldResetVersion}
-          />
-        )
-      case "telegram":
-        return (
-          <TelegramForm
-            config={editConfig}
-            onChange={handleChange}
-            configuredSecrets={configuredSecrets}
-            fieldErrors={fieldErrors}
-            registerArrayFieldFlusher={registerArrayFieldFlusher}
-            arrayFieldResetVersion={arrayFieldResetVersion}
-          />
-        )
-      case "feishu":
-        return (
-          <FeishuForm
             config={editConfig}
             onChange={handleChange}
             configuredSecrets={configuredSecrets}

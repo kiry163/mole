@@ -10,7 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 
 import type { WebSearchDraftUpdater } from "./types"
 
@@ -82,28 +81,6 @@ export function WebSearchGeneralSettings({
               }))
             }
             placeholder="http://127.0.0.1:7890"
-          />
-        </SettingRow>
-
-        <SettingRow
-          label={t(
-            "pages.agent.tools.web_search.prefer_native",
-            "Prefer Native Search",
-          )}
-          description={t(
-            "pages.agent.tools.web_search.prefer_native_hint",
-            "When enabled, the model may use its built-in search capability instead of the configured provider list.",
-          )}
-        >
-          <Switch
-            checked={draft.prefer_native}
-            onCheckedChange={(checked) =>
-              onUpdateDraft((current) => ({
-                ...current,
-                prefer_native: checked,
-              }))
-            }
-            className="data-[state=checked]:shadow-xs"
           />
         </SettingRow>
       </div>

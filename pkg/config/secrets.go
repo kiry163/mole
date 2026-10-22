@@ -229,21 +229,6 @@ func secretEnvName(cfg *Config, path []string, index int) string {
 		field := path[len(path)-1]
 		return cleanEnvName(path[1] + "_" + field)
 	}
-	if len(path) >= 5 && path[0] == "Tools" && path[1] == "Skills" && path[2] == "Registries" {
-		i, _ := strconv.Atoi(path[3])
-		registry := "SKILLS_REGISTRY"
-		if i >= 0 && i < len(cfg.Tools.Skills.Registries) && cfg.Tools.Skills.Registries[i] != nil {
-			registry = cfg.Tools.Skills.Registries[i].Name
-		}
-		switch strings.ToLower(registry) {
-		case "github":
-			return "GITHUB_TOKEN"
-		case "clawhub":
-			return "CLAWHUB_TOKEN"
-		default:
-			return cleanEnvName(registry) + "_AUTH_TOKEN"
-		}
-	}
 	if len(path) >= 3 && path[0] == "ModelList" && path[2] == "APIKeys" {
 		i, _ := strconv.Atoi(path[1])
 		name := "MODEL"

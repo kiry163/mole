@@ -3,8 +3,6 @@ package toolshared
 import (
 	"encoding/json"
 	"strings"
-
-	"github.com/kiry163/mole/pkg/providers"
 )
 
 const (
@@ -33,10 +31,6 @@ type ToolResult struct {
 	// When true, the result should be treated as an error.
 	IsError bool `json:"is_error"`
 
-	// Async indicates whether the tool is running asynchronously.
-	// When true, the tool will complete later and notify via callback.
-	Async bool `json:"async"`
-
 	// Err is the underlying error (not JSON serialized).
 	// Used for internal error handling and logging.
 	Err error `json:"-"`
@@ -44,11 +38,6 @@ type ToolResult struct {
 	// Media contains media store refs produced by this tool.
 	// When non-empty, the agent will publish these as OutboundMediaMessage.
 	Media []string `json:"media,omitempty"`
-
-	// Messages holds the ephemeral session history after execution.
-	// Only populated by SubTurn executions; used by evaluator_optimizer
-	// to carry stateful worker context across evaluation iterations.
-	Messages []providers.Message `json:"-"`
 
 	// ArtifactTags exposes local artifact paths back to the LLM in a structured
 	// form, e.g. "[file:/tmp/example.png]". This is used when a tool produced a
@@ -121,27 +110,6 @@ func SilentResult(forLLM string) *ToolResult {
 		ForLLM:  forLLM,
 		Silent:  true,
 		IsError: false,
-		Async:   false,
-	}
-}
-
-// AsyncResult creates a ToolResult for async operations.
-// The task will run in the background and complete later.
-//
-// Use this for long-running operations like:
-// - Subagent spawns
-// - Background processing
-// - External API calls with callbacks
-//
-// Example:
-//
-//	result := AsyncResult("Subagent spawned, will report back")
-func AsyncResult(forLLM string) *ToolResult {
-	return &ToolResult{
-		ForLLM:  forLLM,
-		Silent:  false,
-		IsError: false,
-		Async:   true,
 	}
 }
 
@@ -156,7 +124,6 @@ func ErrorResult(message string) *ToolResult {
 		ForLLM:  message,
 		Silent:  false,
 		IsError: true,
-		Async:   false,
 	}
 }
 
@@ -177,7 +144,6 @@ func UserResult(content string) *ToolResult {
 		ForUser: content,
 		Silent:  false,
 		IsError: false,
-		Async:   false,
 	}
 }
 

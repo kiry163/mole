@@ -51,23 +51,6 @@
     }
   ],
   "channel_list": {
-    "telegram": {
-      "enabled": false,
-      "type": "telegram",
-      "allow_from": [
-        "YOUR_USER_ID"
-      ],
-      "reasoning_channel_id": "",
-      "settings": {
-        "token": "$TELEGRAM_TOKEN",
-        "base_url": "",
-        "proxy": "",
-        "use_markdown_v2": false,
-        "streaming": {
-          "enabled": true
-        }
-      }
-    },
     "qq": {
       "enabled": false,
       "type": "qq",
@@ -76,28 +59,6 @@
       "settings": {
         "app_id": "YOUR_QQ_APP_ID",
         "app_secret": "YOUR_QQ_APP_SECRET"
-      }
-    },
-    "feishu": {
-      "enabled": false,
-      "type": "feishu",
-      "allow_from": [],
-      "reasoning_channel_id": "",
-      "placeholder": {
-        "enabled": true,
-        "text": [
-          "Thinking...",
-          "Processing...",
-          "Typing..."
-        ]
-      },
-      "settings": {
-        "app_id": "",
-        "app_secret": "",
-        "encrypt_key": "",
-        "verification_token": "",
-        "random_reaction_emoji": [],
-        "is_lark": false
       }
     },
     "weixin": {
@@ -129,22 +90,8 @@
   "tools": {
     "allow_read_paths": null,
     "allow_write_paths": null,
-    "approval": {
-      "rules": [
-        {
-          "category": "write",
-          "action": "require"
-        },
-        {
-          "tool": "exec",
-          "action": "require"
-        }
-      ],
-      "always_allow": []
-    },
     "web": {
       "enabled": true,
-      "prefer_native": true,
       "format": "plaintext",
       "provider": "auto",
       "tavily": {
@@ -240,33 +187,6 @@
       "custom_deny_patterns": null,
       "custom_allow_patterns": null
     },
-    "skills": {
-      "enabled": true,
-      "registries": {
-        "clawhub": {
-          "enabled": true,
-          "base_url": "https://clawhub.ai",
-          "auth_token": "",
-          "search_path": "",
-          "skills_path": "",
-          "download_path": "",
-          "timeout": 0,
-          "max_zip_size": 0,
-          "max_response_size": 0
-        },
-        "github": {
-          "enabled": true,
-          "base_url": "https://github.com",
-          "auth_token": "",
-          "proxy": "http://127.0.0.1:7891"
-        }
-      },
-      "max_concurrent_searches": 2,
-      "search_cache": {
-        "max_size": 50,
-        "ttl_seconds": 300
-      }
-    },
     "media_cleanup": {
       "enabled": true,
       "max_age_minutes": 30,
@@ -276,12 +196,6 @@
       "enabled": true
     },
     "edit_file": {
-      "enabled": true
-    },
-    "find_skills": {
-      "enabled": true
-    },
-    "install_skill": {
       "enabled": true
     },
     "list_dir": {
@@ -294,30 +208,11 @@
       "enabled": true,
       "mode": "bytes"
     },
-    "spawn": {
-      "enabled": true
-    },
-    "subagent": {
-      "enabled": true
-    },
     "web_fetch": {
       "enabled": true
     },
     "write_file": {
       "enabled": true
-    }
-  },
-  "hooks": {
-    "enabled": true,
-    "defaults": {
-      "observer_timeout_ms": 500,
-      "interceptor_timeout_ms": 5000,
-      "approval_timeout_ms": 60000
-    },
-    "builtins": {
-      "webui_approval": {
-        "enabled": true
-      }
     }
   },
   "events": {

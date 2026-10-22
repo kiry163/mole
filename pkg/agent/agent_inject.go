@@ -28,11 +28,8 @@ func (al *AgentLoop) SetMediaStore(s media.MediaStore) {
 	al.mediaStore = s
 
 	// Propagate store to all registered tools that can emit media.
-	registry := al.GetRegistry()
-	for _, agentID := range registry.ListAgentIDs() {
-		if agent, ok := registry.GetAgent(agentID); ok {
-			agent.Tools.SetMediaStore(s)
-		}
+	if agent := al.GetRegistry().GetDefaultAgent(); agent != nil {
+		agent.Tools.SetMediaStore(s)
 	}
 }
 

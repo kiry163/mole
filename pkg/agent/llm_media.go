@@ -134,10 +134,6 @@ func (p *Pipeline) routeMediaTurn(ts *turnState, exec *turnExecution) error {
 		targetCandidates = append([]providers.FallbackCandidate(nil), ts.agent.ImageCandidates...)
 		targetModelName = strings.TrimSpace(p.Cfg.Agents.Defaults.ImageModel)
 		routeReason = "configured_image_model"
-	case exec.usedLight && len(ts.agent.Candidates) > 0:
-		targetCandidates = append([]providers.FallbackCandidate(nil), ts.agent.Candidates...)
-		targetModelName = strings.TrimSpace(ts.agent.Model)
-		routeReason = "bypass_light_model_for_media"
 	default:
 		return nil
 	}
@@ -176,7 +172,6 @@ func (p *Pipeline) routeMediaTurn(ts *turnState, exec *turnExecution) error {
 		targetModel,
 	)
 	exec.llmModelName = resolvedModelName
-	exec.usedLight = false
 
 	logger.InfoCF("agent", "Media turn routing selected model", map[string]any{
 		"agent_id":       ts.agent.ID,

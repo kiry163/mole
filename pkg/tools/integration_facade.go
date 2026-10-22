@@ -4,7 +4,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/kiry163/mole/pkg/config"
-	"github.com/kiry163/mole/pkg/skills"
 	integrationtools "github.com/kiry163/mole/pkg/tools/integration"
 )
 
@@ -13,8 +12,6 @@ type (
 	ReactionCallback        = integrationtools.ReactionCallback
 	MCPManager              = integrationtools.MCPManager
 	MCPTool                 = integrationtools.MCPTool
-	FindSkillsTool          = integrationtools.FindSkillsTool
-	InstallSkillTool        = integrationtools.InstallSkillTool
 	MessageTool             = integrationtools.MessageTool
 	ReactionTool            = integrationtools.ReactionTool
 	APIKeyPool              = integrationtools.APIKeyPool
@@ -30,14 +27,6 @@ type (
 
 func NewMCPTool(manager MCPManager, serverName string, tool *mcp.Tool) *MCPTool {
 	return integrationtools.NewMCPTool(manager, serverName, tool)
-}
-
-func NewFindSkillsTool(registryMgr *skills.RegistryManager, cache *skills.SearchCache) *FindSkillsTool {
-	return integrationtools.NewFindSkillsTool(registryMgr, cache)
-}
-
-func NewInstallSkillTool(registryMgr *skills.RegistryManager, workspace string) *InstallSkillTool {
-	return integrationtools.NewInstallSkillTool(registryMgr, workspace)
 }
 
 func NewMessageTool() *MessageTool {

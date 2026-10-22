@@ -91,13 +91,3 @@ func findRuntimeEvent(
 	}
 	return runtimeevents.Event{}, false
 }
-
-func filterRuntimeEvents(events []runtimeevents.Event, kind runtimeevents.Kind) []runtimeevents.Event {
-	var filtered []runtimeevents.Event
-	for _, evt := range events {
-		if evt.Kind == kind {
-			filtered = append(filtered, evt)
-		}
-	}
-	return filtered
-}

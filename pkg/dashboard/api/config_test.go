@@ -14,130 +14,6 @@ import (
 	"github.com/kiry163/mole/pkg/logger"
 )
 
-func TestHandlePatchConfig_PreservesTurnProfile(t *testing.T) {
-	configPath, cleanup := setupTestEnv(t)
-	defer cleanup()
-
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	cfg.Agents.Defaults.TurnProfile = config.TurnProfileConfig{
-		Enabled:      true,
-		History:      config.TurnProfileBlock{Mode: config.TurnProfileModeOff},
-		SystemPrompt: config.TurnProfileBlock{Mode: config.TurnProfileModeOff},
-		Skills:       config.TurnProfileBlock{Mode: config.TurnProfileModeOff},
-		Tools: config.TurnProfileBlock{
-			Mode:  config.TurnProfileModeCustom,
-			Allow: []string{"web_search", "web_fetch"},
-		},
-	}
-	if saveErr := config.SaveConfig(configPath, cfg); saveErr != nil {
-		t.Fatalf("SaveConfig() error = %v", saveErr)
-	}
-
-	h := NewHandler(configPath)
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-
-	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
-		"agents": {
-			"defaults": {
-				"max_tokens": 1234
-			}
-		}
-	}`))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-
-	updated, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig(updated) error = %v", err)
-	}
-	profile := updated.Agents.Defaults.TurnProfile
-	if profile.Tools.Mode != config.TurnProfileModeCustom ||
-		strings.Join(profile.Tools.Allow, ",") != "web_search,web_fetch" {
-		t.Fatalf("profile tools = %#v, want custom web_search/web_fetch", profile.Tools)
-	}
-}
-
-func TestHandlePatchConfig_RejectsInvalidTurnProfile(t *testing.T) {
-	configPath, cleanup := setupTestEnv(t)
-	defer cleanup()
-
-	h := NewHandler(configPath)
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-
-	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
-		"agents": {
-			"defaults": {
-				"turn_profile": {
-					"enabled": true,
-					"history": { "mode": "custom" }
-				}
-			}
-		}
-	}`))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf(
-			"status = %d, want %d, body=%s",
-			rec.Code,
-			http.StatusBadRequest,
-			rec.Body.String(),
-		)
-	}
-	if !strings.Contains(rec.Body.String(), "history.mode custom is not supported") {
-		t.Fatalf("body=%s, want turn profile validation error", rec.Body.String())
-	}
-
-	if _, err := config.LoadConfig(configPath); err != nil {
-		t.Fatalf("LoadConfig() after rejected patch error = %v", err)
-	}
-}
-
-func assertGatewayLogLevelApplied(t *testing.T, method, body string, want logger.LogLevel) {
-	t.Helper()
-
-	configPath, cleanup := setupTestEnv(t)
-	defer cleanup()
-
-	initialLevel := logger.GetLevel()
-	logger.SetLevel(logger.INFO)
-	t.Cleanup(func() {
-		logger.SetLevel(initialLevel)
-	})
-
-	h := NewHandler(configPath)
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-
-	req := httptest.NewRequest(method, "/api/config", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf(
-			"%s /api/config status = %d, want %d, body=%s",
-			method,
-			rec.Code,
-			http.StatusOK,
-			rec.Body.String(),
-		)
-	}
-	if got := logger.GetLevel(); got != want {
-		t.Fatalf("logger.GetLevel() = %v, want %v", got, want)
-	}
-}
-
 func TestHandleUpdateConfig_PreservesExecAllowRemoteDefaultWhenOmitted(t *testing.T) {
 	configPath, cleanup := setupTestEnv(t)
 	defer cleanup()
@@ -288,13 +164,12 @@ func TestHandlePatchConfig_SavesChannelListSettingsPatch(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
 		"channel_list": {
-			"feishu": {
+			"qq": {
 				"enabled": true,
 				"allow_from": ["ou_patch_user"],
 				"settings": {
 					"app_id": "cli_patch_app",
-					"app_secret": "patch-secret",
-					"is_lark": true
+					"app_secret": "patch-secret"
 				}
 			}
 		}
@@ -316,7 +191,7 @@ func TestHandlePatchConfig_SavesChannelListSettingsPatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	bc := cfg.Channels[config.ChannelFeishu]
+	bc := cfg.Channels[config.ChannelQQ]
 	if !bc.Enabled {
 		t.Fatal("feishu should be enabled after PATCH")
 	}
@@ -327,15 +202,12 @@ func TestHandlePatchConfig_SavesChannelListSettingsPatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	feishuCfg := decoded.(*config.FeishuSettings)
+	feishuCfg := decoded.(*config.QQSettings)
 	if got := feishuCfg.AppID; got != "cli_patch_app" {
 		t.Fatalf("feishu app_id = %q, want %q", got, "cli_patch_app")
 	}
 	if got := feishuCfg.AppSecret.String(); got != "patch-secret" {
 		t.Fatalf("feishu app_secret = %q, want %q", got, "patch-secret")
-	}
-	if !feishuCfg.IsLark {
-		t.Fatal("feishu is_lark should be true after PATCH")
 	}
 }
 
@@ -357,12 +229,6 @@ func TestHandlePatchConfig_NormalizesStringChannelArrayFields(t *testing.T) {
 				},
 				"settings": {
 					"allow_origins": "https://a.example.com，http://localhost:5173，https://a.example.com"
-				}
-			},
-			"feishu": {
-				"type": "feishu",
-				"settings": {
-					"random_reaction_emoji": "THUMBSUP，OK\tEYES，THUMBSUP"
 				}
 			}
 		}
@@ -418,22 +284,6 @@ func TestHandlePatchConfig_NormalizesStringChannelArrayFields(t *testing.T) {
 			webchatCfg.AllowOrigins,
 		)
 	}
-
-	feishuChannel := cfg.Channels[config.ChannelFeishu]
-	decoded, err = feishuChannel.GetDecoded()
-	if err != nil {
-		t.Fatalf("GetDecoded() feishu error = %v", err)
-	}
-	feishuCfg := decoded.(*config.FeishuSettings)
-	if len(feishuCfg.RandomReactionEmoji) != 3 ||
-		feishuCfg.RandomReactionEmoji[0] != "THUMBSUP" ||
-		feishuCfg.RandomReactionEmoji[1] != "OK" ||
-		feishuCfg.RandomReactionEmoji[2] != "EYES" {
-		t.Fatalf(
-			"feishu random_reaction_emoji = %#v, want [\"THUMBSUP\", \"OK\", \"EYES\"]",
-			feishuCfg.RandomReactionEmoji,
-		)
-	}
 }
 
 func TestHandlePatchConfig_NormalizesSingleNumericAllowFrom(t *testing.T) {
@@ -446,8 +296,8 @@ func TestHandlePatchConfig_NormalizesSingleNumericAllowFrom(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
 		"channel_list": {
-			"telegram": {
-				"type": "telegram",
+			"weixin": {
+				"type": "weixin",
 				"allow_from": 123456
 			}
 		}
@@ -469,7 +319,7 @@ func TestHandlePatchConfig_NormalizesSingleNumericAllowFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	telegramChannel := cfg.Channels[config.ChannelTelegram]
+	telegramChannel := cfg.Channels[config.ChannelWeixin]
 	if len(telegramChannel.AllowFrom) != 1 || telegramChannel.AllowFrom[0] != "123456" {
 		t.Fatalf("telegram allow_from = %#v, want [\"123456\"]", telegramChannel.AllowFrom)
 	}
@@ -483,7 +333,7 @@ func TestHandlePatchConfig_RejectsInvalidChannelArrayFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	telegramChannel := cfg.Channels[config.ChannelTelegram]
+	telegramChannel := cfg.Channels[config.ChannelWeixin]
 	telegramChannel.AllowFrom = config.FlexibleStringSlice{"existing-user"}
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
@@ -497,8 +347,8 @@ func TestHandlePatchConfig_RejectsInvalidChannelArrayFields(t *testing.T) {
 			name: "object allow_from",
 			body: `{
 				"channel_list": {
-					"telegram": {
-						"type": "telegram",
+					"weixin": {
+						"type": "weixin",
 						"allow_from": {"id": "bad"}
 					}
 				}
@@ -508,8 +358,8 @@ func TestHandlePatchConfig_RejectsInvalidChannelArrayFields(t *testing.T) {
 			name: "boolean allow_from",
 			body: `{
 				"channel_list": {
-					"telegram": {
-						"type": "telegram",
+					"weixin": {
+						"type": "weixin",
 						"allow_from": true
 					}
 				}
@@ -519,10 +369,10 @@ func TestHandlePatchConfig_RejectsInvalidChannelArrayFields(t *testing.T) {
 			name: "object settings array",
 			body: `{
 				"channel_list": {
-					"feishu": {
-						"type": "feishu",
+					"webchat": {
+						"type": "webchat",
 						"settings": {
-							"random_reaction_emoji": {"name": "THUMBSUP"}
+							"allow_origins": {"name": "https://a.example.com"}
 						}
 					}
 				}
@@ -558,7 +408,7 @@ func TestHandlePatchConfig_RejectsInvalidChannelArrayFields(t *testing.T) {
 			if err != nil {
 				t.Fatalf("LoadConfig() error = %v", err)
 			}
-			telegramChannel := cfg.Channels[config.ChannelTelegram]
+			telegramChannel := cfg.Channels[config.ChannelWeixin]
 			if len(telegramChannel.AllowFrom) != 1 ||
 				telegramChannel.AllowFrom[0] != "existing-user" {
 				t.Fatalf(
@@ -618,14 +468,14 @@ func TestHandlePatchConfig_ClearingAllowFromDoesNotLeaveEmptyStringItem(t *testi
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	feishuChannel := cfg.Channels[config.ChannelFeishu]
+	feishuChannel := cfg.Channels[config.ChannelQQ]
 	feishuChannel.Enabled = true
 	feishuChannel.AllowFrom = config.FlexibleStringSlice{"ou_existing_user"}
 	decoded, err := feishuChannel.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	feishuCfg := decoded.(*config.FeishuSettings)
+	feishuCfg := decoded.(*config.QQSettings)
 	feishuCfg.AppID = "cli_existing_app"
 	feishuCfg.AppSecret = *config.NewSecureString("existing-secret")
 	if err = config.SaveConfig(configPath, cfg); err != nil {
@@ -638,7 +488,7 @@ func TestHandlePatchConfig_ClearingAllowFromDoesNotLeaveEmptyStringItem(t *testi
 
 	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
 		"channel_list": {
-			"feishu": {
+			"qq": {
 				"enabled": false,
 				"allow_from": "",
 				"settings": {
@@ -664,7 +514,7 @@ func TestHandlePatchConfig_ClearingAllowFromDoesNotLeaveEmptyStringItem(t *testi
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	feishuChannel = cfg.Channels[config.ChannelFeishu]
+	feishuChannel = cfg.Channels[config.ChannelQQ]
 	if len(feishuChannel.AllowFrom) != 0 {
 		t.Fatalf("feishu allow_from = %#v, want empty slice", feishuChannel.AllowFrom)
 	}
@@ -879,6 +729,41 @@ func TestHandlePatchConfig_SucceedsWhenWebChatTokenInEnvOnly(t *testing.T) {
 	}
 }
 
+func assertGatewayLogLevelApplied(t *testing.T, method, body string, want logger.LogLevel) {
+	t.Helper()
+
+	configPath, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	initialLevel := logger.GetLevel()
+	logger.SetLevel(logger.INFO)
+	t.Cleanup(func() {
+		logger.SetLevel(initialLevel)
+	})
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(method, "/api/config", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf(
+			"%s /api/config status = %d, want %d, body=%s",
+			method,
+			rec.Code,
+			http.StatusOK,
+			rec.Body.String(),
+		)
+	}
+	if got := logger.GetLevel(); got != want {
+		t.Fatalf("logger.GetLevel() = %v, want %v", got, want)
+	}
+}
+
 func TestHandleUpdateConfig_AppliesGatewayLogLevel(t *testing.T) {
 	assertGatewayLogLevelApplied(t, http.MethodPut, `{
 		"version": 1,
@@ -943,203 +828,6 @@ func TestHandlePatchConfig_PreservesDebugFlagOverride(t *testing.T) {
 	}
 	if got := logger.GetLevel(); got != logger.DEBUG {
 		t.Fatalf("logger.GetLevel() = %v, want %v", got, logger.DEBUG)
-	}
-}
-
-func TestHandlePatchConfig_DoesNotPersistShadowRegistryAuthTokenField(t *testing.T) {
-	configPath, cleanup := setupTestEnv(t)
-	defer cleanup()
-
-	h := NewHandler(configPath)
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-
-	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
-		"tools": {
-			"skills": {
-				"registries": {
-					"github": {
-						"_auth_token": "ghp-shadow-token"
-					}
-				}
-			}
-		}
-	}`))
-	req.Header.Set("Content-Type", "application/json")
-
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf(
-			"PATCH /api/config status = %d, want %d, body=%s",
-			rec.Code,
-			http.StatusOK,
-			rec.Body.String(),
-		)
-	}
-
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	githubRegistry, ok := cfg.Tools.Skills.Registries.Get("github")
-	if !ok {
-		t.Fatal("github registry missing after PATCH")
-	}
-	if got := githubRegistry.AuthToken.String(); got != "ghp-shadow-token" {
-		t.Fatalf("github registry auth token = %q, want %q", got, "ghp-shadow-token")
-	}
-	if got := githubRegistry.BaseURL; got != "https://github.com" {
-		t.Fatalf("github registry base_url = %q, want %q", got, "https://github.com")
-	}
-
-	rawConfig, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("ReadFile(configPath) error = %v", err)
-	}
-	if strings.Contains(string(rawConfig), "_auth_token") {
-		t.Fatalf(
-			"config.json should not persist _auth_token shadow field, got:\n%s",
-			string(rawConfig),
-		)
-	}
-}
-
-func TestHandlePatchConfig_PreservesRegistryAuthTokenReference(t *testing.T) {
-	configPath, cleanup := setupTestEnv(t)
-	defer cleanup()
-
-	t.Setenv("GITHUB_TOKEN", "real")
-	envPath := config.EnvFilePath(configPath)
-	if err := os.WriteFile(envPath, []byte("GITHUB_TOKEN=real\n"), 0o600); err != nil {
-		t.Fatalf("write .env: %v", err)
-	}
-
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	registry, ok := cfg.Tools.Skills.Registries.Get("github")
-	if !ok {
-		t.Fatal("default config missing github registry")
-	}
-	registry.AuthToken = *config.NewSecureString("$GITHUB_TOKEN")
-	cfg.Tools.Skills.Registries.Set("github", registry)
-	if err := config.SaveConfig(configPath, cfg); err != nil {
-		t.Fatalf("SaveConfig() error = %v", err)
-	}
-
-	initialLevel := logger.GetLevel()
-	t.Cleanup(func() { logger.SetLevel(initialLevel) })
-	h := NewHandler(configPath)
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
-		"gateway": {"log_level": "debug"}
-	}`))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("PATCH status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	rawConfig, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("ReadFile(config) error = %v", err)
-	}
-	if !strings.Contains(string(rawConfig), `"auth_token": "$GITHUB_TOKEN"`) {
-		t.Fatalf("config lost the auth_token reference:\n%s", rawConfig)
-	}
-	if strings.Contains(string(rawConfig), `"auth_token": "real"`) {
-		t.Fatalf("config stored the resolved token:\n%s", rawConfig)
-	}
-	rawEnv, err := os.ReadFile(envPath)
-	if err != nil {
-		t.Fatalf("ReadFile(.env) error = %v", err)
-	}
-	if !strings.Contains(string(rawEnv), "GITHUB_TOKEN=real") {
-		t.Fatalf(".env lost the real token:\n%s", rawEnv)
-	}
-	if strings.Contains(string(rawEnv), "GITHUB_TOKEN=$GITHUB_TOKEN") {
-		t.Fatalf(".env got a self-referential token:\n%s", rawEnv)
-	}
-
-	reloaded, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("reload LoadConfig() error = %v", err)
-	}
-	reloadedRegistry, ok := reloaded.Tools.Skills.Registries.Get("github")
-	if !ok {
-		t.Fatal("github registry missing after reload")
-	}
-	if got := reloadedRegistry.AuthToken.String(); got != "real" {
-		t.Fatalf("reloaded auth token = %q, want real", got)
-	}
-}
-
-func TestHandlePatchConfig_ReadsShadowRegistryTokenWithoutChannelList(t *testing.T) {
-	cfg := config.DefaultConfig()
-	registry, ok := cfg.Tools.Skills.Registries.Get("github")
-	if !ok {
-		t.Fatal("default config missing github registry")
-	}
-	registry.AuthToken = *config.NewSecureString("old")
-	cfg.Tools.Skills.Registries.Set("github", registry)
-
-	applyConfigSecretsFromMap(cfg, map[string]any{
-		"tools": map[string]any{
-			"skills": map[string]any{
-				"registries": map[string]any{
-					"github": map[string]any{
-						"auth_token":  "stale",
-						"_auth_token": "$GITHUB_TOKEN",
-					},
-				},
-			},
-		},
-	})
-
-	updated, _ := cfg.Tools.Skills.Registries.Get("github")
-	data, err := json.Marshal(updated.AuthToken)
-	if err != nil {
-		t.Fatalf("marshal auth token: %v", err)
-	}
-	if string(data) != `"$GITHUB_TOKEN"` {
-		t.Fatalf("auth_token = %s, want the $GITHUB_TOKEN reference", data)
-	}
-}
-
-func TestHandlePatchConfig_ReadsShadowRegistryTokenInListForm(t *testing.T) {
-	cfg := config.DefaultConfig()
-	registry, ok := cfg.Tools.Skills.Registries.Get("github")
-	if !ok {
-		t.Fatal("default config missing github registry")
-	}
-	registry.AuthToken = *config.NewSecureString("old")
-	cfg.Tools.Skills.Registries.Set("github", registry)
-
-	applyConfigSecretsFromMap(cfg, map[string]any{
-		"tools": map[string]any{
-			"skills": map[string]any{
-				"registries": []any{
-					map[string]any{
-						"name":        "github",
-						"auth_token":  "$GITHUB_TOKEN",
-						"_auth_token": "$GITHUB_TOKEN",
-					},
-				},
-			},
-		},
-	})
-
-	updated, _ := cfg.Tools.Skills.Registries.Get("github")
-	data, err := json.Marshal(updated.AuthToken)
-	if err != nil {
-		t.Fatalf("marshal auth token: %v", err)
-	}
-	if string(data) != `"$GITHUB_TOKEN"` {
-		t.Fatalf("auth_token = %s, want the $GITHUB_TOKEN reference", data)
 	}
 }
 
@@ -1353,19 +1041,19 @@ func TestHandleTestCommandPatterns_InvalidJSON(t *testing.T) {
 
 func TestApplyConfigSecretsFromMap_TelegramToken(t *testing.T) {
 	cfg := config.DefaultConfig()
-	bc := cfg.Channels["telegram"]
+	bc := cfg.Channels["weixin"]
 	bc.Enabled = true
 	// Pre-decode so extend is populated
 	decoded, err := bc.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	tgCfg := decoded.(*config.TelegramSettings)
+	tgCfg := decoded.(*config.WeixinSettings)
 	tgCfg.Token = *config.NewSecureString("original-token")
 
 	raw := map[string]any{
 		"channel_list": map[string]any{
-			"telegram": map[string]any{
+			"weixin": map[string]any{
 				"enabled": true,
 				"token":   "secret-from-api",
 			},
@@ -1383,34 +1071,34 @@ func TestApplyConfigSecretsFromMap_MultipleChannels(t *testing.T) {
 	cfg := config.DefaultConfig()
 
 	// Setup telegram
-	bc := cfg.Channels["telegram"]
+	bc := cfg.Channels["weixin"]
 	bc.Enabled = true
 	decoded, err := bc.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() telegram error = %v", err)
 	}
-	tgCfg := decoded.(*config.TelegramSettings)
+	tgCfg := decoded.(*config.WeixinSettings)
 	tgCfg.Token = *config.NewSecureString("old-telegram-token")
 
 	// Setup feishu
-	bc = cfg.Channels["feishu"]
+	bc = cfg.Channels["qq"]
 	bc.Enabled = true
 	decoded, err = bc.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() feishu error = %v", err)
 	}
-	feishuCfg := decoded.(*config.FeishuSettings)
+	feishuCfg := decoded.(*config.QQSettings)
 	feishuCfg.AppSecret = *config.NewSecureString("old-feishu-app-secret")
 
 	raw := map[string]any{
 		"channel_list": map[string]any{
-			"telegram": map[string]any{
+			"weixin": map[string]any{
 				"enabled": true,
 				"settings": map[string]any{
 					"token": "new-telegram-token",
 				},
 			},
-			"feishu": map[string]any{
+			"qq": map[string]any{
 				"enabled": true,
 				"settings": map[string]any{
 					"app_secret": "new-feishu-app-secret",
@@ -1431,18 +1119,18 @@ func TestApplyConfigSecretsFromMap_MultipleChannels(t *testing.T) {
 
 func TestApplyConfigSecretsFromMap_SkipsNonStringValues(t *testing.T) {
 	cfg := config.DefaultConfig()
-	bc := cfg.Channels["telegram"]
+	bc := cfg.Channels["weixin"]
 	bc.Enabled = true
 	decoded, err := bc.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	tgCfg := decoded.(*config.TelegramSettings)
+	tgCfg := decoded.(*config.WeixinSettings)
 	tgCfg.Token = *config.NewSecureString("original-token")
 
 	raw := map[string]any{
 		"channel_list": map[string]any{
-			"telegram": map[string]any{
+			"weixin": map[string]any{
 				"enabled": true,
 				"token":   12345, // not a string, should be skipped
 			},
@@ -1458,14 +1146,14 @@ func TestApplyConfigSecretsFromMap_SkipsNonStringValues(t *testing.T) {
 
 func TestApplyConfigSecretsFromMap_ChannelNotDecodedYet(t *testing.T) {
 	cfg := config.DefaultConfig()
-	bc := cfg.Channels["telegram"]
+	bc := cfg.Channels["weixin"]
 	bc.Enabled = true
 	// Don't decode — let the function handle lazy decoding
-	bc.Type = config.ChannelTelegram
+	bc.Type = config.ChannelWeixin
 
 	raw := map[string]any{
 		"channel_list": map[string]any{
-			"telegram": map[string]any{
+			"weixin": map[string]any{
 				"enabled": true,
 				"token":   "lazy-decoded-token",
 			},
@@ -1478,7 +1166,7 @@ func TestApplyConfigSecretsFromMap_ChannelNotDecodedYet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	tgCfg := decoded.(*config.TelegramSettings)
+	tgCfg := decoded.(*config.WeixinSettings)
 	if got := tgCfg.Token.String(); got != "lazy-decoded-token" {
 		t.Fatalf("telegram token = %q, want %q", got, "lazy-decoded-token")
 	}
@@ -1538,7 +1226,7 @@ func TestHandlePatchConfig_RejectsEmptyAllowFromForEnabledChannel(t *testing.T) 
 		return rec
 	}
 
-	rec := patch(`{"channel_list": {"feishu": {"enabled": true}}}`)
+	rec := patch(`{"channel_list": {"qq": {"enabled": true}}}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("enabling a channel without allow_from = %d body=%s, want 400", rec.Code, rec.Body.String())
 	}
@@ -1547,7 +1235,7 @@ func TestHandlePatchConfig_RejectsEmptyAllowFromForEnabledChannel(t *testing.T) 
 	}
 
 	// The explicit form is what "allow everyone" looks like.
-	rec = patch(`{"channel_list": {"feishu": {"enabled": true, "allow_from": ["*"]}}}`)
+	rec = patch(`{"channel_list": {"qq": {"enabled": true, "allow_from": ["*"]}}}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("explicit allow_from = %d body=%s, want 200", rec.Code, rec.Body.String())
 	}
@@ -1615,35 +1303,6 @@ func TestHandleUpdateConfig_PreservesOmittedAllowRemote(t *testing.T) {
 	}
 }
 
-func TestPatchConfigRejectsABadApprovalPolicy(t *testing.T) {
-	configPath, cleanup := setupTestEnv(t)
-	defer cleanup()
-	h := NewHandler(configPath)
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-
-	body := `{"tools":{"approval":{"rules":[{"tool":"exec","action":"maybe"}]}}}`
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPatch, "/api/config", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d body=%s, want 400", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "rules[0].action") {
-		t.Fatalf("body = %s, want the offending field", rec.Body.String())
-	}
-	// The file must not have been written.
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	if len(cfg.Tools.Approval.Rules) != 0 {
-		t.Fatalf("rules = %+v, want the save to be rejected", cfg.Tools.Approval.Rules)
-	}
-}
-
 func TestHandleUpdateConfigPromotesSecretToEnv(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
@@ -1653,7 +1312,7 @@ func TestHandleUpdateConfigPromotesSecretToEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := NewHandler(path)
-	body := `{"version":4,"channel_list":{"telegram":{"enabled":true,"type":"telegram","allow_from":["*"],"settings":{"token":"tg-secret"}}},"model_list":[],"agents":{"defaults":{"model_name":""}}}`
+	body := `{"version":4,"channel_list":{"weixin":{"enabled":true,"type":"weixin","allow_from":["*"],"settings":{"token":"tg-secret"}}},"model_list":[],"agents":{"defaults":{"model_name":""}}}`
 	req := httptest.NewRequest(http.MethodPut, "/api/config", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	h.handleUpdateConfig(rec, req)
@@ -1664,7 +1323,7 @@ func TestHandleUpdateConfigPromotesSecretToEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
-	if !strings.Contains(string(rawConfig), `"$TELEGRAM_TOKEN"`) {
+	if !strings.Contains(string(rawConfig), `"$WEIXIN_TOKEN"`) {
 		t.Fatalf("config missing ref:\n%s", rawConfig)
 	}
 	if strings.Contains(string(rawConfig), "tg-secret") {
@@ -1674,7 +1333,7 @@ func TestHandleUpdateConfigPromotesSecretToEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read .env: %v", err)
 	}
-	if !strings.Contains(string(rawEnv), "TELEGRAM_TOKEN=tg-secret") {
+	if !strings.Contains(string(rawEnv), "WEIXIN_TOKEN=tg-secret") {
 		t.Fatalf(".env missing token:\n%s", rawEnv)
 	}
 }
@@ -1691,12 +1350,12 @@ func TestHandleGetConfig_RedactsPlaintextSecrets(t *testing.T) {
 	}}
 	cfg.Agents.Defaults.ModelName = "redact-model"
 	cfg.Dashboard.Token = *config.NewSecureString("dash-plain-secret")
-	telegram := cfg.Channels["telegram"]
+	telegram := cfg.Channels["weixin"]
 	decoded, err := telegram.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	decoded.(*config.TelegramSettings).Token = *config.NewSecureString("tg-plain-secret")
+	decoded.(*config.WeixinSettings).Token = *config.NewSecureString("tg-plain-secret")
 	telegram.Enabled = true
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

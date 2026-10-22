@@ -12,11 +12,9 @@ import (
 
 // Channel type constants — single source of truth for all channel type names.
 const (
-	ChannelWebChat  = "webchat"
-	ChannelTelegram = "telegram"
-	ChannelFeishu   = "feishu"
-	ChannelWeixin   = "weixin"
-	ChannelQQ       = "qq"
+	ChannelWebChat = "webchat"
+	ChannelWeixin  = "weixin"
+	ChannelQQ      = "qq"
 )
 
 func initChannel() {
@@ -415,11 +413,9 @@ func validateSingletonChannels(channels ChannelsConfig) error {
 var channelSettingsMu sync.RWMutex
 
 var channelSettingsFactory = map[string]any{
-	ChannelWebChat:  (WebChatSettings{}),
-	ChannelTelegram: (TelegramSettings{}),
-	ChannelFeishu:   (FeishuSettings{}),
-	ChannelWeixin:   (WeixinSettings{}),
-	ChannelQQ:       (QQSettings{}),
+	ChannelWebChat: (WebChatSettings{}),
+	ChannelWeixin:  (WeixinSettings{}),
+	ChannelQQ:      (QQSettings{}),
 }
 
 // newChannelSettings creates a fresh zero-value pointer for the given channel type.
@@ -490,8 +486,6 @@ func validateChannelStreamingConfig(channelName string, target any) error {
 	var streaming StreamingConfig
 	switch settings := target.(type) {
 	case *WebChatSettings:
-		streaming = settings.Streaming
-	case *TelegramSettings:
 		streaming = settings.Streaming
 	default:
 		return nil

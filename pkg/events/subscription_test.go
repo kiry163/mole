@@ -143,7 +143,7 @@ func TestLockedHandlerProcessesSequentially(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		bus.Publish(context.Background(), Event{Kind: KindAgentLLMDelta})
+		bus.Publish(context.Background(), Event{Kind: KindAgentLLMResponse})
 	}
 	waitForStat(t, func() uint64 {
 		return sub.Stats().Handled

@@ -5,7 +5,6 @@ package agent
 import (
 	"fmt"
 
-	"github.com/kiry163/mole/pkg/approval"
 	runtimeevents "github.com/kiry163/mole/pkg/events"
 )
 
@@ -19,8 +18,8 @@ func (al *AgentLoop) newTurnEventScope(agentID, sessionKey string, turnCtx *Turn
 	}
 }
 
-func (ts turnEventScope) meta(iteration int, source, tracePath string) HookMeta {
-	return HookMeta{
+func (ts turnEventScope) meta(iteration int, source, tracePath string) EventMeta {
+	return EventMeta{
 		AgentID:     ts.agentID,
 		TurnID:      ts.turnID,
 		SessionKey:  ts.sessionKey,
@@ -31,17 +30,17 @@ func (ts turnEventScope) meta(iteration int, source, tracePath string) HookMeta 
 	}
 }
 
-func (al *AgentLoop) emitEvent(kind runtimeevents.Kind, meta HookMeta, payload any) {
-	clonedMeta := cloneHookMeta(meta)
+func (al *AgentLoop) emitEvent(kind runtimeevents.Kind, meta EventMeta, payload any) {
+	clonedMeta := cloneEventMeta(meta)
 	eventCtx := cloneTurnContext(clonedMeta.turnContext)
 	evt := runtimeevents.Event{
 		Kind:        kind,
 		Source:      runtimeevents.Source{Component: "agent", Name: clonedMeta.AgentID},
-		Scope:       runtimeScopeFromHookMeta(clonedMeta, eventCtx),
-		Correlation: runtimeCorrelationFromHookMeta(clonedMeta),
+		Scope:       runtimeScopeFromEventMeta(clonedMeta, eventCtx),
+		Correlation: runtimeCorrelationFromEventMeta(clonedMeta),
 		Severity:    runtimeSeverityForAgentEvent(kind, payload),
 		Payload:     payload,
-		Attrs:       runtimeAttrsFromHookMeta(clonedMeta),
+		Attrs:       runtimeAttrsFromEventMeta(clonedMeta),
 	}
 
 	if al == nil {
@@ -49,28 +48,6 @@ func (al *AgentLoop) emitEvent(kind runtimeevents.Kind, meta HookMeta, payload a
 	}
 
 	al.publishRuntimeEvent(evt)
-}
-
-// MountHook registers an in-process hook on the agent loop.
-func (al *AgentLoop) MountHook(reg HookRegistration) error {
-	if al == nil || al.hooks == nil {
-		return fmt.Errorf("hook manager is not initialized")
-	}
-	return al.hooks.Mount(reg)
-}
-
-// UnmountHook removes a previously registered in-process hook.
-func (al *AgentLoop) UnmountHook(name string) {
-	if al == nil || al.hooks == nil {
-		return
-	}
-	al.hooks.Unmount(name)
-}
-
-// SetApprovalStore installs the store the builtin approver uses. Call it before
-// the first turn; a nil store makes the approver fail closed.
-func (al *AgentLoop) SetApprovalStore(store *approval.Store) {
-	al.approvalStore = store
 }
 
 // RuntimeEventBus returns the runtime event bus used by the agent loop.

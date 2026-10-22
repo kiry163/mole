@@ -80,9 +80,6 @@ export function useSkillsPage() {
             source: importedSkill.source ?? "workspace",
             description: importedSkill.description ?? "",
             origin_kind: importedSkill.origin_kind ?? "manual",
-            registry_name: importedSkill.registry_name,
-            registry_url: importedSkill.registry_url,
-            installed_version: importedSkill.installed_version,
             installed_at: importedSkill.installed_at,
           })
         }
@@ -144,7 +141,7 @@ export function useSkillsPage() {
       if (normalizedSearchQuery === "") return true
 
       const searchTarget =
-        `${skill.name} ${skill.description} ${skill.registry_name ?? ""}`.toLowerCase()
+        `${skill.name} ${skill.description}`.toLowerCase()
       return searchTarget.includes(normalizedSearchQuery)
     })
   }, [allSkills, normalizedSearchQuery, sourceFilter])

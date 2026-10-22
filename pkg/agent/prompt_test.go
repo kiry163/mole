@@ -3,9 +3,22 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func writeTurnProfileSkill(t *testing.T, workspace, name, content string) {
+	t.Helper()
+	dir := filepath.Join(workspace, "skills", name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q) error = %v", dir, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile(SKILL.md) error = %v", err)
+	}
+}
 
 func TestPromptRegistry_RejectsRegisteredSourceWrongPlacement(t *testing.T) {
 	registry := NewPromptRegistry()
@@ -80,31 +93,6 @@ func TestRenderPromptPartsLegacy_UsesLayerAndSlotOrder(t *testing.T) {
 	want := strings.Join([]string{"kernel", "workspace", "skill", "runtime"}, "\n\n---\n\n")
 	if got != want {
 		t.Fatalf("renderPromptPartsLegacy() = %q, want %q", got, want)
-	}
-}
-
-func TestBuildMessagesFromPrompt_IncludesSystemPromptOverlay(t *testing.T) {
-	t.Setenv("MOLE_BUILTIN_SKILLS", t.TempDir())
-	cb := NewContextBuilder(t.TempDir())
-
-	messages := cb.BuildMessagesFromPrompt(PromptBuildRequest{
-		CurrentMessage: "do child task",
-		Overlays: promptOverlaysForOptions(processOptions{
-			SystemPromptOverride: "Use child-only system instructions.",
-		}),
-	})
-
-	if len(messages) < 2 {
-		t.Fatalf("messages len = %d, want at least 2", len(messages))
-	}
-	if messages[0].Role != "system" {
-		t.Fatalf("messages[0].Role = %q, want system", messages[0].Role)
-	}
-	if !strings.Contains(messages[0].Content, "Use child-only system instructions.") {
-		t.Fatalf("system prompt missing overlay: %q", messages[0].Content)
-	}
-	if messages[1].Role != "user" || messages[1].Content != "do child task" {
-		t.Fatalf("messages[1] = %#v, want user task", messages[1])
 	}
 }
 
@@ -233,30 +221,6 @@ func TestContextBuilder_SuppressesToolReferencesWhenToolsUnavailable(t *testing.
 	}
 }
 
-func TestContextBuilder_CustomToolAllowListSuppressesReadFileSkillInstruction(t *testing.T) {
-	workspace := t.TempDir()
-	t.Setenv("MOLE_BUILTIN_SKILLS", t.TempDir())
-	writeTurnProfileSkill(
-		t,
-		workspace,
-		"research",
-		"---\ndescription: research skill\n---\n# research\n\nResearch carefully.",
-	)
-	cb := NewContextBuilder(workspace)
-
-	messages := cb.BuildMessagesFromPrompt(PromptBuildRequest{
-		CurrentMessage: "hello",
-		AllowedTools:   []string{"web_search"},
-	})
-	system := messages[0]
-	if strings.Contains(system.Content, "read_file tool") {
-		t.Fatalf("system prompt includes read_file skill instruction without read_file permission: %q", system.Content)
-	}
-	if !strings.Contains(system.Content, "<name>research</name>") {
-		t.Fatalf("system prompt should keep skill catalog context, got: %q", system.Content)
-	}
-}
-
 func TestContextBuilder_CollectsMCPServerContributor(t *testing.T) {
 	t.Setenv("MOLE_BUILTIN_SKILLS", t.TempDir())
 	cb := NewContextBuilder(t.TempDir())
@@ -313,83 +277,6 @@ func TestContextBuilder_SuppressesMCPServerContributorWhenToolsUnavailable(t *te
 	for _, part := range system.SystemParts {
 		if part.PromptSource == "mcp:github_server" {
 			t.Fatalf("system parts include MCP tooling despite tools being unavailable: %#v", part)
-		}
-	}
-}
-
-func TestContextBuilder_SuppressesAgentDiscoveryContributorWhenToolsUnavailable(t *testing.T) {
-	t.Setenv("MOLE_BUILTIN_SKILLS", t.TempDir())
-	cb := NewContextBuilder(t.TempDir()).WithAgentDiscovery(
-		"main",
-		func(agentID string) []AgentDescriptor {
-			return []AgentDescriptor{{
-				ID:          "helper",
-				Name:        "Helper",
-				Description: "Helps with tasks",
-			}}
-		},
-	)
-
-	messages := cb.BuildMessagesFromPrompt(PromptBuildRequest{
-		CurrentMessage:      "hello",
-		SuppressToolUseRule: true,
-	})
-	system := messages[0]
-	if strings.Contains(system.Content, "Agent Discovery") ||
-		strings.Contains(system.Content, "calling spawn") {
-		t.Fatalf("system prompt includes agent discovery despite tools being unavailable: %q", system.Content)
-	}
-	for _, part := range system.SystemParts {
-		if part.PromptSource == string(PromptSourceAgentDiscovery) {
-			t.Fatalf("system parts include agent discovery despite tools being unavailable: %#v", part)
-		}
-	}
-}
-
-func TestContextBuilder_CustomToolAllowListSuppressesUnallowedToolContributors(t *testing.T) {
-	t.Setenv("MOLE_BUILTIN_SKILLS", t.TempDir())
-	cb := NewContextBuilder(t.TempDir()).
-		WithToolDiscovery(true, true).
-		WithAgentDiscovery(
-			"main",
-			func(agentID string) []AgentDescriptor {
-				return []AgentDescriptor{{
-					ID:          "helper",
-					Name:        "Helper",
-					Description: "Helps with tasks",
-				}}
-			},
-		)
-	err := cb.RegisterPromptContributor(mcpServerPromptContributor{
-		serverName: "GitHub Server",
-		toolCount:  3,
-		deferred:   false,
-	})
-	if err != nil {
-		t.Fatalf("RegisterPromptContributor() error = %v", err)
-	}
-
-	messages := cb.BuildMessagesFromPrompt(PromptBuildRequest{
-		CurrentMessage: "hello",
-		AllowedTools:   []string{"echo_text"},
-	})
-	system := messages[0]
-	blockedSnippets := []string{
-		"tool_search_tool_bm25",
-		"tool_search_tool_regex",
-		"MCP server `GitHub Server` is connected",
-		"Agent Discovery",
-		"calling spawn",
-	}
-	for _, snippet := range blockedSnippets {
-		if strings.Contains(system.Content, snippet) {
-			t.Fatalf("system prompt includes unallowed tool contributor %q: %q", snippet, system.Content)
-		}
-	}
-	for _, part := range system.SystemParts {
-		switch part.PromptSource {
-		case string(PromptSourceToolDiscovery), string(PromptSourceAgentDiscovery), "mcp:github_server":
-			t.Fatalf("system parts include unallowed tool contributor: %#v", part)
 		}
 	}
 }

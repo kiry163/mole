@@ -11,7 +11,6 @@ import (
 	"github.com/kiry163/mole/pkg/config"
 	runtimeevents "github.com/kiry163/mole/pkg/events"
 	"github.com/kiry163/mole/pkg/providers"
-	"github.com/kiry163/mole/pkg/routing"
 	"github.com/kiry163/mole/pkg/session"
 )
 
@@ -72,40 +71,6 @@ func (p *sequenceProvider) GetDefaultModel() string {
 	return "sequence-model"
 }
 
-type nativeSearchCaptureProvider struct {
-	lastOpts map[string]any
-	messages []providers.Message
-	tools    []providers.ToolDefinition
-}
-
-func (p *nativeSearchCaptureProvider) Chat(
-	ctx context.Context,
-	messages []providers.Message,
-	tools []providers.ToolDefinition,
-	model string,
-	opts map[string]any,
-) (*providers.LLMResponse, error) {
-	p.messages = append([]providers.Message(nil), messages...)
-	p.tools = append([]providers.ToolDefinition(nil), tools...)
-	p.lastOpts = make(map[string]any, len(opts))
-	for k, v := range opts {
-		p.lastOpts[k] = v
-	}
-	return &providers.LLMResponse{
-		Content:      "Using native search",
-		FinishReason: "stop",
-	}, nil
-}
-
-func (p *nativeSearchCaptureProvider) GetDefaultModel() string {
-	return "native-search-model"
-}
-
-func (p *nativeSearchCaptureProvider) SupportsNativeSearch() bool {
-	return true
-}
-
-// toolCallRespProvider returns a tool call response
 type toolCallRespProvider struct {
 	toolName  string
 	toolArgs  map[string]any
@@ -266,7 +231,6 @@ func makeTestProcessOpts(sessionKey string) processOptions {
 		DefaultResponse: "I couldn't process your request.",
 		EnableSummary:   false,
 		SendResponse:    false,
-		NoHistory:       false,
 	}
 }
 
@@ -278,10 +242,6 @@ type saveFailingSessionStore struct {
 func (s *saveFailingSessionStore) Save(_ string) error {
 	return s.err
 }
-
-// =============================================================================
-// Pipeline Method Tests: SetupTurn
-// =============================================================================
 
 func TestPipeline_SetupTurn_BasicInitialization(t *testing.T) {
 	al, agent, cleanup := newTurnCoordTestLoop(t, &simpleConvProvider{})
@@ -456,39 +416,6 @@ func TestPipeline_CallLLM_UsesSuccessfulFallbackDisplayNameWithoutAlias(t *testi
 	}
 }
 
-func TestPipeline_SetupTurn_UsesLightCandidateDisplayName(t *testing.T) {
-	al, agent, cleanup := newTurnCoordTestLoop(t, &simpleConvProvider{})
-	defer cleanup()
-
-	agent.Model = "primary-model"
-	agent.Candidates = []providers.FallbackCandidate{
-		{Provider: "openai", Model: "gpt-5.4", IdentityKey: "model_name:primary", DisplayName: "primary-model"},
-	}
-	agent.LightCandidates = []providers.FallbackCandidate{
-		{Provider: "openai", Model: "gpt-5.4-mini", IdentityKey: "model_name:light-model", DisplayName: "light-model"},
-	}
-	agent.Router = routing.New(routing.RouterConfig{LightModel: "light-model", Threshold: 1})
-
-	pipeline := NewPipeline(al)
-	opts := makeTestProcessOpts("test-session")
-	opts.UserMessage = ""
-	ts := newTurnState(agent, opts, turnEventScope{
-		turnID:  "turn-1",
-		context: newTurnContext(nil, nil, nil),
-	})
-
-	exec, err := pipeline.SetupTurn(context.Background(), ts)
-	if err != nil {
-		t.Fatalf("SetupTurn failed: %v", err)
-	}
-	if !exec.usedLight {
-		t.Fatal("expected light routing to be used")
-	}
-	if exec.llmModelName != "light-model" {
-		t.Fatalf("exec.llmModelName = %q, want %q", exec.llmModelName, "light-model")
-	}
-}
-
 func TestRunTurn_FinalizeSaveErrorEmitsErrorTurnEnd(t *testing.T) {
 	al, agent, cleanup := newTurnCoordTestLoop(t, &simpleConvProvider{})
 	defer cleanup()
@@ -559,41 +486,6 @@ func TestPipeline_CallLLM_WithToolCall(t *testing.T) {
 	}
 	if exec.normalizedToolCalls[0].Name != "web_search" {
 		t.Errorf("expected tool name 'web_search', got %q", exec.normalizedToolCalls[0].Name)
-	}
-}
-
-func TestPipeline_CallLLM_UsesNativeSearchWithoutClientWebSearchTool(t *testing.T) {
-	provider := &nativeSearchCaptureProvider{}
-	al, agent, cleanup := newTurnCoordTestLoop(t, provider)
-	defer cleanup()
-
-	if _, ok := agent.Tools.Get("web_search"); ok {
-		t.Fatal("expected no client-side web_search tool to be registered")
-	}
-
-	al.cfg.Tools.Web.Enabled = true
-	al.cfg.Tools.Web.PreferNative = true
-
-	pipeline := NewPipeline(al)
-	ts := newTurnState(agent, makeTestProcessOpts("test-session"), turnEventScope{
-		turnID:  "turn-1",
-		context: newTurnContext(nil, nil, nil),
-	})
-
-	exec, err := pipeline.SetupTurn(context.Background(), ts)
-	if err != nil {
-		t.Fatalf("SetupTurn failed: %v", err)
-	}
-
-	ctrl, err := pipeline.CallLLM(context.Background(), context.Background(), ts, exec, 1)
-	if err != nil {
-		t.Fatalf("CallLLM failed: %v", err)
-	}
-	if ctrl != ControlBreak {
-		t.Fatalf("expected ControlBreak, got %v", ctrl)
-	}
-	if got, _ := provider.lastOpts["native_search"].(bool); !got {
-		t.Fatalf("expected native_search=true, got %#v", provider.lastOpts["native_search"])
 	}
 }
 
@@ -945,6 +837,27 @@ func TestRunTurn_MaxIterations(t *testing.T) {
 		t.Errorf("expected status Completed, got %v", result.status)
 	}
 }
+
+type slowMockProvider struct {
+	delay time.Duration
+}
+
+func (p *slowMockProvider) Chat(
+	ctx context.Context,
+	_ []providers.Message,
+	_ []providers.ToolDefinition,
+	_ string,
+	_ map[string]any,
+) (*providers.LLMResponse, error) {
+	select {
+	case <-time.After(p.delay):
+		return &providers.LLMResponse{Content: "slow response"}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (p *slowMockProvider) GetDefaultModel() string { return "slow-model" }
 
 func TestRunTurn_HardAbort(t *testing.T) {
 	// Provider simulates a slow response, but we'll abort mid-turn

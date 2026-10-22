@@ -42,7 +42,7 @@ func TestAgentLoop_PublishesRuntimeEvents(t *testing.T) {
 
 	al.emitEvent(
 		runtimeevents.KindAgentToolExecStart,
-		HookMeta{
+		EventMeta{
 			AgentID:      "main",
 			TurnID:       "turn-1",
 			ParentTurnID: "parent-turn",
@@ -188,13 +188,11 @@ func TestAgentLoop_EmitsMinimalTurnEvents(t *testing.T) {
 			SenderID: "tester",
 		},
 		RouteResult: &routing.ResolvedRoute{
-			AgentID:   "main",
 			Channel:   "cli",
 			AccountID: routing.DefaultAccountID,
 			SessionPolicy: routing.SessionPolicy{
 				Dimensions: []string{"sender"},
 			},
-			MatchedBy: "default",
 		},
 		SessionScope: &session.SessionScope{
 			Version:    session.ScopeVersionV1,
@@ -576,104 +574,6 @@ func TestAgentLoop_EmitsSessionSummarizeEvent(t *testing.T) {
 	}
 }
 
-func TestAgentLoop_EmitsFollowUpQueuedEvent(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "agent-eventbus-followup-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace:         tmpDir,
-				ModelName:         "test-model",
-				MaxTokens:         4096,
-				MaxToolIterations: 10,
-			},
-		},
-	}
-
-	provider := &toolCallProvider{
-		toolCalls: []providers.ToolCall{
-			{
-				ID:   "call_async_1",
-				Type: "function",
-				Name: "async_followup",
-				Function: &providers.FunctionCall{
-					Name:      "async_followup",
-					Arguments: "{}",
-				},
-				Arguments: map[string]any{},
-			},
-		},
-		finalResp: "async launched",
-	}
-
-	msgBus := bus.NewMessageBus()
-	al := NewAgentLoop(cfg, msgBus, provider)
-	doneCh := make(chan struct{})
-	registerTool(al, &asyncFollowUpTool{
-		name:          "async_followup",
-		followUpText:  "background result",
-		completionSig: doneCh,
-	})
-	defaultAgent := al.registry.GetDefaultAgent()
-	if defaultAgent == nil {
-		t.Fatal("expected default agent")
-	}
-
-	runtimeCh, closeRuntimeEvents := subscribeRuntimeEventsForTest(
-		t,
-		al,
-		32,
-		runtimeevents.KindAgentFollowUpQueued,
-	)
-	defer closeRuntimeEvents()
-
-	resp, err := al.runAgentLoop(context.Background(), defaultAgent, processOptions{
-		SessionKey:      "session-1",
-		Channel:         "cli",
-		ChatID:          "direct",
-		UserMessage:     "run async tool",
-		DefaultResponse: defaultResponse,
-		EnableSummary:   false,
-		SendResponse:    false,
-	})
-	if err != nil {
-		t.Fatalf("runAgentLoop failed: %v", err)
-	}
-	if resp != "async launched" {
-		t.Fatalf("expected final response 'async launched', got %q", resp)
-	}
-
-	select {
-	case <-doneCh:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for async tool completion")
-	}
-
-	followUpEvt := waitForRuntimeEvent(t, runtimeCh, 2*time.Second, func(evt runtimeevents.Event) bool {
-		return evt.Kind == runtimeevents.KindAgentFollowUpQueued
-	})
-	payload, ok := followUpEvt.Payload.(FollowUpQueuedPayload)
-	if !ok {
-		t.Fatalf("expected FollowUpQueuedPayload, got %T", followUpEvt.Payload)
-	}
-	if payload.SourceTool != "async_followup" {
-		t.Fatalf("expected source tool async_followup, got %q", payload.SourceTool)
-	}
-	if payload.ContentLen != len("background result") {
-		t.Fatalf("expected content len %d, got %d", len("background result"), payload.ContentLen)
-	}
-	if followUpEvt.Scope.SessionKey != "session-1" {
-		t.Fatalf("expected session key session-1, got %q", followUpEvt.Scope.SessionKey)
-	}
-	if followUpEvt.Scope.TurnID == "" {
-		t.Fatal("expected follow-up event to include turn id")
-	}
-}
-
 func receiveRuntimeEvent(t *testing.T, ch <-chan runtimeevents.Event) runtimeevents.Event {
 	t.Helper()
 
@@ -695,46 +595,6 @@ func (e stringError) Error() string {
 	return string(e)
 }
 
-type asyncFollowUpTool struct {
-	name          string
-	followUpText  string
-	completionSig chan struct{}
-}
-
-func (t *asyncFollowUpTool) Name() string {
-	return t.name
-}
-
-func (t *asyncFollowUpTool) Description() string {
-	return "async follow-up tool for testing"
-}
-
-func (t *asyncFollowUpTool) Parameters() map[string]any {
-	return map[string]any{
-		"type":       "object",
-		"properties": map[string]any{},
-	}
-}
-
-func (t *asyncFollowUpTool) Execute(ctx context.Context, args map[string]any) *tools.ToolResult {
-	return tools.AsyncResult("async follow-up scheduled")
-}
-
-func (t *asyncFollowUpTool) ExecuteAsync(
-	ctx context.Context,
-	args map[string]any,
-	cb tools.AsyncCallback,
-) *tools.ToolResult {
-	go func() {
-		cb(ctx, &tools.ToolResult{ForLLM: t.followUpText})
-		if t.completionSig != nil {
-			close(t.completionSig)
-		}
-	}()
-	return tools.AsyncResult("async follow-up scheduled")
-}
-
 var (
-	_ tools.Tool          = (*mockCustomTool)(nil)
-	_ tools.AsyncExecutor = (*asyncFollowUpTool)(nil)
+	_ tools.Tool = (*mockCustomTool)(nil)
 )

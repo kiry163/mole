@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/kiry163/mole/pkg/agent/interfaces"
-	"github.com/kiry163/mole/pkg/approval"
 	"github.com/kiry163/mole/pkg/bus"
 	"github.com/kiry163/mole/pkg/commands"
 	"github.com/kiry163/mole/pkg/config"
@@ -39,11 +38,6 @@ type AgentLoop struct {
 	runtimeEventLogMu  sync.RWMutex
 	runtimeEventLogger *runtimeEventLogger
 	runtimeEventLogSub runtimeevents.Subscription
-	hooks              *HookManager
-	// approvalStore is the process-wide store the builtin approver waits on and
-	// the console decides through. The gateway owns it so it outlives reloads.
-	approvalStore *approval.Store
-
 	// Runtime state
 	running        atomic.Bool
 	contextManager *sessionContextManager
@@ -52,7 +46,6 @@ type AgentLoop struct {
 	mediaStore     media.MediaStore
 	cmdRegistry    *commands.Registry
 	mcp            mcpRuntime
-	hookRuntime    hookRuntime
 	steering       *steeringQueue
 	pendingSkills  sync.Map
 	pendingStops   sync.Map
@@ -63,7 +56,6 @@ type AgentLoop struct {
 
 	// activeTurnStates tracks active turns per session to prevent duplicates.
 	activeTurnStates sync.Map
-	subTurnCounter   atomic.Int64
 
 	turnSeq atomic.Uint64
 
@@ -81,18 +73,16 @@ type AgentLoop struct {
 
 // processOptions configures how a message is processed
 type processOptions struct {
-	Dispatch                   DispatchRequest // Normalized routed request boundary for this turn
-	SessionKey                 string          // Session identifier for history/context
-	Channel                    string          // Target channel for tool execution
-	ChatID                     string          // Target chat ID for tool execution
-	MessageID                  string          // Current inbound platform message ID
-	ReplyToMessageID           string          // Current inbound reply target message ID
-	SenderID                   string          // Current sender ID for dynamic context
-	SenderDisplayName          string          // Current sender display name for dynamic context
-	UserMessage                string          // User message content (may include prefix)
-	ForcedSkills               []string        // Skills explicitly requested for this message
-	TurnProfile                config.EffectiveTurnProfile
-	SystemPromptOverride       string                 // Override the default system prompt (Used by SubTurns)
+	Dispatch                   DispatchRequest        // Normalized routed request boundary for this turn
+	SessionKey                 string                 // Session identifier for history/context
+	Channel                    string                 // Target channel for tool execution
+	ChatID                     string                 // Target chat ID for tool execution
+	MessageID                  string                 // Current inbound platform message ID
+	ReplyToMessageID           string                 // Current inbound reply target message ID
+	SenderID                   string                 // Current sender ID for dynamic context
+	SenderDisplayName          string                 // Current sender display name for dynamic context
+	UserMessage                string                 // User message content (may include prefix)
+	ForcedSkills               []string               // Skills explicitly requested for this message
 	Media                      []string               // media:// refs from inbound message
 	InitialSteeringMessages    []providers.Message    // Steering messages from refactor/agent
 	DefaultResponse            string                 // Response when LLM returns empty
@@ -100,11 +90,10 @@ type processOptions struct {
 	SendResponse               bool                   // Whether to send response via bus
 	AllowInterimWebChatPublish bool                   // Whether webchat tool-call interim text can be published when SendResponse is false
 	SuppressToolFeedback       bool                   // Whether to suppress inline tool feedback messages
-	NoHistory                  bool                   // If true, don't load session history (for subturns/pipeline modes)
 	SkipInitialSteeringPoll    bool                   // If true, skip the steering poll at loop start (used by Continue)
-	InboundContext             *bus.InboundContext    // Normalized inbound facts for events/hooks
-	RouteResult                *routing.ResolvedRoute // Route decision snapshot for events/hooks
-	SessionScope               *session.SessionScope  // Session scope snapshot for events/hooks
+	InboundContext             *bus.InboundContext    // Normalized inbound facts for events
+	RouteResult                *routing.ResolvedRoute // Route decision snapshot for events
+	SessionScope               *session.SessionScope  // Session scope snapshot for events
 }
 
 type continuationTarget struct {
@@ -139,9 +128,6 @@ const (
 func (al *AgentLoop) Run(ctx context.Context) error {
 	al.running.Store(true)
 
-	if err := al.ensureHooksInitialized(ctx); err != nil {
-		return err
-	}
 	if err := al.ensureMCPInitialized(ctx); err != nil {
 		return err
 	}
@@ -330,9 +316,6 @@ func (al *AgentLoop) Close() {
 	}
 
 	al.GetRegistry().Close()
-	if al.hooks != nil {
-		al.hooks.Close()
-	}
 	al.closeRuntimeEventLogger()
 	if al.runtimeEvents != nil {
 		if err := al.runtimeEvents.Close(); err != nil {
@@ -343,10 +326,6 @@ func (al *AgentLoop) Close() {
 		}
 	}
 }
-
-// MountHook registers an in-process hook on the agent loop.
-
-// UnmountHook removes a previously registered in-process hook.
 
 type turnEventScope struct {
 	agentID    string
@@ -409,11 +388,8 @@ func (al *AgentLoop) ReloadProviderAndConfig(
 
 	// Also update fallback chain with new config; rebuild rate limiter registry.
 	newRL := providers.NewRateLimiterRegistry()
-	for _, agentID := range registry.ListAgentIDs() {
-		if agent, ok := registry.GetAgent(agentID); ok {
-			newRL.RegisterCandidates(agent.Candidates)
-			newRL.RegisterCandidates(agent.LightCandidates)
-		}
+	if agent := registry.GetDefaultAgent(); agent != nil {
+		newRL.RegisterCandidates(agent.Candidates)
 	}
 	al.fallback = providers.NewFallbackChain(providers.NewCooldownTracker(), newRL)
 
@@ -421,20 +397,6 @@ func (al *AgentLoop) ReloadProviderAndConfig(
 	al.refreshRuntimeEventLogger(cfg)
 
 	oldMCPManager := al.mcp.reset()
-	al.hookRuntime.reset(al)
-	configureHookManagerFromConfig(al.hooks, cfg)
-	if err := al.ensureHooksInitialized(ctx); err != nil {
-		logger.WarnCF("agent", "Configured hooks failed to reinitialize after reload",
-			map[string]any{"error": err.Error()})
-	} else if degraded := al.hookRuntime.getDegraded(); degraded != nil {
-		// The mount kept the already-mounted hooks (the approval gate among
-		// them) but some process hooks did not start. Report it at error level
-		// so the reload is not read as fully successful; do not return an error
-		// because the config and provider did swap and the gateway would roll
-		// the whole reload back over a degraded process hook.
-		logger.ErrorCF("agent", "Hooks are degraded after reload: some process hooks did not start, hooks are degraded but the approval gate is still mounted",
-			map[string]any{"error": degraded.Error()})
-	}
 	if oldMCPManager != nil {
 		if err := oldMCPManager.Close(); err != nil {
 			logger.WarnCF("agent", "Failed to close previous MCP manager during reload",
@@ -471,10 +433,6 @@ func (al *AgentLoop) runAgentLoop(
 ) (string, error) {
 	opts = normalizeProcessOptions(opts)
 	var err error
-	opts, err = resolveTurnProfileOptions(al.GetConfig(), opts)
-	if err != nil {
-		return "", err
-	}
 
 	ensureSessionMetadata(
 		agent.Sessions,
@@ -595,11 +553,5 @@ func (al *AgentLoop) runAgentLoop(
 
 // makePendingTurnID generates a unique turn ID for placeholder turns.
 // Format: "pending-{sessionKey}-{sequence}"
-
-// isNativeSearchProvider reports whether the given LLM provider implements
-// NativeSearchCapable and returns true for SupportsNativeSearch.
-
-// filterClientWebSearch returns a copy of tools with the client-side
-// web_search tool removed. Used when native provider search is preferred.
 
 // Helper to extract provider from registry for cleanup

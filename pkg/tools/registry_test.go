@@ -48,20 +48,6 @@ func (m *mockPromptMetadataTool) PromptMetadata() PromptMetadata {
 	return m.metadata
 }
 
-type mockAsyncRegistryTool struct {
-	mockRegistryTool
-	lastCB AsyncCallback
-}
-
-func (m *mockAsyncRegistryTool) ExecuteAsync(
-	_ context.Context,
-	args map[string]any,
-	cb AsyncCallback,
-) *ToolResult {
-	m.lastCB = cb
-	return m.result
-}
-
 type mockMediaStoreAwareTool struct {
 	mockRegistryTool
 	store media.MediaStore
@@ -252,7 +238,7 @@ func TestToolRegistry_ExecuteWithContext_InjectsToolContext(t *testing.T) {
 	}
 	r.Register(ct)
 
-	r.ExecuteWithContext(context.Background(), "ctx_tool", nil, "telegram", "chat-42", nil)
+	r.ExecuteWithContext(context.Background(), "ctx_tool", nil, "telegram", "chat-42")
 
 	if ct.lastCtx == nil {
 		t.Fatal("expected Execute to be called")
@@ -272,7 +258,7 @@ func TestToolRegistry_ExecuteWithContext_EmptyContext(t *testing.T) {
 	}
 	r.Register(ct)
 
-	r.ExecuteWithContext(context.Background(), "ctx_tool", nil, "", "", nil)
+	r.ExecuteWithContext(context.Background(), "ctx_tool", nil, "", "")
 
 	if ct.lastCtx == nil {
 		t.Fatal("expected Execute to be called")
@@ -294,7 +280,7 @@ func TestToolRegistry_ExecuteWithContext_PreservesMessageContext(t *testing.T) {
 	r.Register(ct)
 
 	baseCtx := WithToolMessageContext(context.Background(), "msg-123", "msg-100")
-	r.ExecuteWithContext(baseCtx, "ctx_tool", nil, "telegram", "chat-42", nil)
+	r.ExecuteWithContext(baseCtx, "ctx_tool", nil, "telegram", "chat-42")
 
 	if ct.lastCtx == nil {
 		t.Fatal("expected Execute to be called")
@@ -310,31 +296,6 @@ func TestToolRegistry_ExecuteWithContext_PreservesMessageContext(t *testing.T) {
 	}
 	if got := ToolReplyToMessageID(ct.lastCtx); got != "msg-100" {
 		t.Errorf("expected replyToMessageID 'msg-100', got %q", got)
-	}
-}
-
-func TestToolRegistry_ExecuteWithContext_AsyncCallback(t *testing.T) {
-	r := NewToolRegistry()
-	at := &mockAsyncRegistryTool{
-		mockRegistryTool: *newMockTool("async_tool", "async work"),
-	}
-	at.result = AsyncResult("started")
-	r.Register(at)
-
-	called := false
-	cb := func(_ context.Context, _ *ToolResult) { called = true }
-
-	result := r.ExecuteWithContext(context.Background(), "async_tool", nil, "", "", cb)
-	if at.lastCB == nil {
-		t.Error("expected ExecuteAsync to have received a callback")
-	}
-	if !result.Async {
-		t.Error("expected async result")
-	}
-
-	at.lastCB(context.Background(), SilentResult("done"))
-	if !called {
-		t.Error("expected callback to be invoked")
 	}
 }
 
@@ -474,99 +435,6 @@ func TestToolRegistry_ToProviderDefsAttachesPromptMetadata(t *testing.T) {
 		mcp.PromptSlot != ToolPromptSlotMCP ||
 		mcp.PromptSource != "mcp:demo" {
 		t.Fatalf("mcp prompt metadata = %#v, want mcp source", mcp)
-	}
-}
-
-func TestToolRegistry_Clone(t *testing.T) {
-	r := NewToolRegistry()
-	r.Register(newMockTool("read_file", "reads files"))
-	r.Register(newMockTool("exec", "runs commands"))
-	r.Register(newMockTool("web_search", "searches the web"))
-
-	clone := r.Clone()
-
-	// Clone should have the same tools
-	if len(clone.tools) != 3 {
-		t.Errorf("expected clone to have 3 tools, got %d", len(clone.tools))
-	}
-	for _, name := range []string{"read_file", "exec", "web_search"} {
-		if _, ok := clone.Get(name); !ok {
-			t.Errorf("expected clone to have tool %q", name)
-		}
-	}
-
-	// Registering on parent should NOT affect clone
-	r.Register(newMockTool("spawn", "spawns subagent"))
-	if len(r.tools) != 4 {
-		t.Errorf("expected parent to have 4 tools, got %d", len(r.tools))
-	}
-	if len(clone.tools) != 3 {
-		t.Errorf(
-			"expected clone to still have 3 tools after parent mutation, got %d",
-			len(clone.tools),
-		)
-	}
-	if _, ok := clone.Get("spawn"); ok {
-		t.Error("expected clone NOT to have 'spawn' tool registered on parent after cloning")
-	}
-
-	// Registering on clone should NOT affect parent
-	clone.Register(newMockTool("custom", "custom tool"))
-	if len(clone.tools) != 4 {
-		t.Errorf("expected clone to have 4 tools, got %d", len(clone.tools))
-	}
-	if _, ok := r.Get("custom"); ok {
-		t.Error("expected parent NOT to have 'custom' tool registered on clone")
-	}
-}
-
-func TestToolRegistry_Clone_Empty(t *testing.T) {
-	r := NewToolRegistry()
-	clone := r.Clone()
-	if len(clone.tools) != 0 {
-		t.Errorf("expected empty clone, got count %d", len(clone.tools))
-	}
-}
-
-func TestToolRegistry_Clone_PreservesHiddenToolState(t *testing.T) {
-	r := NewToolRegistry()
-	r.RegisterHidden(newMockTool("mcp_tool", "dynamic MCP tool"))
-
-	clone := r.Clone()
-
-	// Hidden tools with TTL=0 should not be gettable (same behavior as parent)
-	if _, ok := clone.Get("mcp_tool"); ok {
-		t.Error("expected hidden tool with TTL=0 to be invisible in clone")
-	}
-
-	// But the entry should exist (count includes hidden tools)
-	if len(clone.tools) != 1 {
-		t.Errorf("expected clone count 1 (hidden entry exists), got %d", len(clone.tools))
-	}
-}
-
-func TestToolRegistry_Clone_PreservesTTLValue(t *testing.T) {
-	r := NewToolRegistry()
-	r.RegisterHidden(newMockTool("ttl_tool", "tool with TTL"))
-
-	// Manually set a non-zero TTL on the entry
-	r.mu.RLock()
-	if entry, ok := r.tools["ttl_tool"]; ok {
-		entry.TTL = 5
-	}
-	r.mu.RUnlock()
-
-	clone := r.Clone()
-
-	// Verify TTL value is preserved in the clone
-	clone.mu.RLock()
-	defer clone.mu.RUnlock()
-	entry, ok := clone.tools["ttl_tool"]
-	if !ok {
-		t.Fatal("expected ttl_tool to exist in clone")
-	}
-	if entry.TTL != 5 {
-		t.Errorf("expected TTL=5 in clone, got %d", entry.TTL)
 	}
 }
 
@@ -725,7 +593,6 @@ func TestToolRegistry_ExecuteWithContext_PanicRecovery(t *testing.T) {
 		map[string]any{"key": "value"},
 		"telegram",
 		"chat-123",
-		nil,
 	)
 
 	if result == nil {
@@ -805,7 +672,6 @@ func TestToolRegistry_ExecuteWithContext_SanitizesLargeBase64Payload(t *testing.
 		nil,
 		"telegram",
 		"chat-1",
-		nil,
 	)
 
 	if result.ForLLM != largeBase64OmittedMessage {
@@ -832,7 +698,6 @@ func TestToolRegistry_ExecuteWithContext_ExtractsInlineMediaDataURL(t *testing.T
 		nil,
 		"telegram",
 		"chat-42",
-		nil,
 	)
 
 	if len(result.Media) != 1 {
@@ -874,7 +739,6 @@ func TestToolRegistry_ExecuteWithContext_SanitizesInlineMediaWithoutStore(t *tes
 		nil,
 		"telegram",
 		"chat-42",
-		nil,
 	)
 
 	if strings.Contains(result.ForLLM, "data:image/png;base64") {

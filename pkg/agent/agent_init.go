@@ -16,7 +16,6 @@ import (
 	runtimeevents "github.com/kiry163/mole/pkg/events"
 	"github.com/kiry163/mole/pkg/logger"
 	"github.com/kiry163/mole/pkg/providers"
-	"github.com/kiry163/mole/pkg/skills"
 	"github.com/kiry163/mole/pkg/tools"
 )
 
@@ -32,11 +31,8 @@ func NewAgentLoop(
 	rl := providers.NewRateLimiterRegistry()
 	// Register rate limiters for all agents' candidates so that RPM limits
 	// configured in ModelConfig are enforced before each LLM call.
-	for _, agentID := range registry.ListAgentIDs() {
-		if agent, ok := registry.GetAgent(agentID); ok {
-			rl.RegisterCandidates(agent.Candidates)
-			rl.RegisterCandidates(agent.LightCandidates)
-		}
+	if agent := registry.GetDefaultAgent(); agent != nil {
+		rl.RegisterCandidates(agent.Candidates)
 	}
 	fallbackChain := providers.NewFallbackChain(cooldown, rl)
 
@@ -59,8 +55,6 @@ func NewAgentLoop(
 	al.activeReqCond = sync.NewCond(&al.activeReqMu)
 	al.refreshRuntimeEventLogger(cfg)
 	al.providerFactory = providers.CreateProviderFromConfig
-	al.hooks = NewHookManager(al.runtimeEvents.Channel())
-	configureHookManagerFromConfig(al.hooks, cfg)
 	al.contextManager = al.resolveContextManager()
 
 	// Register shared tools to all agents (now that al is created)
@@ -204,136 +198,6 @@ func registerSharedTools(
 				allowReadPaths,
 			)
 			agent.Tools.Register(loadImageTool)
-		}
-
-		// Skill discovery and installation tools
-		skills_enabled := cfg.Tools.IsToolEnabled("skills")
-		find_skills_enable := cfg.Tools.IsToolEnabled("find_skills")
-		install_skills_enable := cfg.Tools.IsToolEnabled("install_skill")
-		if skills_enabled && (find_skills_enable || install_skills_enable) {
-			registryMgr := skills.NewRegistryManagerFromToolsConfig(cfg.Tools.Skills)
-
-			if find_skills_enable {
-				searchCache := skills.NewSearchCache(
-					cfg.Tools.Skills.SearchCache.MaxSize,
-					time.Duration(cfg.Tools.Skills.SearchCache.TTLSeconds)*time.Second,
-				)
-				agent.Tools.Register(tools.NewFindSkillsTool(registryMgr, searchCache))
-			}
-
-			if install_skills_enable {
-				agent.Tools.Register(tools.NewInstallSkillTool(registryMgr, agent.Workspace))
-			}
-		}
-
-		// Spawn and spawn_status tools share a SubagentManager.
-		// Construct it when either tool is enabled (both require subagent).
-		spawnEnabled := cfg.Tools.IsToolEnabled("spawn")
-		spawnStatusEnabled := cfg.Tools.IsToolEnabled("spawn_status")
-		if (spawnEnabled || spawnStatusEnabled) && cfg.Tools.IsToolEnabled("subagent") {
-			subagentManager := tools.NewSubagentManager(agent.Model)
-			subagentManager.SetLLMOptions(agent.MaxTokens, agent.Temperature)
-
-			// Set the spawner that links into AgentLoop's turnState
-			subagentManager.SetSpawner(func(
-				ctx context.Context,
-				task, label, targetAgentID string,
-				tls *tools.ToolRegistry,
-				maxTokens int,
-				temperature float64,
-				hasMaxTokens, hasTemperature bool,
-			) (*tools.ToolResult, error) {
-				// 1. Recover parent Turn State from Context
-				parentTS := turnStateFromContext(ctx)
-				if parentTS == nil {
-					// Fallback: If no turnState exists in context, create an isolated ad-hoc root turn state
-					// so that the tool can still function outside of an agent loop (e.g. tests, raw invocations).
-					parentTS = &turnState{
-						ctx:            ctx,
-						turnID:         "adhoc-root",
-						depth:          0,
-						session:        nil, // Ephemeral session not needed for adhoc spawn
-						pendingResults: make(chan *tools.ToolResult, 16),
-						concurrencySem: make(chan struct{}, 5),
-					}
-				}
-
-				// 2. Build Tools slice from registry
-				var tlSlice []tools.Tool
-				for _, name := range tls.List() {
-					if t, ok := tls.Get(name); ok {
-						tlSlice = append(tlSlice, t)
-					}
-				}
-
-				// 3. System Prompt
-				systemPrompt := "You are a subagent. Complete the given task independently and report the result.\n" +
-					"You have access to tools - use them as needed to complete your task.\n" +
-					"After completing the task, provide a clear summary of what was done.\n\n" +
-					"Task: " + task
-
-				// 4. Resolve Model
-				modelToUse := agent.Model
-				if targetAgentID != "" {
-					if targetAgent, ok := al.GetRegistry().GetAgent(targetAgentID); ok {
-						modelToUse = targetAgent.Model
-					}
-				}
-
-				// 5. Build SubTurnConfig
-				cfg := SubTurnConfig{
-					Model:        modelToUse,
-					Tools:        tlSlice,
-					SystemPrompt: systemPrompt,
-				}
-				if hasMaxTokens {
-					cfg.MaxTokens = maxTokens
-				}
-
-				// 6. Spawn SubTurn
-				return spawnSubTurn(ctx, al, parentTS, cfg)
-			})
-
-			// Clone the parent's tool registry so subagents can use all
-			// tools registered so far (file, web, etc.) but NOT spawn/
-			// spawn_status which are added below — preventing recursive
-			// subagent spawning.
-			subagentManager.SetTools(agent.Tools.Clone())
-			if spawnEnabled {
-				spawnTool := tools.NewSpawnTool(subagentManager)
-				spawnTool.SetSpawner(NewSubTurnSpawner(al))
-				currentAgentID := agentID
-				spawnTool.SetAllowlistChecker(func(targetAgentID string) bool {
-					return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
-				})
-
-				agent.Tools.Register(spawnTool)
-
-				// Also register the synchronous subagent tool
-				subagentTool := tools.NewSubagentTool(subagentManager)
-				subagentTool.SetSpawner(NewSubTurnSpawner(al))
-				agent.Tools.Register(subagentTool)
-			}
-			if spawnStatusEnabled {
-				agent.Tools.Register(tools.NewSpawnStatusTool(subagentManager))
-			}
-		} else if (spawnEnabled || spawnStatusEnabled) && !cfg.Tools.IsToolEnabled("subagent") {
-			logger.WarnCF("agent", "spawn/spawn_status tools require subagent to be enabled", nil)
-		}
-
-		// Register delegate tool for multi-agent setups.
-		// Auto-enabled when multiple agents exist. Delegation uses the SubTurn
-		// mechanism directly (not SubagentManager) and is independent of the
-		// subagent tool.
-		if len(registry.ListAgentIDs()) > 1 {
-			delegateTool := tools.NewDelegateTool()
-			delegateTool.SetSpawner(NewSubTurnSpawner(al))
-			currentAgentID := agentID
-			delegateTool.SetSelfAgentID(currentAgentID)
-			delegateTool.SetAllowlistChecker(func(targetAgentID string) bool {
-				return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
-			})
-			agent.Tools.Register(delegateTool)
 		}
 
 		warnOnUnknownAgentToolDeclarations(agentID, agent.Workspace, agent.Definition, agent.Tools)

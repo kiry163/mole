@@ -4,7 +4,7 @@ import type { SkillSupportItem } from "@/api/skills"
 
 import type { SkillSortOption } from "./types"
 
-const KNOWN_ORIGIN_ORDER = ["builtin", "third_party", "manual"]
+const KNOWN_ORIGIN_ORDER = ["builtin", "manual"]
 
 export function compareSkills(
   left: SkillSupportItem,
@@ -37,7 +37,7 @@ export function getSkillOriginKind(skill: SkillSupportItem) {
 }
 
 export function getOriginLabel(origin: string, t: TFunction) {
-  if (origin === "builtin" || origin === "third_party" || origin === "manual") {
+  if (origin === "builtin" || origin === "manual") {
     return t(`pages.agent.skills.origin.${origin}`)
   }
   if (origin === "all") {
@@ -50,9 +50,6 @@ export function getOriginAccentClasses(origin: string) {
   if (origin === "manual") {
     return "bg-emerald-100 text-emerald-700"
   }
-  if (origin === "third_party") {
-    return "bg-sky-100 text-sky-700"
-  }
   if (origin === "builtin") {
     return "bg-amber-100 text-amber-700"
   }
@@ -62,9 +59,6 @@ export function getOriginAccentClasses(origin: string) {
 export function getOriginBadgeClasses(origin: string) {
   if (origin === "manual") {
     return "bg-emerald-100 text-emerald-700"
-  }
-  if (origin === "third_party") {
-    return "bg-sky-100 text-sky-700"
   }
   if (origin === "builtin") {
     return "bg-amber-100 text-amber-700"

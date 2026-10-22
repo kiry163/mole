@@ -19,9 +19,6 @@ func TestNewToolResult(t *testing.T) {
 	if result.IsError {
 		t.Error("Expected IsError to be false")
 	}
-	if result.Async {
-		t.Error("Expected Async to be false")
-	}
 }
 
 func TestSilentResult(t *testing.T) {
@@ -36,9 +33,6 @@ func TestSilentResult(t *testing.T) {
 	if result.IsError {
 		t.Error("Expected IsError to be false")
 	}
-	if result.Async {
-		t.Error("Expected Async to be false")
-	}
 }
 
 func TestDiffResult(t *testing.T) {
@@ -49,9 +43,6 @@ func TestDiffResult(t *testing.T) {
 	}
 	if result.IsError {
 		t.Error("Expected IsError to be false")
-	}
-	if result.Async {
-		t.Error("Expected Async to be false")
 	}
 	if result.ForLLM == result.ForUser {
 		t.Fatalf("Expected ForLLM to omit the full diff, got %q", result.ForLLM)
@@ -88,23 +79,6 @@ func TestDiffResult_NormalizesAbsolutePathsAndHandlesNoOpChanges(t *testing.T) {
 	}
 }
 
-func TestAsyncResult(t *testing.T) {
-	result := AsyncResult("async task started")
-
-	if result.ForLLM != "async task started" {
-		t.Errorf("Expected ForLLM 'async task started', got '%s'", result.ForLLM)
-	}
-	if result.Silent {
-		t.Error("Expected Silent to be false")
-	}
-	if result.IsError {
-		t.Error("Expected IsError to be false")
-	}
-	if !result.Async {
-		t.Error("Expected Async to be true")
-	}
-}
-
 func TestErrorResult(t *testing.T) {
 	result := ErrorResult("operation failed")
 
@@ -116,9 +90,6 @@ func TestErrorResult(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("Expected IsError to be true")
-	}
-	if result.Async {
-		t.Error("Expected Async to be false")
 	}
 }
 
@@ -138,9 +109,6 @@ func TestUserResult(t *testing.T) {
 	if result.IsError {
 		t.Error("Expected IsError to be false")
 	}
-	if result.Async {
-		t.Error("Expected Async to be false")
-	}
 }
 
 func TestToolResultJSONSerialization(t *testing.T) {
@@ -155,10 +123,6 @@ func TestToolResultJSONSerialization(t *testing.T) {
 		{
 			name:   "silent result",
 			result: SilentResult("silent content"),
-		},
-		{
-			name:   "async result",
-			result: AsyncResult("async content"),
 		},
 		{
 			name:   "error result",
@@ -196,9 +160,6 @@ func TestToolResultJSONSerialization(t *testing.T) {
 			}
 			if decoded.IsError != tt.result.IsError {
 				t.Errorf("IsError mismatch: got %v, want %v", decoded.IsError, tt.result.IsError)
-			}
-			if decoded.Async != tt.result.Async {
-				t.Errorf("Async mismatch: got %v, want %v", decoded.Async, tt.result.Async)
 			}
 		})
 	}
@@ -257,9 +218,6 @@ func TestToolResultJSONStructure(t *testing.T) {
 	}
 	if _, ok := parsed["is_error"]; !ok {
 		t.Error("Expected 'is_error' key in JSON")
-	}
-	if _, ok := parsed["async"]; !ok {
-		t.Error("Expected 'async' key in JSON")
 	}
 
 	// Check that 'err' is NOT present (it should have json:"-" tag)

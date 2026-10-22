@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/kiry163/mole/pkg"
-	"github.com/kiry163/mole/pkg/approval"
 	"github.com/kiry163/mole/pkg/fileutil"
 	"github.com/kiry163/mole/pkg/logger"
 )
@@ -37,7 +36,6 @@ type Config struct {
 	Dashboard DashboardConfig `json:"dashboard,omitempty" yaml:"dashboard,omitempty"`
 	Gateway   GatewayConfig   `json:"gateway"             yaml:"-"`
 	Events    EventsConfig    `json:"events,omitempty"    yaml:"-"`
-	Hooks     HooksConfig     `json:"hooks,omitempty"     yaml:"-"`
 	Tools     ToolsConfig     `json:"tools"               yaml:",inline"`
 
 	// cache for sensitive values and compiled regex (computed once)
@@ -66,36 +64,6 @@ func (c *Config) FilterSensitiveData(content string) string {
 	return c.SensitiveDataReplacer().Replace(content)
 }
 
-type HooksConfig struct {
-	Enabled   bool                         `json:"enabled"`
-	Defaults  HookDefaultsConfig           `json:"defaults,omitempty"`
-	Builtins  map[string]BuiltinHookConfig `json:"builtins,omitempty"`
-	Processes map[string]ProcessHookConfig `json:"processes,omitempty"`
-}
-
-type HookDefaultsConfig struct {
-	ObserverTimeoutMS    int `json:"observer_timeout_ms,omitempty"`
-	InterceptorTimeoutMS int `json:"interceptor_timeout_ms,omitempty"`
-	ApprovalTimeoutMS    int `json:"approval_timeout_ms,omitempty"`
-}
-
-type BuiltinHookConfig struct {
-	Enabled  bool            `json:"enabled"`
-	Priority int             `json:"priority,omitempty"`
-	Config   json.RawMessage `json:"config,omitempty"`
-}
-
-type ProcessHookConfig struct {
-	Enabled   bool              `json:"enabled"`
-	Priority  int               `json:"priority,omitempty"`
-	Transport string            `json:"transport,omitempty"`
-	Command   []string          `json:"command,omitempty"`
-	Dir       string            `json:"dir,omitempty"`
-	Env       map[string]string `json:"env,omitempty"`
-	Observe   []string          `json:"observe,omitempty"`
-	Intercept []string          `json:"intercept,omitempty"`
-}
-
 // MarshalJSON implements custom JSON marshaling for Config
 // to omit providers section when empty and session when empty.
 func (c *Config) MarshalJSON() ([]byte, error) {
@@ -116,84 +84,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 }
 
 type AgentsConfig struct {
-	Defaults AgentDefaults   `json:"defaults"`
-	List     []AgentConfig   `json:"list,omitempty"`
-	Dispatch *DispatchConfig `json:"dispatch,omitempty"`
-}
-
-// AgentModelConfig supports both string and structured model config.
-// String format: "gpt-4" (just primary, no fallbacks)
-// Object format: {"primary": "gpt-4", "fallbacks": ["gpt-4-mini"]}
-type AgentModelConfig struct {
-	Primary   string   `json:"primary,omitempty"`
-	Fallbacks []string `json:"fallbacks,omitempty"`
-}
-
-func (m *AgentModelConfig) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err == nil {
-		m.Primary = s
-		m.Fallbacks = nil
-		return nil
-	}
-	type raw struct {
-		Primary   string   `json:"primary"`
-		Fallbacks []string `json:"fallbacks"`
-	}
-	var r raw
-	if err := json.Unmarshal(data, &r); err != nil {
-		return err
-	}
-	m.Primary = r.Primary
-	m.Fallbacks = r.Fallbacks
-	return nil
-}
-
-func (m AgentModelConfig) MarshalJSON() ([]byte, error) {
-	if len(m.Fallbacks) == 0 && m.Primary != "" {
-		return json.Marshal(m.Primary)
-	}
-	type raw struct {
-		Primary   string   `json:"primary,omitempty"`
-		Fallbacks []string `json:"fallbacks,omitempty"`
-	}
-	return json.Marshal(raw{Primary: m.Primary, Fallbacks: m.Fallbacks})
-}
-
-type AgentConfig struct {
-	ID        string            `json:"id"`
-	Default   bool              `json:"default,omitempty"`
-	Name      string            `json:"name,omitempty"`
-	Workspace string            `json:"workspace,omitempty"`
-	Model     *AgentModelConfig `json:"model,omitempty"`
-	Skills    []string          `json:"skills,omitempty"`
-	Subagents *SubagentsConfig  `json:"subagents,omitempty"`
-}
-
-type SubagentsConfig struct {
-	AllowAgents []string          `json:"allow_agents,omitempty"`
-	Model       *AgentModelConfig `json:"model,omitempty"`
-}
-
-type DispatchConfig struct {
-	Rules []DispatchRule `json:"rules,omitempty"`
-}
-
-type DispatchRule struct {
-	Name              string           `json:"name,omitempty"`
-	Agent             string           `json:"agent"`
-	When              DispatchSelector `json:"when"`
-	SessionDimensions []string         `json:"session_dimensions,omitempty"`
-}
-
-type DispatchSelector struct {
-	Channel   string `json:"channel,omitempty"`
-	Account   string `json:"account,omitempty"`
-	Space     string `json:"space,omitempty"`
-	Chat      string `json:"chat,omitempty"`
-	Topic     string `json:"topic,omitempty"`
-	Sender    string `json:"sender,omitempty"`
-	Mentioned *bool  `json:"mentioned,omitempty"`
+	Defaults AgentDefaults `json:"defaults"`
 }
 
 type SessionConfig struct {
@@ -222,27 +113,6 @@ func (s *SessionConfig) ApplyDmScope() {
 	}
 }
 
-// RoutingConfig controls the intelligent model routing feature.
-// When enabled, each incoming message is scored against structural features
-// (message length, code blocks, tool call history, conversation depth, attachments).
-// Messages scoring below Threshold are sent to LightModel; all others use the
-// agent's primary model. This reduces cost and latency for simple tasks without
-// requiring any keyword matching — all scoring is language-agnostic.
-type RoutingConfig struct {
-	Enabled    bool    `json:"enabled"`
-	LightModel string  `json:"light_model"` // model_name from model_list to use for simple tasks
-	Threshold  float64 `json:"threshold"`   // complexity score in [0,1]; score >= threshold → primary model
-}
-
-// SubTurnConfig configures the SubTurn execution system.
-type SubTurnConfig struct {
-	MaxDepth              int `json:"max_depth"`
-	MaxConcurrent         int `json:"max_concurrent"`
-	DefaultTimeoutMinutes int `json:"default_timeout_minutes"`
-	DefaultTokenBudget    int `json:"default_token_budget"`
-	ConcurrencyTimeoutSec int `json:"concurrency_timeout_sec"`
-}
-
 type ToolFeedbackConfig struct {
 	Enabled          bool `json:"enabled"`
 	MaxArgsLength    int  `json:"max_args_length"`
@@ -264,13 +134,10 @@ type AgentDefaults struct {
 	SummarizeMessageThreshold int                `json:"summarize_message_threshold"`
 	SummarizeTokenPercent     int                `json:"summarize_token_percent"`
 	MaxMediaSize              int                `json:"max_media_size,omitempty"`
-	Routing                   *RoutingConfig     `json:"routing,omitempty"`
 	SteeringMode              string             `json:"steering_mode,omitempty"`      // "one-at-a-time" (default) or "all"
 	MaxParallelTurns          int                `json:"max_parallel_turns,omitempty"` // Max concurrent turns (0 or 1 = sequential)
-	SubTurn                   SubTurnConfig      `json:"subturn"`
 	ToolFeedback              ToolFeedbackConfig `json:"tool_feedback,omitempty"`
 	SplitOnMarker             bool               `json:"split_on_marker"` // split messages on <|[SPLIT]|> marker
-	TurnProfile               TurnProfileConfig  `json:"turn_profile,omitempty"`
 	MaxLLMRetries             int                `json:"max_llm_retries,omitempty"`
 	LLMRetryBackoffSecs       int                `json:"llm_retry_backoff_secs,omitempty"`
 }
@@ -358,24 +225,6 @@ func (c StreamingConfig) WithDefaults(throttleSeconds, minGrowthChars int) Strea
 		}
 	}
 	return c
-}
-
-type TelegramSettings struct {
-	Token             SecureString    `json:"token,omitzero"       yaml:"token,omitempty"`
-	BaseURL           string          `json:"base_url"             yaml:"-"`
-	Proxy             string          `json:"proxy"                yaml:"-"`
-	Streaming         StreamingConfig `json:"streaming,omitzero"   yaml:"-"`
-	UseMarkdownV2     bool            `json:"use_markdown_v2"      yaml:"-"`
-	MediaGroupDelayMS int             `json:"media_group_delay_ms" yaml:"-"`
-}
-
-type FeishuSettings struct {
-	AppID               string              `json:"app_id"                      yaml:"-"`
-	AppSecret           SecureString        `json:"app_secret,omitzero"         yaml:"app_secret,omitempty"`
-	EncryptKey          SecureString        `json:"encrypt_key,omitzero"        yaml:"encrypt_key,omitempty"`
-	VerificationToken   SecureString        `json:"verification_token,omitzero" yaml:"verification_token,omitempty"`
-	RandomReactionEmoji FlexibleStringSlice `json:"random_reaction_emoji"       yaml:"-"`
-	IsLark              bool                `json:"is_lark"                     yaml:"-"`
 }
 
 type QQSettings struct {
@@ -560,12 +409,6 @@ type WebToolsConfig struct {
 	Tavily     TavilyConfig `yaml:"tavily,omitempty" json:"tavily"`
 	Sogou      SogouConfig  `yaml:"-"                json:"sogou"`
 	Provider   string       `yaml:"-"                json:"provider,omitempty"`
-	// PreferNative controls whether to use provider-native web search when
-	// the active LLM supports it (e.g. OpenAI web_search_preview). When true,
-	// the client-side web_search tool is hidden to avoid duplicate search surfaces,
-	// and the provider's built-in search is used instead. Falls back to client-side
-	// search when the provider does not support native search.
-	PreferNative bool `yaml:"-" json:"prefer_native"`
 	// Proxy is an optional proxy URL for web tools (http/https/socks5/socks5h).
 	// For authenticated proxies, prefer HTTP_PROXY/HTTPS_PROXY env vars instead of embedding credentials in config.
 	Proxy                string              `yaml:"-" json:"proxy,omitempty"`
@@ -581,13 +424,6 @@ type ExecConfig struct {
 	CustomDenyPatterns  []string `                                 json:"custom_deny_patterns"`
 	CustomAllowPatterns []string `                                 json:"custom_allow_patterns"`
 	TimeoutSeconds      int      `                                 json:"timeout_seconds"` // 0 means use default (60s)
-}
-
-type SkillsToolsConfig struct {
-	ToolConfig            `                       yaml:"-"`
-	Registries            SkillsRegistriesConfig `yaml:"registries,omitempty"                             json:"registries"`
-	MaxConcurrentSearches int                    `yaml:"-"                    json:"max_concurrent_searches"`
-	SearchCache           SearchCacheConfig      `yaml:"-"                    json:"search_cache"`
 }
 
 type MediaCleanupConfig struct {
@@ -628,37 +464,20 @@ type ToolsConfig struct {
 	// FilterMinLength is the minimum content length required for filtering.
 	// Content shorter than this will be returned unchanged for performance.
 	// Default: 8
-	FilterMinLength int            `json:"filter_min_length" yaml:"-"`
-	Web             WebToolsConfig `json:"web"               yaml:"web,omitempty"`
-	// Approval holds the human-approval policy for tool calls. It only has an
-	// effect while hooks.builtins.webui_approval is enabled.
-	Approval     ApprovalConfig     `json:"approval" yaml:"-"`
-	Exec         ExecConfig         `json:"exec"              yaml:"-"`
-	Skills       SkillsToolsConfig  `json:"skills"            yaml:"skills,omitempty"`
-	MediaCleanup MediaCleanupConfig `json:"media_cleanup"     yaml:"-"`
-	MCP          MCPConfig          `json:"mcp"               yaml:"-"`
-	AppendFile   ToolConfig         `json:"append_file"       yaml:"-"`
-	EditFile     ToolConfig         `json:"edit_file"         yaml:"-"`
-	FindSkills   ToolConfig         `json:"find_skills"       yaml:"-"`
-	InstallSkill ToolConfig         `json:"install_skill"     yaml:"-"`
-	ListDir      ToolConfig         `json:"list_dir"          yaml:"-"`
-	LoadImage    ToolConfig         `json:"load_image"        yaml:"-"`
-	Message      MessageToolsConfig `json:"message"           yaml:"-"`
-	ReadFile     ReadFileToolConfig `json:"read_file"         yaml:"-"`
-	SendFile     ToolConfig         `json:"send_file"         yaml:"-"`
-	Spawn        ToolConfig         `json:"spawn"             yaml:"-"`
-	SpawnStatus  ToolConfig         `json:"spawn_status"      yaml:"-"`
-	Subagent     ToolConfig         `json:"subagent"          yaml:"-"`
-	WebFetch     ToolConfig         `json:"web_fetch"         yaml:"-"`
-	WriteFile    ToolConfig         `json:"write_file"        yaml:"-"`
-}
-
-// ApprovalConfig is the tools.approval section.
-type ApprovalConfig struct {
-	// Rules are evaluated in order; the first match decides the tool call.
-	Rules []approval.Rule `json:"rules,omitempty"`
-	// AlwaysAllow is written by the console's "always allow" button.
-	AlwaysAllow []approval.AllowEntry `json:"always_allow,omitempty"`
+	FilterMinLength int                `json:"filter_min_length" yaml:"-"`
+	Web             WebToolsConfig     `json:"web"               yaml:"web,omitempty"`
+	Exec            ExecConfig         `json:"exec"              yaml:"-"`
+	MediaCleanup    MediaCleanupConfig `json:"media_cleanup"     yaml:"-"`
+	MCP             MCPConfig          `json:"mcp"               yaml:"-"`
+	AppendFile      ToolConfig         `json:"append_file"       yaml:"-"`
+	EditFile        ToolConfig         `json:"edit_file"         yaml:"-"`
+	ListDir         ToolConfig         `json:"list_dir"          yaml:"-"`
+	LoadImage       ToolConfig         `json:"load_image"        yaml:"-"`
+	Message         MessageToolsConfig `json:"message"           yaml:"-"`
+	ReadFile        ReadFileToolConfig `json:"read_file"         yaml:"-"`
+	SendFile        ToolConfig         `json:"send_file"         yaml:"-"`
+	WebFetch        ToolConfig         `json:"web_fetch"         yaml:"-"`
+	WriteFile       ToolConfig         `json:"write_file"        yaml:"-"`
 }
 
 // IsFilterSensitiveDataEnabled returns true if sensitive data filtering is enabled
@@ -674,100 +493,19 @@ func (c *ToolsConfig) GetFilterMinLength() int {
 	return c.FilterMinLength
 }
 
-type SearchCacheConfig struct {
-	MaxSize    int `json:"max_size"`
-	TTLSeconds int `json:"ttl_seconds"`
-}
-
-type SkillsRegistriesConfig []*SkillRegistryConfig
-
-func (c *SkillsRegistriesConfig) Get(name string) (SkillRegistryConfig, bool) {
-	if c == nil {
-		return SkillRegistryConfig{}, false
-	}
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return SkillRegistryConfig{}, false
-	}
-	for _, registry := range *c {
-		if registry == nil || registry.Name != name {
-			continue
-		}
-		return *registry, true
-	}
-	return SkillRegistryConfig{}, false
-}
-
-func (c *SkillsRegistriesConfig) Set(name string, cfg SkillRegistryConfig) {
-	if c == nil {
-		return
-	}
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return
-	}
-	cfg.Name = name
-	for i, registry := range *c {
-		if registry == nil || registry.Name != name {
-			continue
-		}
-		(*c)[i] = &cfg
-		return
-	}
-	*c = append(*c, &cfg)
-}
-
-type SkillRegistryConfig struct {
-	Name      string         `json:"name,omitempty"      yaml:"-"`
-	Enabled   bool           `json:"enabled"             yaml:"-"`
-	BaseURL   string         `json:"base_url"            yaml:"-"`
-	AuthToken SecureString   `json:"auth_token,omitzero" yaml:"auth_token,omitempty"`
-	Param     map[string]any `json:"-"                   yaml:"-"`
-}
-
-func (c *SkillRegistryConfig) DecodeParam(target any) error {
-	if c == nil {
-		return nil
-	}
-	if len(c.Param) == 0 {
-		return nil
-	}
-	data, err := json.Marshal(c.Param)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, target)
-}
-
-// MCPServerConfig defines configuration for a single MCP server
+// MCPServerConfig defines configuration for a single MCP server.
 type MCPServerConfig struct {
-	// Enabled indicates whether this MCP server is active
-	Enabled bool `json:"enabled"`
-	// Deferred controls whether this server's tools are registered as hidden (deferred/discovery mode).
-	// When nil, the global Discovery.Enabled setting applies.
-	// When explicitly set to true or false, it overrides the global setting for this server only.
-	Deferred *bool `json:"deferred,omitempty"`
-	// Command is the executable to run (e.g., "npx", "python", "/path/to/server")
-	Command string `json:"command"`
-	// Args are the arguments to pass to the command
-	Args []string `json:"args,omitempty"`
-	// Env are environment variables to set for the server process (stdio only)
-	Env map[string]string `json:"env,omitempty"`
-	// EnvFile is the path to a file containing environment variables (stdio only)
-	EnvFile string `json:"env_file,omitempty"`
-	// Type is "stdio", "sse", "http", or "streamable-http".
-	// "http" and "streamable-http" both select streamable HTTP request-response
-	// mode, while "sse" keeps the standalone SSE listener enabled for
-	// server-initiated notifications. Defaults: stdio if command is set, sse if
-	// url is set.
-	Type string `json:"type,omitempty"`
-	// URL is used for SSE/HTTP transport
-	URL string `json:"url,omitempty"`
-	// Headers are HTTP headers to send with requests (sse/http only)
-	Headers map[string]string `json:"headers,omitempty"`
+	Enabled  bool              `json:"enabled"`
+	Deferred *bool             `json:"deferred,omitempty"`
+	Command  string            `json:"command"`
+	Args     []string          `json:"args,omitempty"`
+	Env      map[string]string `json:"env,omitempty"`
+	EnvFile  string            `json:"env_file,omitempty"`
+	Type     string            `json:"type,omitempty"`
+	URL      string            `json:"url,omitempty"`
+	Headers  map[string]string `json:"headers,omitempty"`
 }
 
-// MCPConfig defines configuration for all MCP servers
 type MCPConfig struct {
 	ToolConfig
 	Discovery ToolDiscoveryConfig `                                json:"discovery"`
@@ -824,9 +562,6 @@ func LoadConfig(path string) (*Config, error) {
 	// would point at the wrong entries when the config is saved.
 	cfg.ModelList = expandMultiKeyModels(cfg.ModelList)
 	if err := ExpandEnvRefs(cfg); err != nil {
-		return nil, err
-	}
-	if err := cfg.ValidateTurnProfile(); err != nil {
 		return nil, err
 	}
 	cfg.Gateway.Host, err = normalizeGatewayHostInput(cfg.Gateway.Host)
@@ -1090,18 +825,12 @@ func (t *ToolsConfig) IsToolEnabled(name string) bool {
 		return t.Web.Enabled
 	case "exec":
 		return t.Exec.Enabled
-	case "skills":
-		return t.Skills.Enabled
 	case "media_cleanup":
 		return t.MediaCleanup.Enabled
 	case "append_file":
 		return t.AppendFile.Enabled
 	case "edit_file":
 		return t.EditFile.Enabled
-	case "find_skills":
-		return t.FindSkills.Enabled
-	case "install_skill":
-		return t.InstallSkill.Enabled
 	case "list_dir":
 		return t.ListDir.Enabled
 	case "load_image":
@@ -1110,12 +839,6 @@ func (t *ToolsConfig) IsToolEnabled(name string) bool {
 		return t.Message.Enabled
 	case "read_file":
 		return t.ReadFile.Enabled
-	case "spawn":
-		return t.Spawn.Enabled
-	case "spawn_status":
-		return t.SpawnStatus.Enabled
-	case "subagent":
-		return t.Subagent.Enabled
 	case "web_fetch":
 		return t.WebFetch.Enabled
 	case "send_file":

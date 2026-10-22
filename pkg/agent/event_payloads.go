@@ -71,12 +71,6 @@ type LLMResponsePayload struct {
 	HasReasoning bool
 }
 
-// LLMDeltaPayload describes a streamed LLM delta.
-type LLMDeltaPayload struct {
-	ContentDeltaLen   int
-	ReasoningDeltaLen int
-}
-
 // LLMRetryPayload describes a retry of an LLM request.
 type LLMRetryPayload struct {
 	Attempt    int
@@ -126,7 +120,6 @@ type ToolExecEndPayload struct {
 	ForLLMLen  int
 	ForUserLen int
 	IsError    bool
-	Async      bool
 }
 
 // ToolExecSkippedPayload describes a skipped tool call.
@@ -135,40 +128,10 @@ type ToolExecSkippedPayload struct {
 	Reason string
 }
 
-// ToolApprovalRequestedPayload describes a tool call waiting for a human.
-type ToolApprovalRequestedPayload struct {
-	RequestID  string `json:"request_id"`
-	Tool       string `json:"tool"`
-	Category   string `json:"category"`
-	Summary    string `json:"summary"`
-	Origin     string `json:"origin"`
-	Channel    string `json:"channel,omitempty"`
-	ChatID     string `json:"chat_id,omitempty"`
-	SessionKey string `json:"session_key,omitempty"`
-	TurnID     string `json:"turn_id,omitempty"`
-	Iteration  int    `json:"iteration,omitempty"`
-}
-
-// ToolApprovalDecidedPayload describes how a pending request ended.
-type ToolApprovalDecidedPayload struct {
-	RequestID string `json:"request_id"`
-	Tool      string `json:"tool"`
-	Outcome   string `json:"outcome"`
-	Reason    string `json:"reason,omitempty"`
-	DecidedBy string `json:"decided_by,omitempty"`
-	WaitedMS  int64  `json:"waited_ms"`
-}
-
 // SteeringInjectedPayload describes steering messages appended before the next LLM call.
 type SteeringInjectedPayload struct {
 	Count           int
 	TotalContentLen int
-}
-
-// FollowUpQueuedPayload describes an async follow-up queued back into the inbound bus.
-type FollowUpQueuedPayload struct {
-	SourceTool string
-	ContentLen int
 }
 
 type InterruptKind string
@@ -186,33 +149,6 @@ type InterruptReceivedPayload struct {
 	ContentLen int
 	QueueDepth int
 	HintLen    int
-}
-
-// SubTurnSpawnPayload describes the creation of a child turn.
-type SubTurnSpawnPayload struct {
-	AgentID      string
-	Label        string
-	ParentTurnID string
-}
-
-// SubTurnEndPayload describes the completion of a child turn.
-type SubTurnEndPayload struct {
-	AgentID string
-	Status  string
-}
-
-// SubTurnResultDeliveredPayload describes delivery of a sub-turn result.
-type SubTurnResultDeliveredPayload struct {
-	TargetChannel string
-	TargetChatID  string
-	ContentLen    int
-}
-
-// SubTurnOrphanPayload describes a sub-turn result that could not be delivered.
-type SubTurnOrphanPayload struct {
-	ParentTurnID string
-	ChildTurnID  string
-	Reason       string
 }
 
 // ErrorPayload describes an execution error inside the agent loop.

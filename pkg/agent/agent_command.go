@@ -333,11 +333,6 @@ func (al *AgentLoop) buildCommandsRuntime(
 				nextCandidateProviders,
 				agent.ImageCandidates,
 			)
-			copyInitializedCandidateProviders(
-				agent.CandidateProviders,
-				nextCandidateProviders,
-				agent.LightCandidates,
-			)
 			inheritPrimaryProviderForCandidates(
 				cfg,
 				nextCandidates[0],
@@ -370,7 +365,6 @@ func (al *AgentLoop) buildCommandsRuntime(
 				previousProviders,
 				nextCandidateProviders,
 				nextProvider,
-				agent.LightProvider,
 			)
 			return oldModel, nil
 		}

@@ -65,12 +65,11 @@ func Mount(env *gateway.RuntimeEnv, opts Options) error {
 
 	s.SetDebug(opts.Debug)
 	s.apiHandler.SetRuntime(&api.Runtime{
-		Address:   env.Address,
-		Version:   config.FormatVersion(),
-		PID:       os.Getpid(),
-		Channels:  env.Manager.GetEnabledChannels(),
-		Reload:    env.RequestReload,
-		Approvals: env.Approvals,
+		Address:  env.Address,
+		Version:  config.FormatVersion(),
+		PID:      os.Getpid(),
+		Channels: env.Manager.GetEnabledChannels(),
+		Reload:   env.RequestReload,
 	})
 	s.Register(env.Manager)
 

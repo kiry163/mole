@@ -38,7 +38,6 @@ export interface WebSearchProviderConfig {
 export interface WebSearchConfigResponse {
   provider: string
   current_service: string
-  prefer_native: boolean
   proxy?: string
   providers: WebSearchProviderOption[]
   settings: Record<string, WebSearchProviderConfig>

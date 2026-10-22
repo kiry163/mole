@@ -54,10 +54,8 @@ func TestNormalizeProcessOptions_UsesDispatchAsSourceOfTruth(t *testing.T) {
 		ReplyToMessageID: "parent-1",
 	}
 	route := &routing.ResolvedRoute{
-		AgentID:   "support",
 		Channel:   "slack",
 		AccountID: "workspace-a",
-		MatchedBy: "dispatch.rule:test",
 		SessionPolicy: routing.SessionPolicy{
 			Dimensions: []string{"chat", "sender"},
 		},
@@ -96,8 +94,8 @@ func TestNormalizeProcessOptions_UsesDispatchAsSourceOfTruth(t *testing.T) {
 	if opts.ReplyToMessageID != "parent-1" {
 		t.Fatalf("ReplyToMessageID = %q, want parent-1", opts.ReplyToMessageID)
 	}
-	if opts.RouteResult == nil || opts.RouteResult.AgentID != "support" {
-		t.Fatalf("RouteResult = %#v, want support route", opts.RouteResult)
+	if opts.RouteResult == nil || opts.RouteResult.AccountID != "workspace-a" {
+		t.Fatalf("RouteResult = %#v, want workspace-a route", opts.RouteResult)
 	}
 	if opts.SessionScope == nil || opts.SessionScope.AgentID != "support" {
 		t.Fatalf("SessionScope = %#v, want support scope", opts.SessionScope)

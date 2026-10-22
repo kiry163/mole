@@ -297,7 +297,7 @@ func (t *ExecTool) executeRun(ctx context.Context, args map[string]any) *ToolRes
 		return ErrorResult("command is required")
 	}
 
-	// GHSA-pv8c-p6jf-3fpp: block exec from remote channels (e.g. Telegram webhooks)
+	// GHSA-pv8c-p6jf-3fpp: block exec from remote channels
 	// unless explicitly opted-in via config. Fail-closed: empty channel = blocked.
 	if !t.allowRemote {
 		channel := ToolChannel(ctx)

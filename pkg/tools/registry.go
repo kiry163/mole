@@ -241,19 +241,15 @@ func (r *ToolRegistry) Get(name string) (Tool, bool) {
 }
 
 func (r *ToolRegistry) Execute(ctx context.Context, name string, args map[string]any) *ToolResult {
-	return r.ExecuteWithContext(ctx, name, args, "", "", nil)
+	return r.ExecuteWithContext(ctx, name, args, "", "")
 }
 
-// ExecuteWithContext executes a tool with channel/chatID context and optional async callback.
-// If the tool implements AsyncExecutor and a non-nil callback is provided,
-// ExecuteAsync is called instead of Execute — the callback is a parameter,
-// never stored as mutable state on the tool.
+// ExecuteWithContext executes a tool with channel/chatID context.
 func (r *ToolRegistry) ExecuteWithContext(
 	ctx context.Context,
 	name string,
 	args map[string]any,
 	channel, chatID string,
-	asyncCallback AsyncCallback,
 ) *ToolResult {
 	logger.InfoCF("tool", "Tool execution started",
 		map[string]any{
@@ -284,8 +280,6 @@ func (r *ToolRegistry) ExecuteWithContext(
 	// Always inject — tools validate what they require.
 	ctx = WithToolContext(ctx, channel, chatID)
 
-	// If tool implements AsyncExecutor and callback is provided, use ExecuteAsync.
-	// The callback is a call parameter, not mutable state on the tool instance.
 	var result *ToolResult
 	start := time.Now()
 
@@ -310,15 +304,7 @@ func (r *ToolRegistry) ExecuteWithContext(
 			}
 		}()
 
-		if asyncExec, ok := tool.(AsyncExecutor); ok && asyncCallback != nil {
-			logger.DebugCF("tool", "Executing async tool via ExecuteAsync",
-				map[string]any{
-					"tool": name,
-				})
-			result = asyncExec.ExecuteAsync(ctx, args, asyncCallback)
-		} else {
-			result = tool.Execute(ctx, args)
-		}
+		result = tool.Execute(ctx, args)
 	}()
 
 	// Handle nil result (should not happen, but defensive)
@@ -342,12 +328,6 @@ func (r *ToolRegistry) ExecuteWithContext(
 				"tool":     name,
 				"duration": duration.Milliseconds(),
 				"error":    result.ForLLM,
-			})
-	} else if result.Async {
-		logger.InfoCF("tool", "Tool started (async)",
-			map[string]any{
-				"tool":     name,
-				"duration": duration.Milliseconds(),
 			})
 	} else {
 		logger.InfoCF("tool", "Tool execution completed",
@@ -444,33 +424,4 @@ func (r *ToolRegistry) List() []string {
 	defer r.mu.RUnlock()
 
 	return r.sortedToolNames()
-}
-
-// Clone creates an independent copy of the registry containing the same tool
-// entries (shallow copy of each ToolEntry). This is used to give subagents a
-// snapshot of the parent agent's tools without sharing the same registry —
-// tools registered on the parent after cloning (e.g. spawn, spawn_status)
-// will NOT be visible to the clone, preventing recursive subagent spawning.
-// The version counter is reset to 0 in the clone as it's a new independent registry.
-func (r *ToolRegistry) Clone() *ToolRegistry {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	clone := &ToolRegistry{
-		tools:      make(map[string]*ToolEntry, len(r.tools)),
-		mediaStore: r.mediaStore,
-	}
-	if r.allowlist != nil {
-		clone.allowlist = make(map[string]struct{}, len(r.allowlist))
-		for name := range r.allowlist {
-			clone.allowlist[name] = struct{}{}
-		}
-	}
-	for name, entry := range r.tools {
-		clone.tools[name] = &ToolEntry{
-			Tool:   entry.Tool,
-			IsCore: entry.IsCore,
-			TTL:    entry.TTL,
-		}
-	}
-	return clone
 }

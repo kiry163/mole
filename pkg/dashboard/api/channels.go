@@ -16,8 +16,6 @@ type channelCatalogItem struct {
 
 var channelCatalog = []channelCatalogItem{
 	{Name: "weixin", ConfigKey: "weixin"},
-	{Name: "telegram", ConfigKey: "telegram"},
-	{Name: "feishu", ConfigKey: "feishu"},
 	{Name: "qq", ConfigKey: "qq"},
 	{Name: "webchat", ConfigKey: "webchat"},
 }
@@ -80,11 +78,9 @@ func findChannelCatalogItem(name string) (channelCatalogItem, bool) {
 }
 
 var channelSecretFieldMap = map[string][]string{
-	"weixin":   {"token"},
-	"telegram": {"token"},
-	"feishu":   {"app_secret", "encrypt_key", "verification_token"},
-	"qq":       {"app_secret"},
-	"webchat":  {"token"},
+	"weixin":  {"token"},
+	"qq":      {"app_secret"},
+	"webchat": {"token"},
 }
 
 func buildChannelConfigResponse(cfg *config.Config, item channelCatalogItem) channelConfigResponse {

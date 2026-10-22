@@ -1050,10 +1050,6 @@ func (m *Manager) getChannelConfigAndEnabled(channelName string) (*config.Channe
 		return bc, settings.Token.String() != ""
 	case *config.QQSettings:
 		return bc, settings.AppSecret.String() != ""
-	case *config.TelegramSettings:
-		return bc, settings.Token.String() != ""
-	case *config.FeishuSettings:
-		return bc, settings.AppSecret.String() != ""
 	}
 
 	return bc, bc.Enabled

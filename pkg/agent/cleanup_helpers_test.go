@@ -9,19 +9,6 @@ import (
 	"github.com/kiry163/mole/pkg/tools"
 )
 
-func namedHook(name string, hook any) HookRegistration {
-	return HookRegistration{Name: name, Source: HookSourceInProcess, Hook: hook}
-}
-
-func unregisterTestBuiltinHook(name string) {
-	if name == "" {
-		return
-	}
-	builtinHookRegistryMu.Lock()
-	delete(builtinHookRegistry, name)
-	builtinHookRegistryMu.Unlock()
-}
-
 func registerTool(al *AgentLoop, tool tools.Tool) {
 	registry := al.GetRegistry()
 	for _, agentID := range registry.ListAgentIDs() {
@@ -36,9 +23,6 @@ func processDirectForTest(
 	ctx context.Context,
 	content, sessionKey, channel, chatID string,
 ) (string, error) {
-	if err := al.ensureHooksInitialized(ctx); err != nil {
-		return "", err
-	}
 	if err := al.ensureMCPInitialized(ctx); err != nil {
 		return "", err
 	}

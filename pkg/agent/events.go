@@ -1,8 +1,8 @@
 package agent
 
-// HookMeta contains correlation fields shared by agent hook requests and
+// EventMeta contains correlation fields shared by agent events and
 // runtime events emitted from turn processing.
-type HookMeta struct {
+type EventMeta struct {
 	AgentID      string
 	TurnID       string
 	ParentTurnID string

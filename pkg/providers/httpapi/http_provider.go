@@ -74,10 +74,6 @@ func (p *HTTPProvider) GetDefaultModel() string {
 	return ""
 }
 
-func (p *HTTPProvider) SupportsNativeSearch() bool {
-	return p.delegate.SupportsNativeSearch()
-}
-
 func (p *HTTPProvider) SupportsThinking() bool {
 	if p == nil || p.delegate == nil {
 		return false

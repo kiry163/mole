@@ -60,17 +60,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Skills and tools support/actions
 	h.registerSkillRoutes(mux)
 	h.registerToolRoutes(mux)
-	// Hook support (builtin hook catalog for the config page)
-	h.registerHookRoutes(mux)
-
 	// Runtime build/version metadata
 	h.registerVersionRoutes(mux)
 
 	// WeChat QR login flow
 	h.registerWeixinRoutes(mux)
 
-	// Tool approval queue
-	h.registerApprovalRoutes(mux)
 }
 
 // Routes returns the mux holding every API route, built on first use.

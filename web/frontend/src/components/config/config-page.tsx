@@ -10,7 +10,6 @@ import { patchAppConfig, resetAppConfig } from "@/api/channels"
 import { dashboardFetch } from "@/api/http"
 import { getSystemVersionInfo } from "@/api/system"
 import { ConfigChangeNotice } from "@/components/config-change-notice"
-import { HooksSection } from "@/components/config/hooks-section"
 import {
   AgentDefaultsSection,
   DashboardAccessSection,
@@ -23,12 +22,9 @@ import {
   type DashboardPasswordForm,
   EMPTY_DASHBOARD_PASSWORD_FORM,
   EMPTY_FORM,
-  type HookProcessForm,
   type MCPServerForm,
-  type TurnProfileForm,
   buildFormFromConfig,
   parseIntField,
-  parseCommaOrNewlineList,
   parseJSONObjectField,
   parseMultilineList,
 } from "@/components/config/form-model"
@@ -61,33 +57,6 @@ function buildStringMapMergePatch(
   }
 
   return patch
-}
-
-function buildTurnProfilePatch(
-  profile: TurnProfileForm,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {
-    enabled: profile.enabled,
-    history: { mode: profile.historyMode },
-    system_prompt: { mode: profile.systemPromptMode },
-    skills: { mode: profile.skillsMode },
-    tools: { mode: profile.toolsMode },
-  }
-
-  if (profile.skillsMode === "custom") {
-    result.skills = {
-      mode: "custom",
-      allow: parseMultilineList(profile.skillsAllowText),
-    }
-  }
-  if (profile.toolsMode === "custom") {
-    result.tools = {
-      mode: "custom",
-      allow: parseMultilineList(profile.toolsAllowText),
-    }
-  }
-
-  return result
 }
 
 export function ConfigPage() {
@@ -190,76 +159,6 @@ export function ConfigPage() {
     )
   }
 
-  const handleHookProcessAdd = () => {
-    const nextIndex = form.hookProcesses.length + 1
-    updateField("hookProcesses", [
-      ...form.hookProcesses,
-      {
-        id: `hook-process-${Date.now()}-${nextIndex}`,
-        name: "",
-        enabled: true,
-        priority: "0",
-        command: "",
-        argsText: "",
-        dir: "",
-        envText: "{}",
-        observeText: "",
-        interceptText: "",
-      },
-    ])
-  }
-
-  const handleHookProcessRemove = (id: string) => {
-    updateField(
-      "hookProcesses",
-      form.hookProcesses.filter((process) => process.id !== id),
-    )
-  }
-
-  const handleHookProcessFieldChange = <K extends keyof HookProcessForm>(
-    id: string,
-    key: K,
-    value: HookProcessForm[K],
-  ) => {
-    updateField(
-      "hookProcesses",
-      form.hookProcesses.map((process) =>
-        process.id === id ? { ...process, [key]: value } : process,
-      ),
-    )
-  }
-
-  const handleHookBuiltinAdd = (name: string) => {
-    if (name === "" || form.hookBuiltins.some((builtin) => builtin.name === name)) {
-      return
-    }
-    updateField("hookBuiltins", [
-      ...form.hookBuiltins,
-      { id: `hook-builtin-${Date.now()}`, name, enabled: true, priority: "0" },
-    ])
-  }
-
-  const handleHookBuiltinRemove = (id: string) => {
-    updateField(
-      "hookBuiltins",
-      form.hookBuiltins.filter((builtin) => builtin.id !== id),
-    )
-  }
-
-  const handleHookBuiltinToggle = (id: string, enabled: boolean) => {
-    updateField(
-      "hookBuiltins",
-      form.hookBuiltins.map((builtin) => (builtin.id === id ? { ...builtin, enabled } : builtin)),
-    )
-  }
-
-  const handleTurnProfileFieldChange = <K extends keyof TurnProfileForm>(
-    key: K,
-    value: TurnProfileForm[K],
-  ) => {
-    updateField("turnProfile", { ...form.turnProfile, [key]: value })
-  }
-
   const handleReset = () => {
     setForm(baseline)
     setPasswordForm(EMPTY_DASHBOARD_PASSWORD_FORM)
@@ -352,7 +251,6 @@ export function ConfigPage() {
           "Summarize token percent",
           { min: 1, max: 100 },
         )
-        const turnProfile = buildTurnProfilePatch(form.turnProfile)
         const mcpDiscoveryValidationEnabled =
           form.mcpEnabled && form.mcpDiscoveryEnabled
         const mcpDiscoveryPatch: Record<string, unknown> = {
@@ -551,67 +449,6 @@ export function ConfigPage() {
           }
         }
 
-        // Hooks are a map of named entries: upsert what the form holds and null
-        // out what it dropped (PATCH is a recursive merge).
-        const hookProcessEntries: Record<string, Record<string, unknown> | null> = {}
-        const baselineProcessNames = new Set(
-          baseline.hookProcesses.map((process) => process.name.trim()).filter((name) => name !== ""),
-        )
-        for (const process of form.hookProcesses) {
-          const name = process.name.trim()
-          if (name === "") {
-            continue
-          }
-          const command = [
-            process.command.trim(),
-            ...process.argsText.trim().split(/\s+/).filter((part) => part !== ""),
-          ].filter((part) => part !== "")
-          hookProcessEntries[name] = {
-            enabled: process.enabled,
-            priority: parseIntField(
-              process.priority,
-              `${t("pages.config.hooks_processes")} ${name}`,
-              { min: 0 },
-            ),
-            transport: "stdio",
-            command,
-            dir: process.dir.trim(),
-            env: parseJSONObjectField(
-              process.envText,
-              `${t("pages.config.hooks_process_env")} ${name}`,
-            ),
-            observe: parseCommaOrNewlineList(process.observeText),
-            intercept: parseCommaOrNewlineList(process.interceptText),
-          }
-          baselineProcessNames.delete(name)
-        }
-        for (const name of baselineProcessNames) {
-          hookProcessEntries[name] = null
-        }
-
-        const hookBuiltinEntries: Record<string, Record<string, unknown> | null> = {}
-        const baselineBuiltinNames = new Set(
-          baseline.hookBuiltins.map((builtin) => builtin.name.trim()).filter((name) => name !== ""),
-        )
-        for (const builtin of form.hookBuiltins) {
-          const name = builtin.name.trim()
-          if (name === "") {
-            continue
-          }
-          hookBuiltinEntries[name] = {
-            enabled: builtin.enabled,
-            priority: parseIntField(
-              builtin.priority,
-              `${t("pages.config.hooks_builtins")} ${name}`,
-              { min: 0 },
-            ),
-          }
-          baselineBuiltinNames.delete(name)
-        }
-        for (const name of baselineBuiltinNames) {
-          hookBuiltinEntries[name] = null
-        }
-
         await patchAppConfig({
           agents: {
             defaults: {
@@ -628,33 +465,10 @@ export function ConfigPage() {
               max_tool_iterations: maxToolIterations,
               summarize_message_threshold: summarizeMessageThreshold,
               summarize_token_percent: summarizeTokenPercent,
-              turn_profile: turnProfile,
             },
           },
           session: {
             dm_scope: dmScope,
-          },
-          hooks: {
-            enabled: form.hooksEnabled,
-            defaults: {
-              observer_timeout_ms: parseIntField(
-                form.hooksObserverTimeoutMs,
-                t("pages.config.hooks_observer_timeout"),
-                { min: 1 },
-              ),
-              interceptor_timeout_ms: parseIntField(
-                form.hooksInterceptorTimeoutMs,
-                t("pages.config.hooks_interceptor_timeout"),
-                { min: 1 },
-              ),
-              approval_timeout_ms: parseIntField(
-                form.hooksApprovalTimeoutMs,
-                t("pages.config.hooks_approval_timeout"),
-                { min: 1 },
-              ),
-            },
-            processes: hookProcessEntries,
-            builtins: hookBuiltinEntries,
           },
           tools: {
             exec: execConfigPatch,
@@ -784,7 +598,6 @@ export function ConfigPage() {
               <AgentDefaultsSection
                 form={form}
                 onFieldChange={updateField}
-                onTurnProfileFieldChange={handleTurnProfileFieldChange}
               />
 
               <RuntimeSection form={form} onFieldChange={updateField} />
@@ -798,17 +611,6 @@ export function ConfigPage() {
               />
 
               <ExecSection form={form} onFieldChange={updateField} />
-
-              <HooksSection
-                form={form}
-                onFieldChange={updateField}
-                onProcessAdd={handleHookProcessAdd}
-                onProcessRemove={handleHookProcessRemove}
-                onProcessFieldChange={handleHookProcessFieldChange}
-                onBuiltinAdd={handleHookBuiltinAdd}
-                onBuiltinRemove={handleHookBuiltinRemove}
-                onBuiltinToggle={handleHookBuiltinToggle}
-              />
 
               {!isDirty && actionButtons}
             </div>

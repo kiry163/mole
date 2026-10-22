@@ -10,7 +10,7 @@ import (
 	"github.com/kiry163/mole/pkg/config"
 )
 
-func TestHandleListTools(t *testing.T) {
+func TestHandleListTools_ReportsWebSearchEnabledWhenToolIsOn(t *testing.T) {
 	configPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
@@ -18,18 +18,11 @@ func TestHandleListTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	cfg.Tools.ReadFile.Enabled = true
-	cfg.Tools.WriteFile.Enabled = false
-	cfg.Tools.FindSkills.Enabled = true
-	cfg.Tools.Skills.Enabled = true
-	cfg.Tools.Spawn.Enabled = true
-	cfg.Tools.Subagent.Enabled = false
-	cfg.Tools.MCP.Enabled = true
-	cfg.Tools.MCP.Discovery.Enabled = true
-	cfg.Tools.MCP.Discovery.UseRegex = true
-	cfg.Tools.MCP.Discovery.UseBM25 = false
-	err = config.SaveConfig(configPath, cfg)
-	if err != nil {
+	cfg.Tools.Web.Provider = "tavily"
+	cfg.Tools.Web.Sogou.Enabled = false
+	cfg.Tools.Web.Tavily.Enabled = true
+	cfg.Tools.Web.Tavily.SetAPIKeys(nil)
+	if err := config.SaveConfig(configPath, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
 
@@ -49,157 +42,18 @@ func TestHandleListTools(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	gotTools := make(map[string]toolSupportItem, len(resp.Tools))
+
 	for _, tool := range resp.Tools {
-		gotTools[tool.Name] = tool
-	}
-	if gotTools["read_file"].Status != "enabled" {
-		t.Fatalf("read_file status = %q, want enabled", gotTools["read_file"].Status)
-	}
-	if gotTools["write_file"].Status != "disabled" {
-		t.Fatalf("write_file status = %q, want disabled", gotTools["write_file"].Status)
-	}
-	if gotTools["spawn"].Status != "blocked" || gotTools["spawn"].ReasonCode != "requires_subagent" {
-		t.Fatalf("spawn = %#v, want blocked/requires_subagent", gotTools["spawn"])
-	}
-	if gotTools["find_skills"].Status != "enabled" {
-		t.Fatalf("find_skills status = %q, want enabled", gotTools["find_skills"].Status)
-	}
-	if gotTools["tool_search_tool_regex"].Status != "enabled" {
-		t.Fatalf("tool_search_tool_regex status = %q, want enabled", gotTools["tool_search_tool_regex"].Status)
-	}
-	if gotTools["tool_search_tool_regex"].ConfigKey != "mcp.discovery.use_regex" {
-		t.Fatalf(
-			"tool_search_tool_regex config_key = %q, want mcp.discovery.use_regex",
-			gotTools["tool_search_tool_regex"].ConfigKey,
-		)
-	}
-	if gotTools["tool_search_tool_bm25"].Status != "disabled" {
-		t.Fatalf("tool_search_tool_bm25 status = %q, want disabled", gotTools["tool_search_tool_bm25"].Status)
-	}
-	if gotTools["tool_search_tool_bm25"].ConfigKey != "mcp.discovery.use_bm25" {
-		t.Fatalf(
-			"tool_search_tool_bm25 config_key = %q, want mcp.discovery.use_bm25",
-			gotTools["tool_search_tool_bm25"].ConfigKey,
-		)
-	}
-}
-
-func TestHandleUpdateToolState(t *testing.T) {
-	configPath, cleanup := setupTestEnv(t)
-	defer cleanup()
-
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	cfg.Tools.Spawn.Enabled = false
-	cfg.Tools.Subagent.Enabled = false
-	cfg.Tools.MCP.Enabled = false
-	cfg.Tools.MCP.Discovery.Enabled = false
-	cfg.Tools.MCP.Discovery.UseRegex = false
-	err = config.SaveConfig(configPath, cfg)
-	if err != nil {
-		t.Fatalf("SaveConfig() error = %v", err)
+		if tool.Name != "web_search" {
+			continue
+		}
+		if tool.Status != "enabled" || tool.ReasonCode != "" {
+			t.Fatalf("web_search = %#v, want enabled with no reason code", tool)
+		}
+		return
 	}
 
-	h := NewHandler(configPath)
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(
-		http.MethodPut,
-		"/api/tools/spawn/state",
-		bytes.NewBufferString(`{"enabled":true}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("spawn status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-
-	rec2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest(
-		http.MethodPut,
-		"/api/tools/tool_search_tool_regex/state",
-		bytes.NewBufferString(`{"enabled":true}`),
-	)
-	req2.Header.Set("Content-Type", "application/json")
-	mux.ServeHTTP(rec2, req2)
-	if rec2.Code != http.StatusOK {
-		t.Fatalf("regex status = %d, want %d, body=%s", rec2.Code, http.StatusOK, rec2.Body.String())
-	}
-
-	updated, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig(updated) error = %v", err)
-	}
-	if !updated.Tools.Spawn.Enabled || !updated.Tools.Subagent.Enabled {
-		t.Fatalf("spawn/subagent should both be enabled: %#v", updated.Tools)
-	}
-	if !updated.Tools.MCP.Enabled || !updated.Tools.MCP.Discovery.Enabled || !updated.Tools.MCP.Discovery.UseRegex {
-		t.Fatalf("mcp regex discovery should be enabled: %#v", updated.Tools.MCP)
-	}
-}
-
-func TestHandleListTools_ReportsWebSearchEnabledWhenToolIsOn(t *testing.T) {
-	tests := []struct {
-		name         string
-		preferNative bool
-	}{
-		{name: "without prefer_native", preferNative: false},
-		{name: "with prefer_native", preferNative: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			configPath, cleanup := setupTestEnv(t)
-			defer cleanup()
-
-			cfg, err := config.LoadConfig(configPath)
-			if err != nil {
-				t.Fatalf("LoadConfig() error = %v", err)
-			}
-			cfg.Tools.Web.PreferNative = tt.preferNative
-			cfg.Tools.Web.Provider = "tavily"
-			cfg.Tools.Web.Sogou.Enabled = false
-			cfg.Tools.Web.Tavily.Enabled = true
-			cfg.Tools.Web.Tavily.SetAPIKeys(nil)
-			if err := config.SaveConfig(configPath, cfg); err != nil {
-				t.Fatalf("SaveConfig() error = %v", err)
-			}
-
-			h := NewHandler(configPath)
-			mux := http.NewServeMux()
-			h.RegisterRoutes(mux)
-
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodGet, "/api/tools", nil)
-			mux.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
-			}
-
-			var resp toolSupportResponse
-			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-				t.Fatalf("Unmarshal() error = %v", err)
-			}
-
-			for _, tool := range resp.Tools {
-				if tool.Name != "web_search" {
-					continue
-				}
-				if tool.Status != "enabled" || tool.ReasonCode != "" {
-					t.Fatalf("web_search = %#v, want enabled with no reason code", tool)
-				}
-				return
-			}
-
-			t.Fatal("expected web_search in response")
-		})
-	}
+	t.Fatal("expected web_search in response")
 }
 
 func TestHandleGetWebSearchConfig(t *testing.T) {
@@ -210,7 +64,6 @@ func TestHandleGetWebSearchConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	cfg.Tools.Web.PreferNative = false
 	cfg.Tools.Web.Provider = "sogou"
 	cfg.Tools.Web.Sogou.Enabled = true
 	cfg.Tools.Web.Sogou.MaxResults = 6
@@ -247,47 +100,6 @@ func TestHandleGetWebSearchConfig(t *testing.T) {
 	}
 }
 
-func TestHandleGetWebSearchConfig_DoesNotExposeNativeAsCurrentService(t *testing.T) {
-	configPath, cleanup := setupTestEnv(t)
-	defer cleanup()
-
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	cfg.Tools.Web.PreferNative = true
-	cfg.Tools.Web.Provider = "tavily"
-	cfg.Tools.Web.Sogou.Enabled = false
-	cfg.Tools.Web.Tavily.Enabled = true
-	cfg.Tools.Web.Tavily.SetAPIKeys(nil)
-	if err := config.SaveConfig(configPath, cfg); err != nil {
-		t.Fatalf("SaveConfig() error = %v", err)
-	}
-
-	h := NewHandler(configPath)
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/tools/web-search-config", nil)
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-
-	var resp webSearchConfigResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("Unmarshal() error = %v", err)
-	}
-	if !resp.PreferNative {
-		t.Fatal("prefer_native should remain true in response")
-	}
-	if resp.CurrentService != "" {
-		t.Fatalf("current_service = %q, want empty when no external provider is ready", resp.CurrentService)
-	}
-}
-
 func TestHandleUpdateWebSearchConfig(t *testing.T) {
 	configPath, cleanup := setupTestEnv(t)
 	defer cleanup()
@@ -311,7 +123,6 @@ func TestHandleUpdateWebSearchConfig(t *testing.T) {
 		"/api/tools/web-search-config",
 		bytes.NewBufferString(`{
 			"provider":"tavily",
-			"prefer_native":false,
 			"proxy":"http://127.0.0.1:7890",
 			"settings":{
 				"sogou":{"enabled":true,"max_results":4},
@@ -332,9 +143,6 @@ func TestHandleUpdateWebSearchConfig(t *testing.T) {
 	}
 	if updated.Tools.Web.Provider != "tavily" {
 		t.Fatalf("provider = %q, want tavily", updated.Tools.Web.Provider)
-	}
-	if updated.Tools.Web.PreferNative {
-		t.Fatal("prefer_native should be false after update")
 	}
 	if updated.Tools.Web.Proxy != "http://127.0.0.1:7890" {
 		t.Fatalf("proxy = %q", updated.Tools.Web.Proxy)
@@ -373,7 +181,6 @@ func TestHandleUpdateWebSearchConfig_PreservesAndReplacesMultiKeys(t *testing.T)
 		"/api/tools/web-search-config",
 		bytes.NewBufferString(`{
 			"provider":"auto",
-			"prefer_native":true,
 			"proxy":"",
 			"settings":{
 				"tavily":{"enabled":true,"max_results":7}
@@ -402,7 +209,6 @@ func TestHandleUpdateWebSearchConfig_PreservesAndReplacesMultiKeys(t *testing.T)
 		"/api/tools/web-search-config",
 		bytes.NewBufferString(`{
 			"provider":"auto",
-			"prefer_native":true,
 			"proxy":"",
 			"settings":{
 				"tavily":{"enabled":true,"max_results":7,"api_keys":["tavily-new-1","tavily-new-2","tavily-new-1"]}
@@ -456,23 +262,5 @@ func TestResolveCurrentWebSearchProvider_FallsBackWhenProviderIsUnknown(t *testi
 
 	if got := resolveCurrentWebSearchProvider(cfg); got != "sogou" {
 		t.Fatalf("resolveCurrentWebSearchProvider() = %q, want sogou", got)
-	}
-}
-
-func TestResolveCurrentWebSearchProvider_IgnoresPreferNativeInConfigView(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.ModelList = []*config.ModelConfig{{
-		ModelName: "custom-default",
-		Model:     "openai/gpt-4o",
-		APIKeys:   config.SimpleSecureStrings("sk-default"),
-	}}
-	cfg.Agents.Defaults.ModelName = "custom-default"
-	cfg.Tools.Web.PreferNative = true
-	cfg.Tools.Web.Provider = "tavily"
-	cfg.Tools.Web.Sogou.Enabled = false
-	cfg.Tools.Web.Tavily.Enabled = true
-
-	if got := resolveCurrentWebSearchProvider(cfg); got != "" {
-		t.Fatalf("resolveCurrentWebSearchProvider() = %q, want empty when only native search would be available", got)
 	}
 }

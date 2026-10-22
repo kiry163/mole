@@ -41,31 +41,29 @@ func (p *Pipeline) Finalize(
 
 	ts.setPhase(TurnPhaseFinalizing)
 	ts.setFinalContent(finalContent)
-	if !ts.opts.NoHistory {
-		finalMsg := providers.Message{
-			Role:             "assistant",
-			Content:          finalContent,
-			ModelName:        exec.llmModelName,
-			ReasoningContent: responseReasoningContent(exec.response),
-		}
-		ts.agent.Sessions.AddFullMessage(ts.sessionKey, finalMsg)
-		ts.recordPersistedMessage(finalMsg)
-		ts.ingestMessage(turnCtx, al, finalMsg)
-		if err := ts.agent.Sessions.Save(ts.sessionKey); err != nil {
-			al.emitEvent(
-				runtimeevents.KindAgentError,
-				ts.eventMeta("runTurn", "turn.error"),
-				ErrorPayload{
-					Stage:   "session_save",
-					Message: err.Error(),
-				},
-			)
-			cancelConfiguredStreamingLLM(turnCtx, exec)
-			return turnResult{status: TurnEndStatusError}, err
-		}
+	finalMsg := providers.Message{
+		Role:             "assistant",
+		Content:          finalContent,
+		ModelName:        exec.llmModelName,
+		ReasoningContent: responseReasoningContent(exec.response),
+	}
+	ts.agent.Sessions.AddFullMessage(ts.sessionKey, finalMsg)
+	ts.recordPersistedMessage(finalMsg)
+	ts.ingestMessage(turnCtx, al, finalMsg)
+	if err := ts.agent.Sessions.Save(ts.sessionKey); err != nil {
+		al.emitEvent(
+			runtimeevents.KindAgentError,
+			ts.eventMeta("runTurn", "turn.error"),
+			ErrorPayload{
+				Stage:   "session_save",
+				Message: err.Error(),
+			},
+		)
+		cancelConfiguredStreamingLLM(turnCtx, exec)
+		return turnResult{status: TurnEndStatusError}, err
 	}
 
-	if !ts.opts.NoHistory && ts.opts.EnableSummary {
+	if ts.opts.EnableSummary {
 		al.contextManager.Compact(
 			turnCtx,
 			&CompactRequest{

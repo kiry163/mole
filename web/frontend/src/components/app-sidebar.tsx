@@ -5,9 +5,7 @@ import {
   IconChevronsUp,
   IconListDetails,
   IconMessageCircle,
-  IconSearch,
   IconSettings,
-  IconShieldCheck,
   IconSparkles,
   IconTools,
 } from "@tabler/icons-react"
@@ -15,8 +13,6 @@ import { Link, useRouterState } from "@tanstack/react-router"
 import * as React from "react"
 import { useTranslation } from "react-i18next"
 
-import { useApprovals } from "@/components/agent/approvals/use-approvals"
-import { Badge } from "@/components/ui/badge"
 import {
   Collapsible,
   CollapsibleContent,
@@ -69,17 +65,9 @@ const baseNavGroups: Omit<NavGroup, "items">[] = [
   },
 ]
 
-function ApprovalsPendingBadge() {
-  const { pending } = useApprovals()
-  if (pending.length === 0) {
-    return null
-  }
-  return <Badge className="ml-auto">{pending.length}</Badge>
-}
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const routerState = useRouterState()
-  const { i18n, t } = useTranslation()
+  const { t } = useTranslation()
   const { isMobile, setOpenMobile } = useSidebar()
   const currentPath = routerState.location.pathname
   const {
@@ -88,7 +76,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     showAllChannels,
     toggleShowAllChannels,
   } = useSidebarChannels({
-    language: (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase(),
     t,
   })
 
@@ -137,21 +124,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ...baseNavGroups[2],
         items: [
           {
-            title: "navigation.hub",
-            url: "/agent/hub",
-            icon: IconSearch,
-            translateTitle: true,
-          },
-          {
             title: "navigation.skills",
             url: "/agent/skills",
             icon: IconSparkles,
-            translateTitle: true,
-          },
-          {
-            title: "navigation.approvals",
-            url: "/agent/approvals",
-            icon: IconShieldCheck,
             translateTitle: true,
           },
           {
@@ -233,9 +208,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                   ? item.title
                                   : t(item.title)}
                               </span>
-                              {item.url === "/agent/approvals" ? (
-                                <ApprovalsPendingBadge />
-                              ) : null}
                             </Link>
                           </SidebarMenuButton>
                         </SidebarMenuItem>

@@ -4,7 +4,6 @@
     "model_group": "Models",
     "models": "Models",
     "agent_group": "Agent",
-    "hub": "Hub",
     "skills": "Skills",
     "tools": "Tools",
     "services": "Services",
@@ -12,8 +11,7 @@
     "show_more_channels": "More",
     "show_less_channels": "Less",
     "config": "Config",
-    "logs": "Logs",
-    "approvals": "Approvals"
+    "logs": "Logs"
   },
   "login": {
     "title": "Sign in",
@@ -312,8 +310,6 @@
   "channels": {
     "loadError": "Failed to load channels",
     "name": {
-      "telegram": "Telegram",
-      "feishu": "Feishu",
       "qq": "QQ",
       "webchat": "Web",
       "weixin": "WeChat"
@@ -483,28 +479,6 @@
         "dropzone_label": "Drop a skill file here",
         "dropzone_active": "Release to import this skill",
         "dropzone_release": "The skill will be normalized and saved into the workspace skills directory.",
-        "marketplace_title": "Discover Skills",
-        "marketplace_description": "Search the skill registries and install useful skills into this workspace",
-        "marketplace_search_placeholder": "Search for capabilities like github, docker, database...",
-        "marketplace_search_action": "Search",
-        "marketplace_search_status": "Search Status",
-        "marketplace_install_status": "Install Status",
-        "marketplace_notice_title": "Security Notice",
-        "marketplace_notice_body": "Registry skills are third-party content. Review the author, page URL, instructions, and any required code or credentials before installing.",
-        "marketplace_status_disabled": "Disabled. Enable the corresponding tool on the Tools page first.",
-        "marketplace_status_enable_hint": "Enable the related tool on the Tools page first.",
-        "marketplace_search_error": "Failed to search registries.",
-        "marketplace_loading_results": "Searching skills...",
-        "marketplace_loading_more": "Loading more skills...",
-        "marketplace_results_title": "{{count}} results for “{{query}}”",
-        "marketplace_results_hint": "Registry results install into the current workspace.",
-        "marketplace_install_action": "Install",
-        "marketplace_installed": "Installed",
-        "marketplace_view_installed": "View Local",
-        "marketplace_installed_hint": "Already available in this workspace as “{{name}}”.",
-        "marketplace_empty_results": "No installable skills matched “{{query}}”.",
-        "marketplace_idle": "Search for a capability to discover installable skills from configured registries.",
-        "marketplace_unavailable": "Registry search is currently unavailable. Check the Skills tools configuration.",
         "sort": {
           "name_asc": "Name (A-Z)",
           "name_desc": "Name (Z-A)",
@@ -513,7 +487,6 @@
         "origin": {
           "all": "All Types",
           "builtin": "Builtin",
-          "third_party": "Third-Party",
           "manual": "Manual"
         },
         "summary": {
@@ -527,16 +500,8 @@
         "metadata": {
           "name": "Name",
           "description": "Description",
-          "registry": "Registry",
-          "url": "URL",
-          "version": "Installed Version",
           "lines": "Line Count",
           "characters": "Character Count"
-        },
-        "marketplace_installDisabled": {
-          "installing": "Installing...",
-          "installed": "Already installed",
-          "cannotInstall": "Cannot install: related tool is not enabled"
         }
       },
       "tools": {
@@ -596,8 +561,6 @@
         "reasons": {
           "requires_linux": "This tool only works on Linux hosts with the required device files exposed.",
           "requires_serial_platform": "This tool currently supports Linux, macOS, and Windows hosts with accessible serial ports.",
-          "requires_skills": "Enable `tools.skills` before this skill-registry tool can be used.",
-          "requires_subagent": "Enable `tools.subagent` before the spawn tool can delegate work.",
           "requires_mcp_discovery": "Enable `tools.mcp.discovery` before MCP discovery tools become available.",
           "requires_web_search_provider": "Configure at least one ready external web-search provider."
         }
@@ -648,22 +611,6 @@
       "summarize_token_percent": "Summarize Token Percent",
       "summarize_token_percent_hint": "Used when conversation summary is triggered.",
       "turn_profile": "Request Context Policy",
-      "turn_profile_hint": "Controls what context each request carries. Leave disabled to keep the normal chat behavior.",
-      "turn_profile_enabled": "Enable policy",
-      "turn_profile_enabled_hint": "When enabled, this policy applies to every new turn. When disabled, Mole uses the original context behavior.",
-      "turn_profile_mode_default": "Default",
-      "turn_profile_mode_off": "Off",
-      "turn_profile_mode_custom": "Allow List",
-      "turn_profile_history": "History Context",
-      "turn_profile_history_hint": "Default includes earlier messages from this session. Off makes the turn behave like a fresh chat and skips saving its result back to history.",
-      "turn_profile_system_prompt": "System Context",
-      "turn_profile_system_prompt_hint": "Default includes Mole identity, workspace, memory, and runtime instructions. Off keeps only system prompts explicitly supplied by the request.",
-      "turn_profile_skills": "Skill Prompts",
-      "turn_profile_skills_hint": "Default includes available skills and active skill instructions. Off hides them. Allow List keeps only skill names entered one per line.",
-      "turn_profile_skills_allow_placeholder": "skill-name\nanother-skill",
-      "turn_profile_tools": "Callable Tools",
-      "turn_profile_tools_hint": "Default exposes normal tools. Off prevents tool calls. Allow List keeps only tool names entered one per line, such as web_search.",
-      "turn_profile_tools_allow_placeholder": "web_search\nweb_fetch",
       "session_scope": "Session Scope",
       "session_scope_hint": "How chat context is isolated across peers/channels.",
       "session_scope_per_channel_peer": "Per Channel + Peer",
@@ -741,62 +688,11 @@
       "factory_reset_confirm_desc": "This will reset all configuration to factory defaults. API keys and security credentials will be preserved. A backup of the current config will be created.",
       "factory_reset_confirm": "Reset to Defaults",
       "factory_reset_success": "Configuration has been reset to factory defaults.",
-      "factory_reset_error": "Failed to reset configuration.",
-      "hooks_hint": "In-process builtin hooks and external stdio hook processes. An invalid entry is rejected on save, because it would break every later turn.",
-      "hooks_enabled": "Enable hooks",
-      "hooks_enabled_hint": "Master switch: with this off no builtin or process hook is mounted.",
-      "hooks_observer_timeout": "Observer timeout (ms)",
-      "hooks_interceptor_timeout": "Interceptor timeout (ms)",
-      "hooks_approval_timeout": "Approval timeout (ms)",
-      "hooks_approval_timeout_hint": "Milliseconds a tool approval may take; a timeout denies the tool. Must be greater than 0.",
-      "hooks_timeout_hint": "Milliseconds; must be greater than 0.",
-      "hooks_builtins": "Builtin hooks",
-      "hooks_builtins_hint": "Hooks compiled into this build. Names must be registered, so only what the server offers can be enabled.",
-      "hooks_add_builtin": "Add builtin",
-      "hooks_no_builtins": "This build registers no builtin hooks.",
-      "hooks_processes": "External hook processes",
-      "hooks_processes_hint": "Processes the agent launches and talks to over stdio; each needs a command and at least one observe event or intercept mode. A process that fails to start also breaks turns until it is fixed or removed - the runtime log says why.",
-      "hooks_add_process": "Add process",
-      "hooks_remove": "Remove",
-      "hooks_process_enabled": "Enable hook",
-      "hooks_process_name": "Name",
-      "hooks_process_command": "Command",
-      "hooks_command_hint": "Executable only; arguments go in the next field.",
-      "hooks_process_args": "Arguments",
-      "hooks_args_hint": "Space separated.",
-      "hooks_process_intercept": "Intercept",
-      "hooks_intercept_hint": "Comma or newline separated: before_llm, after_llm, before_tool, after_tool, approve_tool.",
-      "hooks_process_observe": "Observe events",
-      "hooks_observe_hint": "Event kinds separated by commas or newlines, e.g. turn_start, turn_end; * observes everything.",
-      "hooks_process_env": "Environment",
-      "hooks_env_hint": "JSON object, e.g. {\"HOOK_MODE\":\"rewrite\"}.",
-      "hooks_process_dir": "Working directory"
+      "factory_reset_error": "Failed to reset configuration."
     },
     "logs": {
       "log_level_error": "Failed to update log level.",
       "empty": "Waiting for logs..."
-    },
-    "approvals": {
-      "title": "Tool approvals",
-      "subtitle": "Tool calls that need your decision.",
-      "empty": "Nothing waiting for approval.",
-      "pending_badge": "pending",
-      "allow": "Allow",
-      "always_allow": "Always allow",
-      "deny": "Deny",
-      "remember_hint": "Remembers `{{tool}}` with `{{arg}}` = `{{value}}`",
-      "allowed": "Allowed",
-      "denied": "Denied",
-      "always_allowed": "Allowed and remembered",
-      "decide_error": "Could not send the decision",
-      "recent_title": "Recent decisions",
-      "outcome_allowed": "allowed",
-      "outcome_always_allowed": "remembered",
-      "outcome_denied": "denied",
-      "outcome_expired": "timed out",
-      "outcome_cancelled": "cancelled",
-      "origin_chat": "chat",
-      "origin_console": "console"
     }
   },
   "tour": {

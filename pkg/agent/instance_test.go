@@ -10,7 +10,6 @@ import (
 	"github.com/kiry163/mole/pkg/config"
 	"github.com/kiry163/mole/pkg/media"
 	"github.com/kiry163/mole/pkg/providers"
-	"github.com/kiry163/mole/pkg/tools"
 )
 
 type countingStatefulProvider struct {
@@ -34,8 +33,7 @@ func (p *countingStatefulProvider) Close() { p.closeCount++ }
 func TestAgentInstanceCloseClosesSharedStatefulProviderOnce(t *testing.T) {
 	provider := &countingStatefulProvider{}
 	agent := &AgentInstance{
-		Provider:      provider,
-		LightProvider: provider,
+		Provider: provider,
 		CandidateProviders: map[string]providers.LLMProvider{
 			"candidate": provider,
 			"runtime":   provider,
@@ -72,7 +70,7 @@ func TestNewAgentInstance_UsesDefaultsTemperatureAndMaxTokens(t *testing.T) {
 	cfg.Agents.Defaults.Temperature = &configuredTemp
 
 	provider := &mockProvider{}
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider)
+	agent := NewAgentInstance(&cfg.Agents.Defaults, cfg, provider)
 
 	if agent.MaxTokens != 1234 {
 		t.Fatalf("MaxTokens = %d, want %d", agent.MaxTokens, 1234)
@@ -104,7 +102,7 @@ func TestNewAgentInstance_DefaultsTemperatureWhenZero(t *testing.T) {
 	cfg.Agents.Defaults.Temperature = &configuredTemp
 
 	provider := &mockProvider{}
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider)
+	agent := NewAgentInstance(&cfg.Agents.Defaults, cfg, provider)
 
 	if agent.Temperature != 0.0 {
 		t.Fatalf("Temperature = %f, want %f", agent.Temperature, 0.0)
@@ -130,7 +128,7 @@ func TestNewAgentInstance_DefaultsTemperatureWhenUnset(t *testing.T) {
 	}
 
 	provider := &mockProvider{}
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider)
+	agent := NewAgentInstance(&cfg.Agents.Defaults, cfg, provider)
 
 	if agent.Temperature != 0.7 {
 		t.Fatalf("Temperature = %f, want %f", agent.Temperature, 0.7)
@@ -201,7 +199,7 @@ func TestNewAgentInstance_ResolveCandidatesFromModelListAlias(t *testing.T) {
 			}
 
 			provider := &mockProvider{}
-			agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider)
+			agent := NewAgentInstance(&cfg.Agents.Defaults, cfg, provider)
 
 			if len(agent.Candidates) != 1 {
 				t.Fatalf("len(Candidates) = %d, want 1", len(agent.Candidates))
@@ -243,7 +241,7 @@ func TestNewAgentInstance_PreservesDistinctLimiterIdentityForSharedResolvedModel
 		},
 	}
 
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+	agent := NewAgentInstance(&cfg.Agents.Defaults, cfg, &mockProvider{})
 	if len(agent.Candidates) != 2 {
 		t.Fatalf("len(Candidates) = %d, want 2", len(agent.Candidates))
 	}
@@ -290,7 +288,7 @@ func TestNewAgentInstance_PreservesConfigIdentityForAlias(t *testing.T) {
 		},
 	}
 
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+	agent := NewAgentInstance(&cfg.Agents.Defaults, cfg, &mockProvider{})
 	if len(agent.Candidates) != 1 {
 		t.Fatalf("len(Candidates) = %d, want 1", len(agent.Candidates))
 	}
@@ -347,7 +345,7 @@ func TestNewAgentInstance_AllowsMediaTempDirForReadListAndExec(t *testing.T) {
 		},
 	}
 
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+	agent := NewAgentInstance(&cfg.Agents.Defaults, cfg, &mockProvider{})
 
 	readTool, ok := agent.Tools.Get("read_file")
 	if !ok {
@@ -597,41 +595,6 @@ func TestProviderForConfiguredFallbackRejectsMissingProvider(t *testing.T) {
 	}
 }
 
-func TestApplyBeforeLLMModelRewriteSwitchesProvider(t *testing.T) {
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{Defaults: config.AgentDefaults{}},
-		ModelList: []*config.ModelConfig{{
-			ModelName: "hook-model",
-			Provider:  "anthropic",
-			Model:     "claude-sonnet",
-			APIKeys:   config.SimpleSecureStrings("sk-ant-test"),
-		}},
-	}
-	candidate, ok := resolveModelCandidate(cfg, "hook-model")
-	if !ok {
-		t.Fatal("resolveModelCandidate() did not resolve hook model")
-	}
-	replacement := &mockProvider{}
-	agent := &AgentInstance{
-		Workspace: t.TempDir(),
-		CandidateProviders: map[string]providers.LLMProvider{
-			candidateProviderKey(candidate): replacement,
-		},
-	}
-	exec := &turnExecution{llmModel: "hook-model", activeProvider: &mockProvider{}}
-	pipeline := &Pipeline{Cfg: cfg}
-
-	if err := pipeline.applyBeforeLLMModelRewrite(&turnState{agent: agent}, exec); err != nil {
-		t.Fatalf("applyBeforeLLMModelRewrite() error = %v", err)
-	}
-	if exec.activeProvider != replacement {
-		t.Fatalf("active provider = %T, want hook-selected candidate provider", exec.activeProvider)
-	}
-	if exec.activeModel != "claude-sonnet" {
-		t.Fatalf("active model = %q, want %q", exec.activeModel, "claude-sonnet")
-	}
-}
-
 func TestPopulateCandidateProvidersUsesConfigIndexAndRuntimeKey(t *testing.T) {
 	out := map[string]providers.LLMProvider{}
 	cfg := &config.Config{ModelList: []*config.ModelConfig{
@@ -778,7 +741,7 @@ func TestNewAgentInstance_CandidateProvidersPopulatedForCrossProviderFallbacks(t
 	}
 
 	primaryProvider := &mockProvider{}
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, primaryProvider)
+	agent := NewAgentInstance(&cfg.Agents.Defaults, cfg, primaryProvider)
 
 	// Only fallback models need entries — the primary uses the injected provider directly.
 	wantKeys := []string{
@@ -834,7 +797,7 @@ func TestNewAgentInstance_ReadFileModeSelectsSchema(t *testing.T) {
 		},
 	}
 
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+	agent := NewAgentInstance(&cfg.Agents.Defaults, cfg, &mockProvider{})
 	readTool, ok := agent.Tools.Get("read_file")
 	if !ok {
 		t.Fatal("read_file tool not registered")
@@ -875,7 +838,7 @@ func TestNewAgentInstance_WriteFileCopyReflectsAvailableAltTools(t *testing.T) {
 	}
 
 	writeToolDesc := func(cfg *config.Config) string {
-		agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+		agent := NewAgentInstance(&cfg.Agents.Defaults, cfg, &mockProvider{})
 		writeTool, ok := agent.Tools.Get("write_file")
 		if !ok {
 			t.Fatal("write_file tool not registered")
@@ -910,360 +873,3 @@ func TestNewAgentInstance_WriteFileCopyReflectsAvailableAltTools(t *testing.T) {
 
 // Availability follows the per-agent allowlist, not just the enable flag:
 // editors enabled globally but hidden by frontmatter must not be named.
-func TestNewAgentInstance_WriteFileCopyExcludesAllowlistHiddenAltTools(t *testing.T) {
-	workspace := setupWorkspace(t, map[string]string{
-		"AGENT.md": "---\ntools: [write_file]\n---\n# Agent\n",
-	})
-	defer cleanupWorkspace(t, workspace)
-
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace: workspace,
-				ModelName: "test-model",
-			},
-		},
-		Tools: config.ToolsConfig{
-			WriteFile:  config.ToolConfig{Enabled: true},
-			EditFile:   config.ToolConfig{Enabled: true},
-			AppendFile: config.ToolConfig{Enabled: true},
-		},
-	}
-
-	agent := NewAgentInstance(&config.AgentConfig{
-		ID:        "restricted",
-		Workspace: workspace,
-	}, &cfg.Agents.Defaults, cfg, &mockProvider{})
-
-	if _, ok := agent.Tools.Get("edit_file"); ok {
-		t.Fatal("edit_file should be blocked by the allowlist")
-	}
-	if _, ok := agent.Tools.Get("append_file"); ok {
-		t.Fatal("append_file should be blocked by the allowlist")
-	}
-
-	writeTool, ok := agent.Tools.Get("write_file")
-	if !ok {
-		t.Fatal("write_file tool not registered")
-	}
-	if desc := writeTool.Description(); strings.Contains(desc, "append_file") ||
-		strings.Contains(desc, "edit_file") {
-		t.Fatalf("write_file must not name allowlist-hidden tools, got: %q", desc)
-	}
-}
-
-func TestNewAgentInstance_InvalidExecConfigDoesNotExit(t *testing.T) {
-	workspace := t.TempDir()
-
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace: workspace,
-				ModelName: "test-model",
-			},
-		},
-		Tools: config.ToolsConfig{
-			ReadFile: config.ReadFileToolConfig{Enabled: true},
-			Exec: config.ExecConfig{
-				ToolConfig:         config.ToolConfig{Enabled: true},
-				EnableDenyPatterns: true,
-				CustomDenyPatterns: []string{"[invalid-regex"},
-			},
-		},
-	}
-
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
-	if agent == nil {
-		t.Fatal("expected agent instance, got nil")
-	}
-
-	if _, ok := agent.Tools.Get("exec"); ok {
-		t.Fatal("exec tool should not be registered when exec config is invalid")
-	}
-
-	if _, ok := agent.Tools.Get("read_file"); !ok {
-		t.Fatal("read_file tool should still be registered")
-	}
-}
-
-func TestNewAgentInstance_UsesFrontmatterModelAndSkills(t *testing.T) {
-	workspace := setupWorkspace(t, map[string]string{
-		"AGENT.md": `---
-model: frontmatter-model
-skills: [frontmatter-skill]
-mcpServers: [GitHub, filesystem]
----
-# Agent
-
-Use frontmatter identity.
-`,
-	})
-	defer cleanupWorkspace(t, workspace)
-
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace: workspace,
-				ModelName: "default-model",
-			},
-		},
-	}
-
-	agent := NewAgentInstance(&config.AgentConfig{
-		ID:        "research",
-		Workspace: workspace,
-		Model: &config.AgentModelConfig{
-			Primary: "config-model",
-		},
-		Skills: []string{"config-skill"},
-	}, &cfg.Agents.Defaults, cfg, &mockProvider{})
-
-	if agent.Model != "frontmatter-model" {
-		t.Fatalf("agent.Model = %q, want frontmatter-model", agent.Model)
-	}
-	if len(agent.SkillsFilter) != 1 || agent.SkillsFilter[0] != "frontmatter-skill" {
-		t.Fatalf("agent.SkillsFilter = %v, want [frontmatter-skill]", agent.SkillsFilter)
-	}
-	if !agent.AllowsMCPServer("github") {
-		t.Fatal("expected github MCP server to be allowed from frontmatter")
-	}
-	if !agent.AllowsMCPServer("FILESYSTEM") {
-		t.Fatal("expected filesystem MCP server matching to be case-insensitive")
-	}
-	if agent.AllowsMCPServer("slack") {
-		t.Fatal("expected slack MCP server to be blocked by frontmatter allowlist")
-	}
-}
-
-func TestNewAgentInstance_UsesResolvedProviderForFrontmatterPrimaryModel(t *testing.T) {
-	workspace := setupWorkspace(t, map[string]string{
-		"AGENT.md": `---
-model: claude-frontmatter
----
-# Agent
-`,
-	})
-	defer cleanupWorkspace(t, workspace)
-
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace: workspace,
-				ModelName: "default-model",
-			},
-		},
-		ModelList: []*config.ModelConfig{
-			{
-				ModelName: "claude-frontmatter",
-				Provider:  "anthropic",
-				Model:     "claude-3-7-sonnet",
-				APIBase:   "https://api.example.com/v1",
-				APIKeys:   config.SimpleSecureStrings("test-anthropic-key"),
-			},
-		},
-	}
-
-	defaultProvider := &mockProvider{}
-	agent := NewAgentInstance(&config.AgentConfig{
-		ID:        "research",
-		Workspace: workspace,
-	}, &cfg.Agents.Defaults, cfg, defaultProvider)
-
-	if agent.Model != "claude-frontmatter" {
-		t.Fatalf("agent.Model = %q, want %q", agent.Model, "claude-frontmatter")
-	}
-	if len(agent.Candidates) != 1 {
-		t.Fatalf("len(agent.Candidates) = %d, want 1", len(agent.Candidates))
-	}
-	if got := agent.Candidates[0].Provider; got != "anthropic" {
-		t.Fatalf("primary candidate provider = %q, want %q", got, "anthropic")
-	}
-	if got := agent.Candidates[0].Model; got != "claude-3-7-sonnet" {
-		t.Fatalf("primary candidate model = %q, want %q", got, "claude-3-7-sonnet")
-	}
-	if agent.Provider == defaultProvider {
-		t.Fatal("expected primary provider to be resolved from model_list instead of using injected default provider")
-	}
-}
-
-func TestNewAgentInstance_SuppressesToolDiscoveryPromptWhenNoMCPServersSelected(t *testing.T) {
-	workspace := setupWorkspace(t, map[string]string{
-		"AGENT.md": `---
-mcpServers: []
----
-# Agent
-`,
-	})
-	defer cleanupWorkspace(t, workspace)
-
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace: workspace,
-				ModelName: "default-model",
-			},
-		},
-		Tools: config.ToolsConfig{
-			MCP: config.MCPConfig{
-				ToolConfig: config.ToolConfig{Enabled: true},
-				Discovery: config.ToolDiscoveryConfig{
-					Enabled:  true,
-					UseBM25:  true,
-					UseRegex: false,
-				},
-				Servers: map[string]config.MCPServerConfig{
-					"github": {Enabled: true},
-				},
-			},
-		},
-	}
-
-	agent := NewAgentInstance(&config.AgentConfig{
-		ID:        "research",
-		Workspace: workspace,
-	}, &cfg.Agents.Defaults, cfg, &mockProvider{})
-
-	if agent.AllowsMCPServer("github") {
-		t.Fatal("expected empty mcpServers allowlist to deny all servers")
-	}
-	messages := agent.ContextBuilder.BuildMessagesFromPrompt(PromptBuildRequest{CurrentMessage: "hello"})
-	if prompt := messages[0].Content; strings.Contains(prompt, tools.BM25SearchToolName) {
-		t.Fatalf("expected no tool discovery prompt when no MCP servers are selected, got %q", prompt)
-	}
-}
-
-func TestNewAgentInstance_IncludesToolDiscoveryPromptWhenDiscoverableMCPServerSelected(t *testing.T) {
-	workspace := setupWorkspace(t, map[string]string{
-		"AGENT.md": `---
-mcpServers: [github]
----
-# Agent
-`,
-	})
-	defer cleanupWorkspace(t, workspace)
-
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace: workspace,
-				ModelName: "default-model",
-			},
-		},
-		Tools: config.ToolsConfig{
-			MCP: config.MCPConfig{
-				ToolConfig: config.ToolConfig{Enabled: true},
-				Discovery: config.ToolDiscoveryConfig{
-					Enabled:  true,
-					UseBM25:  true,
-					UseRegex: false,
-				},
-				Servers: map[string]config.MCPServerConfig{
-					"github": {Enabled: true},
-				},
-			},
-		},
-	}
-
-	agent := NewAgentInstance(&config.AgentConfig{
-		ID:        "research",
-		Workspace: workspace,
-	}, &cfg.Agents.Defaults, cfg, &mockProvider{})
-
-	messages := agent.ContextBuilder.BuildMessagesFromPrompt(PromptBuildRequest{CurrentMessage: "hello"})
-	if prompt := messages[0].Content; !strings.Contains(prompt, tools.BM25SearchToolName) {
-		t.Fatalf("expected tool discovery prompt when a discoverable MCP server is selected, got %q", prompt)
-	}
-}
-
-func TestNewAgentInstance_InvalidFrontmatterFailsClosedForToolsAndMCPServers(t *testing.T) {
-	workspace := setupWorkspace(t, map[string]string{
-		"AGENT.md": `---
-tools: [read_file
-mcpServers: [github]
----
-# Agent
-`,
-	})
-	defer cleanupWorkspace(t, workspace)
-
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace: workspace,
-				ModelName: "default-model",
-			},
-		},
-		Tools: config.ToolsConfig{
-			ReadFile: config.ReadFileToolConfig{Enabled: true},
-		},
-	}
-
-	agent := NewAgentInstance(&config.AgentConfig{
-		ID:        "research",
-		Workspace: workspace,
-	}, &cfg.Agents.Defaults, cfg, &mockProvider{})
-
-	if _, ok := agent.Tools.Get("read_file"); ok {
-		t.Fatal("expected malformed frontmatter to fail closed and block read_file")
-	}
-	if agent.AllowsMCPServer("github") {
-		t.Fatal("expected malformed frontmatter to fail closed for MCP servers")
-	}
-}
-
-func TestNewAgentInstance_ExplicitEmptyToolsFieldBlocksAllTools(t *testing.T) {
-	tests := []struct {
-		name         string
-		toolsSnippet string
-	}{
-		{
-			name:         "empty list",
-			toolsSnippet: "tools: []",
-		},
-		{
-			name:         "blank field",
-			toolsSnippet: "tools:",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			workspace := setupWorkspace(t, map[string]string{
-				"AGENT.md": `---
-` + tt.toolsSnippet + `
----
-# Agent
-`,
-			})
-			defer cleanupWorkspace(t, workspace)
-
-			cfg := &config.Config{
-				Agents: config.AgentsConfig{
-					Defaults: config.AgentDefaults{
-						Workspace: workspace,
-						ModelName: "default-model",
-					},
-				},
-				Tools: config.ToolsConfig{
-					ReadFile: config.ReadFileToolConfig{Enabled: true},
-					ListDir:  config.ToolConfig{Enabled: true},
-				},
-			}
-
-			agent := NewAgentInstance(&config.AgentConfig{
-				ID:        "research",
-				Workspace: workspace,
-			}, &cfg.Agents.Defaults, cfg, &mockProvider{})
-
-			if got := agent.Tools.List(); len(got) != 0 {
-				t.Fatalf("agent tools = %v, want no registered tools", got)
-			}
-			if _, ok := agent.Tools.Get("read_file"); ok {
-				t.Fatal("expected read_file to be blocked by explicit empty tools field")
-			}
-			if _, ok := agent.Tools.Get("list_dir"); ok {
-				t.Fatal("expected list_dir to be blocked by explicit empty tools field")
-			}
-		})
-	}
-}

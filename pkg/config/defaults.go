@@ -48,19 +48,7 @@ func DefaultConfig() *Config {
 		Session: SessionConfig{
 			Dimensions: []string{"chat"},
 		},
-		Channels: defaultChannels(),
-		Hooks: HooksConfig{
-			Enabled: true,
-			Defaults: HookDefaultsConfig{
-				ObserverTimeoutMS:    500,
-				InterceptorTimeoutMS: 5000,
-				ApprovalTimeoutMS:    60000,
-			},
-			// spec §8.4: approval is on by default, covering the §5.5 categories.
-			Builtins: map[string]BuiltinHookConfig{
-				"webui_approval": {Enabled: true},
-			},
-		},
+		Channels:  defaultChannels(),
 		ModelList: nil,
 		Gateway: GatewayConfig{
 			Host:      "localhost",
@@ -86,7 +74,6 @@ func DefaultConfig() *Config {
 					Enabled: true,
 				},
 				Provider:        "auto",
-				PreferNative:    true,
 				Proxy:           "",
 				FetchLimitBytes: 10 * 1024 * 1024, // 10MB by default
 				Format:          "plaintext",
@@ -106,30 +93,6 @@ func DefaultConfig() *Config {
 				EnableDenyPatterns: true,
 				AllowRemote:        true,
 				TimeoutSeconds:     60,
-			},
-			Skills: SkillsToolsConfig{
-				ToolConfig: ToolConfig{
-					Enabled: true,
-				},
-				Registries: SkillsRegistriesConfig{
-					&SkillRegistryConfig{
-						Name:    "clawhub",
-						Enabled: true,
-						BaseURL: "https://clawhub.ai",
-						Param:   map[string]any{},
-					},
-					&SkillRegistryConfig{
-						Name:    "github",
-						Enabled: true,
-						BaseURL: "https://github.com",
-						Param:   map[string]any{},
-					},
-				},
-				MaxConcurrentSearches: 2,
-				SearchCache: SearchCacheConfig{
-					MaxSize:    50,
-					TTLSeconds: 300,
-				},
 			},
 			SendFile: ToolConfig{
 				Enabled: true,
@@ -154,12 +117,6 @@ func DefaultConfig() *Config {
 			EditFile: ToolConfig{
 				Enabled: true,
 			},
-			FindSkills: ToolConfig{
-				Enabled: true,
-			},
-			InstallSkill: ToolConfig{
-				Enabled: true,
-			},
 			ListDir: ToolConfig{
 				Enabled: true,
 			},
@@ -177,15 +134,6 @@ func DefaultConfig() *Config {
 				Mode:            ReadFileModeBytes,
 				MaxReadFileSize: 64 * 1024, // 64KB
 			},
-			Spawn: ToolConfig{
-				Enabled: true,
-			},
-			SpawnStatus: ToolConfig{
-				Enabled: false,
-			},
-			Subagent: ToolConfig{
-				Enabled: true,
-			},
 			WebFetch: ToolConfig{
 				Enabled: true,
 			},
@@ -198,15 +146,6 @@ func DefaultConfig() *Config {
 
 func defaultChannels() ChannelsConfig {
 	defs := map[string]any{
-		"telegram": map[string]any{
-			"typing":      map[string]any{"enabled": true},
-			"placeholder": map[string]any{"enabled": true, "text": []string{"Thinking... 💭"}},
-			"settings": map[string]any{
-				"use_markdown_v2":      false,
-				"media_group_delay_ms": 500,
-			},
-		},
-		"feishu": map[string]any{},
 		"qq": map[string]any{
 			"settings": map[string]any{"max_message_length": 2000},
 		},

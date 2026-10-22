@@ -20,8 +20,6 @@ type (
 	ExecResponse           = toolshared.ExecResponse
 	SessionInfo            = toolshared.SessionInfo
 	Tool                   = toolshared.Tool
-	AsyncCallback          = toolshared.AsyncCallback
-	AsyncExecutor          = toolshared.AsyncExecutor
 	PromptMetadata         = toolshared.PromptMetadata
 	PromptMetadataProvider = toolshared.PromptMetadataProvider
 	ToolResult             = toolshared.ToolResult
@@ -103,10 +101,6 @@ func SilentResult(forLLM string) *ToolResult {
 
 func DiffResult(path string, before, after []byte) *ToolResult {
 	return toolshared.DiffResult(path, before, after)
-}
-
-func AsyncResult(forLLM string) *ToolResult {
-	return toolshared.AsyncResult(forLLM)
 }
 
 func ErrorResult(message string) *ToolResult {

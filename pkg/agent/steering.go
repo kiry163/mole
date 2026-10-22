@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/kiry163/mole/pkg/logger"
 	"github.com/kiry163/mole/pkg/providers"
 	"github.com/kiry163/mole/pkg/session"
-	"github.com/kiry163/mole/pkg/tools"
 )
 
 // SteeringMode controls how queued steering messages are dequeued.
@@ -196,7 +194,7 @@ func (al *AgentLoop) enqueueSteeringMessage(scope, agentID string, msg providers
 		"scope":       normalizeSteeringScope(scope),
 	})
 
-	meta := HookMeta{
+	meta := EventMeta{
 		Source:    "Steer",
 		TracePath: "turn.interrupt.received",
 	}
@@ -294,23 +292,6 @@ func (al *AgentLoop) agentForSession(sessionKey string) *AgentInstance {
 	if registry == nil {
 		return nil
 	}
-
-	agentIDs := registry.ListAgentIDs()
-	sort.Strings(agentIDs)
-	for _, agentID := range agentIDs {
-		agent, ok := registry.GetAgent(agentID)
-		if !ok || agent == nil {
-			continue
-		}
-		resolvedAgentID := session.ResolveAgentID(agent.Sessions, sessionKey)
-		if resolvedAgentID == "" {
-			continue
-		}
-		if scopedAgent, ok := registry.GetAgent(resolvedAgentID); ok {
-			return scopedAgent
-		}
-	}
-
 	return registry.GetDefaultAgent()
 }
 
@@ -337,10 +318,6 @@ func (al *AgentLoop) Continue(ctx context.Context, sessionKey, channel, chatID s
 		return "", nil
 	}
 
-	if err := al.ensureHooksInitialized(ctx); err != nil {
-		al.activeTurnStates.Delete(sessionKey)
-		return "", err
-	}
 	if err := al.ensureMCPInitialized(ctx); err != nil {
 		al.activeTurnStates.Delete(sessionKey)
 		return "", err
@@ -393,41 +370,10 @@ func (al *AgentLoop) InterruptGraceful(hint string) error {
 	return nil
 }
 
-// ====================== SubTurn Result Polling ======================
-
-// dequeuePendingSubTurnResults polls the SubTurn result channel for the given
-// session and returns all available results without blocking.
-// Returns nil if no active turn state exists for this session.
-func (al *AgentLoop) dequeuePendingSubTurnResults(sessionKey string) []*tools.ToolResult {
-	tsInterface, ok := al.activeTurnStates.Load(sessionKey)
-	if !ok {
-		return nil
-	}
-	ts, ok := tsInterface.(*turnState)
-	if !ok {
-		return nil
-	}
-
-	var results []*tools.ToolResult
-	for {
-		select {
-		case result, ok := <-ts.pendingResults:
-			if !ok {
-				return results
-			}
-			if result != nil {
-				results = append(results, result)
-			}
-		default:
-			return results
-		}
-	}
-}
-
 // ====================== Hard Abort ======================
 
 // HardAbort immediately cancels the running agent loop for the given session,
-// cascading the cancellation to all child SubTurns. This is a destructive operation
+// cancelling the running turn. This is a destructive operation
 // that terminates execution without waiting for graceful cleanup.
 //
 // Use this when the user explicitly requests immediate termination (e.g., "stop now", "abort").
@@ -451,7 +397,6 @@ func (al *AgentLoop) HardAbort(sessionKey string) error {
 	logger.InfoCF("agent", "Hard abort triggered", map[string]any{
 		"session_key":            sessionKey,
 		"turn_id":                ts.turnID,
-		"depth":                  ts.depth,
 		"initial_history_length": ts.initialHistoryLength,
 	})
 
@@ -459,7 +404,7 @@ func (al *AgentLoop) HardAbort(sessionKey string) error {
 	// execution stops as soon as possible on the root turn.
 	_ = ts.requestHardAbort()
 
-	// Announce the accepted hard interrupt so hooks and the console can observe it.
+	// Announce the accepted hard interrupt so the console can observe it.
 	al.emitEvent(
 		runtimeevents.KindAgentInterruptReceived,
 		ts.eventMeta("HardAbort", "turn.interrupt.received"),
@@ -468,10 +413,6 @@ func (al *AgentLoop) HardAbort(sessionKey string) error {
 		},
 	)
 
-	// IMPORTANT: Trigger cascading cancellation FIRST to stop all child SubTurns
-	// from adding more messages to the session. This prevents race conditions
-	// where rollback happens while children are still writing.
-	// Use isHardAbort=true for hard abort to immediately cancel all children.
 	ts.Finish(true)
 
 	// Roll back session history to the state before the turn started.

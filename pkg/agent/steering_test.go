@@ -1108,42 +1108,29 @@ func TestAgentLoop_Steering_DirectResponseContinuesWithQueuedMessage(t *testing.
 }
 
 func TestAgentLoop_AgentForSession_UsesStoredScopeMetadata(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "agent-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace:         tmpDir,
-				ModelName:         "test-model",
-				MaxTokens:         4096,
-				MaxToolIterations: 10,
-			},
-			List: []config.AgentConfig{
-				{ID: "sales", Default: true},
-				{ID: "support"},
-			},
-		},
-	}
+	cfg := config.DefaultConfig()
+	cfg.Agents.Defaults.Workspace = tmpDir
+	cfg.Agents.Defaults.ModelName = "test-model"
+	cfg.Agents.Defaults.MaxTokens = 4096
+	cfg.Agents.Defaults.MaxToolIterations = 10
 
 	al := NewAgentLoop(cfg, bus.NewMessageBus(), &mockProvider{})
-	support, ok := al.registry.GetAgent("support")
-	if !ok || support == nil {
-		t.Fatal("expected support agent")
+	mainAgent := al.registry.GetDefaultAgent()
+	if mainAgent == nil {
+		t.Fatal("expected main agent")
 	}
 
-	metaStore, ok := support.Sessions.(session.MetadataAwareSessionStore)
+	metaStore, ok := mainAgent.Sessions.(session.MetadataAwareSessionStore)
 	if !ok {
-		t.Fatal("support session store does not support metadata")
+		t.Fatal("session store does not support metadata")
 	}
 
-	key := session.BuildOpaqueSessionKey("agent:support:slack:channel:c001")
+	key := session.BuildOpaqueSessionKey("agent:main:slack:channel:c001")
 	scope := &session.SessionScope{
 		Version:    session.ScopeVersionV1,
-		AgentID:    "support",
+		AgentID:    "main",
 		Channel:    "slack",
 		Account:    "default",
 		Dimensions: []string{"chat"},
@@ -1157,8 +1144,8 @@ func TestAgentLoop_AgentForSession_UsesStoredScopeMetadata(t *testing.T) {
 	if got == nil {
 		t.Fatal("agentForSession() returned nil")
 	}
-	if got.ID != "support" {
-		t.Fatalf("agentForSession() = %q, want %q", got.ID, "support")
+	if got.ID != "main" {
+		t.Fatalf("agentForSession() = %q, want %q", got.ID, "main")
 	}
 }
 

@@ -9,8 +9,6 @@ export const SECRET_FIELD_MAP = {
 
 const CHANNEL_SECRET_FIELDS: Record<string, string[]> = {
   weixin: ["token"],
-  telegram: ["token"],
-  feishu: ["app_secret", "encrypt_key", "verification_token"],
   qq: ["app_secret"],
   webchat: ["token"],
 }

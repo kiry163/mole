@@ -256,9 +256,6 @@ func appendRuntimeEventPayloadSummary(fields map[string]any, payload any) {
 		fields["messages"] = payload.MessagesCount
 		fields["tools"] = payload.ToolsCount
 		fields["max_tokens"] = payload.MaxTokens
-	case LLMDeltaPayload:
-		fields["content_delta_len"] = payload.ContentDeltaLen
-		fields["reasoning_delta_len"] = payload.ReasoningDeltaLen
 	case LLMResponsePayload:
 		fields["content_len"] = payload.ContentLen
 		fields["tool_calls"] = payload.ToolCalls
@@ -287,49 +284,8 @@ func appendRuntimeEventPayloadSummary(fields map[string]any, payload any) {
 		fields["for_llm_len"] = payload.ForLLMLen
 		fields["for_user_len"] = payload.ForUserLen
 		fields["is_error"] = payload.IsError
-		fields["async"] = payload.Async
 	case ToolExecSkippedPayload:
 		fields["tool"] = payload.Tool
-		fields["reason"] = payload.Reason
-	case ToolApprovalRequestedPayload:
-		fields["tool"] = payload.Tool
-		fields["category"] = payload.Category
-		fields["summary"] = payload.Summary
-		fields["origin"] = payload.Origin
-		fields["iteration"] = payload.Iteration
-		setStringField(fields, "request_id", payload.RequestID)
-	case ToolApprovalDecidedPayload:
-		fields["tool"] = payload.Tool
-		fields["outcome"] = payload.Outcome
-		fields["waited_ms"] = payload.WaitedMS
-		setStringField(fields, "request_id", payload.RequestID)
-		setStringField(fields, "decided_by", payload.DecidedBy)
-		setStringField(fields, "reason", payload.Reason)
-	case SteeringInjectedPayload:
-		fields["count"] = payload.Count
-		fields["total_content_len"] = payload.TotalContentLen
-	case FollowUpQueuedPayload:
-		fields["source_tool"] = payload.SourceTool
-		fields["content_len"] = payload.ContentLen
-	case InterruptReceivedPayload:
-		fields["interrupt_kind"] = payload.Kind
-		fields["role"] = payload.Role
-		fields["content_len"] = payload.ContentLen
-		fields["queue_depth"] = payload.QueueDepth
-		fields["hint_len"] = payload.HintLen
-	case SubTurnSpawnPayload:
-		fields["child_agent_id"] = payload.AgentID
-		fields["label"] = payload.Label
-	case SubTurnEndPayload:
-		fields["child_agent_id"] = payload.AgentID
-		fields["status"] = payload.Status
-	case SubTurnResultDeliveredPayload:
-		fields["target_channel"] = payload.TargetChannel
-		fields["target_chat_id"] = payload.TargetChatID
-		fields["content_len"] = payload.ContentLen
-	case SubTurnOrphanPayload:
-		fields["parent_turn_id"] = payload.ParentTurnID
-		fields["child_turn_id"] = payload.ChildTurnID
 		fields["reason"] = payload.Reason
 	case ErrorPayload:
 		fields["stage"] = payload.Stage

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kiry163/mole/pkg/approval"
 	"github.com/kiry163/mole/pkg/bus"
 	"github.com/kiry163/mole/pkg/config"
 	runtimeevents "github.com/kiry163/mole/pkg/events"
@@ -103,53 +102,6 @@ func TestRuntimeEventLogFieldsSummarizeAgentPayload(t *testing.T) {
 	}
 	if _, ok := fields["payload"]; ok {
 		t.Fatalf("raw payload should not be included by runtimeEventLogFields: %#v", fields)
-	}
-}
-
-func TestRuntimeEventLogFieldsSummarizeApprovalPayloads(t *testing.T) {
-	requested := runtimeEventLogFields(runtimeevents.Event{
-		ID:       "evt-approval-requested",
-		Kind:     runtimeevents.KindAgentToolApprovalRequested,
-		Severity: runtimeevents.SeverityInfo,
-		Scope:    runtimeevents.Scope{AgentID: "main", SessionKey: "session-1", Channel: "cli"},
-		Payload: ToolApprovalRequestedPayload{
-			RequestID: "ap_1",
-			Tool:      "exec",
-			Category:  "exec",
-			Summary:   "echo hi",
-			Origin:    "cli",
-			Iteration: 2,
-		},
-	})
-	if requested["tool"] != "exec" || requested["summary"] != "echo hi" || requested["origin"] != "cli" {
-		t.Fatalf("missing approval-requested summary fields: %#v", requested)
-	}
-	if requested["request_id"] != "ap_1" || requested["category"] != "exec" {
-		t.Fatalf("missing approval-requested identity fields: %#v", requested)
-	}
-
-	decided := runtimeEventLogFields(runtimeevents.Event{
-		ID:       "evt-approval-decided",
-		Kind:     runtimeevents.KindAgentToolApprovalDecided,
-		Severity: runtimeevents.SeverityWarn,
-		Scope:    runtimeevents.Scope{AgentID: "main", SessionKey: "session-1", Channel: "cli"},
-		Payload: ToolApprovalDecidedPayload{
-			RequestID: "ap_1",
-			Tool:      "exec",
-			Outcome:   string(approval.OutcomeDenied),
-			Reason:    "exec is denied by the approval policy",
-			DecidedBy: "console",
-			WaitedMS:  1200,
-		},
-	})
-	if decided["tool"] != "exec" || decided["outcome"] != string(approval.OutcomeDenied) {
-		t.Fatalf("missing approval-decided outcome fields: %#v", decided)
-	}
-	if decided["reason"] != "exec is denied by the approval policy" || decided["decided_by"] != "console" {
-		t.Fatalf("missing approval-decided reason fields: %#v", decided)
-	}
-	if decided["waited_ms"] != int64(1200) || decided["request_id"] != "ap_1" {
-		t.Fatalf("missing approval-decided timing/id fields: %#v", decided)
 	}
 }
 

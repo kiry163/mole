@@ -26,7 +26,6 @@ type ContextBuilder struct {
 	skillsLoader   *skills.SkillsLoader
 	memory         *MemoryStore
 	splitOnMarker  bool
-	agentDiscovery func(agentID string) []AgentDescriptor
 	promptRegistry *PromptRegistry
 
 	// Cache for system prompt to avoid rebuilding on every call.
@@ -68,28 +67,6 @@ func (cb *ContextBuilder) WithToolDiscovery(useBM25, useRegex bool) *ContextBuil
 
 func (cb *ContextBuilder) WithSplitOnMarker(enabled bool) *ContextBuilder {
 	cb.splitOnMarker = enabled
-	return cb
-}
-
-func (cb *ContextBuilder) WithAgentDiscovery(
-	agentID string,
-	discover func(agentID string) []AgentDescriptor,
-) *ContextBuilder {
-	cb.agentDiscovery = discover
-	if discover != nil {
-		if err := cb.RegisterPromptContributor(agentDiscoveryPromptContributor{
-			agentID:  agentID,
-			discover: discover,
-		}); err != nil {
-			logger.WarnCF(
-				"agent",
-				"Failed to register agent discovery prompt contributor",
-				map[string]any{
-					"error": err.Error(),
-				},
-			)
-		}
-	}
 	return cb
 }
 
@@ -222,8 +199,6 @@ func (cb *ContextBuilder) BuildSystemPromptParts() []PromptPart {
 type systemPromptBuildOptions struct {
 	IncludeSkillCatalog bool
 	IncludeToolUseRule  bool
-	AllowedSkills       []string
-	AllowedTools        []string
 }
 
 func (cb *ContextBuilder) buildSystemPromptParts(opts systemPromptBuildOptions) []PromptPart {
@@ -268,15 +243,11 @@ func (cb *ContextBuilder) buildSystemPromptParts(opts systemPromptBuildOptions) 
 	// Skills - show summary, AI can read full content with read_file tool
 	skillsSummary := ""
 	if opts.IncludeSkillCatalog {
-		skillsSummary = cb.buildSkillsSummary(opts.AllowedSkills)
+		skillsSummary = cb.buildSkillsSummary()
 	}
 	if skillsSummary != "" {
 		skillIntro := "The following skills extend your capabilities."
-		readFileAllowed := promptAllowsTool(
-			PromptBuildRequest{AllowedTools: opts.AllowedTools},
-			"read_file",
-		)
-		if opts.IncludeToolUseRule && readFileAllowed {
+		if opts.IncludeToolUseRule {
 			skillIntro += " To use a skill, read its SKILL.md file using the read_file tool."
 		}
 		add(PromptPart{
@@ -378,10 +349,7 @@ func (cb *ContextBuilder) buildSystemPromptForRequest(
 		return "", nil
 	}
 
-	useDefaultCache := !req.SuppressSkillContext &&
-		!req.SuppressToolUseRule &&
-		len(req.AllowedSkills) == 0 &&
-		len(req.AllowedTools) == 0
+	useDefaultCache := !req.SuppressSkillContext && !req.SuppressToolUseRule
 	if useDefaultCache {
 		staticPrompt := cb.BuildSystemPromptWithCache()
 		return staticPrompt, []providers.ContentBlock{
@@ -398,8 +366,6 @@ func (cb *ContextBuilder) buildSystemPromptForRequest(
 	parts := cb.buildSystemPromptParts(systemPromptBuildOptions{
 		IncludeSkillCatalog: !req.SuppressSkillContext,
 		IncludeToolUseRule:  !req.SuppressToolUseRule,
-		AllowedSkills:       req.AllowedSkills,
-		AllowedTools:        req.AllowedTools,
 	})
 	staticPrompt := renderPromptPartsLegacy(parts)
 	blocks := make([]providers.ContentBlock, 0, len(parts))
@@ -412,53 +378,11 @@ func (cb *ContextBuilder) buildSystemPromptForRequest(
 	return staticPrompt, blocks
 }
 
-func (cb *ContextBuilder) buildSkillsSummary(allowed []string) string {
+func (cb *ContextBuilder) buildSkillsSummary() string {
 	if cb.skillsLoader == nil {
 		return ""
 	}
-	if len(allowed) == 0 {
-		return cb.skillsLoader.BuildSkillsSummary()
-	}
-	allowedSet := cleanAllowedSet(allowed)
-	if len(allowedSet) == 0 {
-		return ""
-	}
-
-	var lines []string
-	lines = append(lines, "<skills>")
-	for _, s := range cb.skillsLoader.ListSkills() {
-		if _, ok := allowedSet[strings.ToLower(strings.TrimSpace(s.Name))]; !ok {
-			continue
-		}
-		lines = append(lines, "  <skill>")
-		lines = append(lines, fmt.Sprintf("    <name>%s</name>", xmlEscapeForPrompt(s.Name)))
-		lines = append(
-			lines,
-			fmt.Sprintf("    <description>%s</description>", xmlEscapeForPrompt(s.Description)),
-		)
-		lines = append(
-			lines,
-			fmt.Sprintf("    <location>%s</location>", xmlEscapeForPrompt(s.Path)),
-		)
-		lines = append(lines, fmt.Sprintf("    <source>%s</source>", xmlEscapeForPrompt(s.Source)))
-		lines = append(lines, "  </skill>")
-	}
-	if len(lines) == 1 {
-		return ""
-	}
-	lines = append(lines, "</skills>")
-	return strings.Join(lines, "\n")
-}
-
-func xmlEscapeForPrompt(s string) string {
-	replacer := strings.NewReplacer(
-		"&", "&amp;",
-		"<", "&lt;",
-		">", "&gt;",
-		"\"", "&quot;",
-		"'", "&apos;",
-	)
-	return replacer.Replace(s)
+	return cb.skillsLoader.BuildSkillsSummary()
 }
 
 // EstimateSystemTokens estimates the token count of the full system message
@@ -628,11 +552,7 @@ func (cb *ContextBuilder) sourceFilesChangedLocked() bool {
 			return true
 		}
 	}
-	if skillFilesChangedSince(cb.skillRoots(), cb.skillFilesAtCache) {
-		return true
-	}
-
-	return false
+	return skillFilesChangedSince(cb.skillRoots(), cb.skillFilesAtCache)
 }
 
 // fileChangedSince returns true if a tracked source file has been modified,
@@ -815,13 +735,9 @@ func (cb *ContextBuilder) BuildMessagesFromPrompt(req PromptBuildRequest) []prov
 		stringParts = append(stringParts, staticPrompt)
 	}
 
-	promptParts := append([]PromptPart(nil), req.Overlays...)
+	var promptParts []PromptPart
 	if !req.SuppressDefaultSystemPrompt && !req.SuppressSkillContext {
-		activeSkills := append([]string(nil), req.ActiveSkills...)
-		if len(req.AllowedSkills) > 0 {
-			activeSkills = filterNamesByTurnProfile(activeSkills, req.AllowedSkills)
-		}
-		promptParts = append(promptParts, cb.buildActiveSkillsPromptParts(activeSkills)...)
+		promptParts = append(promptParts, cb.buildActiveSkillsPromptParts(req.ActiveSkills)...)
 	}
 	if !req.SuppressDefaultSystemPrompt {
 		if contributedParts, err := cb.promptRegistryOrDefault().Collect(context.Background(), req); err != nil {
@@ -923,7 +839,6 @@ func (cb *ContextBuilder) BuildMessagesFromPrompt(req PromptBuildRequest) []prov
 			"dynamic_chars": dynamicChars,
 			"total_chars":   len(fullSystemPrompt),
 			"has_summary":   req.Summary != "",
-			"overlays":      len(req.Overlays),
 			"cached":        isCached,
 		})
 

@@ -231,50 +231,6 @@ func (s *failNthUpdateStreamer) Update(ctx context.Context, content string) erro
 	return nil
 }
 
-type configuredStreamingAfterHook struct {
-	content string
-	action  HookAction
-}
-
-func (h configuredStreamingAfterHook) BeforeLLM(
-	ctx context.Context,
-	req *LLMHookRequest,
-) (*LLMHookRequest, HookDecision, error) {
-	return req, HookDecision{Action: HookActionContinue}, nil
-}
-
-func (h configuredStreamingAfterHook) AfterLLM(
-	ctx context.Context,
-	resp *LLMHookResponse,
-) (*LLMHookResponse, HookDecision, error) {
-	if h.action == HookActionAbortTurn || h.action == HookActionHardAbort {
-		return resp, HookDecision{Action: h.action}, nil
-	}
-	next := resp.Clone()
-	next.Response.Content = h.content
-	return next, HookDecision{Action: HookActionModify}, nil
-}
-
-type configuredStreamingBeforeModelHook struct {
-	model string
-}
-
-func (h configuredStreamingBeforeModelHook) BeforeLLM(
-	ctx context.Context,
-	req *LLMHookRequest,
-) (*LLMHookRequest, HookDecision, error) {
-	next := req.Clone()
-	next.Model = h.model
-	return next, HookDecision{Action: HookActionModify}, nil
-}
-
-func (h configuredStreamingBeforeModelHook) AfterLLM(
-	ctx context.Context,
-	resp *LLMHookResponse,
-) (*LLMHookResponse, HookDecision, error) {
-	return resp, HookDecision{Action: HookActionContinue}, nil
-}
-
 func TestConfiguredStreamingEligibilityGates(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -298,7 +254,7 @@ func TestConfiguredStreamingEligibilityGates(t *testing.T) {
 		},
 		{
 			name:              "telegram channel and model enabled streams",
-			channel:           "telegram",
+			channel:           "webchat",
 			channelStreaming:  true,
 			modelStreaming:    true,
 			streamingProvider: true,
@@ -764,87 +720,6 @@ func TestConfiguredStreamingLaterUpdateFailureThenStreamSuccessReturnsVisibleErr
 	}
 }
 
-func TestConfiguredStreamingBeforeLLMModelRewriteReevaluatesModelStreaming(t *testing.T) {
-	tests := []struct {
-		name                   string
-		initialModelStreaming  bool
-		rewriteModel           string
-		rewriteModelStreaming  bool
-		fallbacks              []string
-		wantStreamCalls        int
-		wantChatCalls          int
-		wantFinalizedResponses int
-	}{
-		{
-			name:                  "rewrite to disabled model uses chat",
-			initialModelStreaming: true,
-			rewriteModel:          "hook-disabled-model",
-			wantChatCalls:         1,
-		},
-		{
-			name:                   "rewrite to enabled model streams",
-			rewriteModel:           "hook-enabled-model",
-			rewriteModelStreaming:  true,
-			fallbacks:              []string{"fallback-model"},
-			wantStreamCalls:        1,
-			wantFinalizedResponses: 1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := newConfiguredStreamingTestConfig(t, true, tt.initialModelStreaming, tt.fallbacks)
-			cfg.ModelList = append(cfg.ModelList, &config.ModelConfig{
-				ModelName: tt.rewriteModel,
-				Provider:  "openai",
-				Model:     "openai/" + tt.rewriteModel,
-				Streaming: config.ModelStreamingConfig{Enabled: tt.rewriteModelStreaming},
-			})
-			streamer := &recordingStreamer{}
-			msgBus := bus.NewMessageBus()
-			msgBus.SetStreamDelegate(configuredStreamingDelegate{streamer: streamer})
-			provider := &configuredStreamingProvider{
-				streamPlan: []configuredStreamingCall{{
-					chunks:   []string{"streamed after hook model rewrite"},
-					response: &providers.LLMResponse{Content: "stream response"},
-				}},
-			}
-			al := NewAgentLoop(cfg, msgBus, provider)
-			if err := al.MountHook(namedHook("rewrite-model", configuredStreamingBeforeModelHook{
-				model: tt.rewriteModel,
-			})); err != nil {
-				t.Fatalf("MountHook() error = %v", err)
-			}
-
-			got := runConfiguredStreamingTurn(t, al, "webchat")
-
-			if provider.streamCalls != tt.wantStreamCalls {
-				t.Fatalf("ChatStream calls = %d, want %d", provider.streamCalls, tt.wantStreamCalls)
-			}
-			if provider.chatCalls != tt.wantChatCalls {
-				t.Fatalf("Chat calls = %d, want %d", provider.chatCalls, tt.wantChatCalls)
-			}
-			if len(streamer.finalized) != tt.wantFinalizedResponses {
-				t.Fatalf("stream finalized = %v, want %d responses", streamer.finalized, tt.wantFinalizedResponses)
-			}
-			if tt.wantChatCalls == 1 && got != "chat response" {
-				t.Fatalf("response = %q, want chat response", got)
-			}
-			if tt.wantStreamCalls == 1 && got != "stream response" {
-				t.Fatalf("response = %q, want stream response", got)
-			}
-			wantResolvedModel := "openai/" + tt.rewriteModel
-			if tt.wantStreamCalls == 1 &&
-				(len(provider.streamModels) != 1 || provider.streamModels[0] != wantResolvedModel) {
-				t.Fatalf("stream models = %v, want [%s]", provider.streamModels, wantResolvedModel)
-			}
-			if tt.wantChatCalls == 1 && (len(provider.chatModels) != 1 || provider.chatModels[0] != wantResolvedModel) {
-				t.Fatalf("chat models = %v, want [%s]", provider.chatModels, wantResolvedModel)
-			}
-		})
-	}
-}
-
 func TestConfiguredStreamingPostChunkFailureDoesNotFallBackToChat(t *testing.T) {
 	cfg := newConfiguredStreamingTestConfig(t, true, true, nil)
 	streamer := &recordingStreamer{}
@@ -907,78 +782,6 @@ func TestConfiguredStreamingPostChunkEOFDoesNotRetryOrCancelVisibleOutput(t *tes
 	}
 	if streamer.canceled != 0 {
 		t.Fatalf("streamer canceled = %d, want 0 for already-visible stream EOF", streamer.canceled)
-	}
-}
-
-func TestConfiguredStreamingFinalizesAfterAfterLLMHookMutation(t *testing.T) {
-	cfg := newConfiguredStreamingTestConfig(t, true, true, nil)
-	streamer := &recordingStreamer{}
-	msgBus := bus.NewMessageBus()
-	msgBus.SetStreamDelegate(configuredStreamingDelegate{streamer: streamer})
-	provider := &configuredStreamingProvider{
-		streamPlan: []configuredStreamingCall{{
-			chunks:   []string{"partial"},
-			response: &providers.LLMResponse{Content: "original streamed response"},
-		}},
-	}
-	al := NewAgentLoop(cfg, msgBus, provider)
-	if err := al.MountHook(namedHook("rewrite-stream-response", configuredStreamingAfterHook{
-		content: "hooked final response",
-	})); err != nil {
-		t.Fatalf("MountHook() error = %v", err)
-	}
-
-	got := runConfiguredStreamingTurn(t, al, "webchat")
-
-	if got != "hooked final response" {
-		t.Fatalf("response = %q, want hook-modified response", got)
-	}
-	if len(streamer.finalized) != 1 || streamer.finalized[0] != "hooked final response" {
-		t.Fatalf("stream finalized = %v, want [hooked final response]", streamer.finalized)
-	}
-}
-
-func TestConfiguredStreamingAfterLLMAbortCancelsPublishedStream(t *testing.T) {
-	tests := []struct {
-		name   string
-		action HookAction
-	}{
-		{name: "abort turn", action: HookActionAbortTurn},
-		{name: "hard abort", action: HookActionHardAbort},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := newConfiguredStreamingTestConfig(t, true, true, nil)
-			streamer := &recordingStreamer{}
-			msgBus := bus.NewMessageBus()
-			msgBus.SetStreamDelegate(configuredStreamingDelegate{streamer: streamer})
-			provider := &configuredStreamingProvider{
-				streamPlan: []configuredStreamingCall{{
-					chunks:   []string{"partial before abort"},
-					response: &providers.LLMResponse{Content: "should not be visible"},
-				}},
-			}
-			al := NewAgentLoop(cfg, msgBus, provider)
-			if err := al.MountHook(namedHook("abort-stream-response", configuredStreamingAfterHook{
-				action: tt.action,
-			})); err != nil {
-				t.Fatalf("MountHook() error = %v", err)
-			}
-
-			_, _ = al.runAgentLoop(
-				context.Background(),
-				al.GetRegistry().GetDefaultAgent(),
-				configuredStreamingProcessOptions("webchat"),
-			)
-
-			if streamer.canceled != 1 {
-				t.Fatalf("streamer canceled = %d, want 1", streamer.canceled)
-			}
-			if len(streamer.finalized) != 0 {
-				t.Fatalf("stream finalized = %v, want none", streamer.finalized)
-			}
-		})
 	}
 }
 
@@ -1076,8 +879,7 @@ func newConfiguredStreamingTestConfig(
 			},
 		},
 		Channels: config.ChannelsConfig{
-			"webchat":  newConfiguredStreamingWebChatChannel(t, channelStreaming),
-			"telegram": newConfiguredStreamingTelegramChannel(t, channelStreaming),
+			"webchat": newConfiguredStreamingWebChatChannel(t, channelStreaming),
 		},
 		ModelList: []*config.ModelConfig{{
 			ModelName: "test-model",
@@ -1098,27 +900,6 @@ func newConfiguredStreamingTestConfig(
 		t.Fatalf("InitChannelList() error = %v", err)
 	}
 	return cfg
-}
-
-func newConfiguredStreamingTelegramChannel(t *testing.T, enabled bool) *config.Channel {
-	t.Helper()
-	settings := config.TelegramSettings{
-		Token: *config.NewSecureString("test-telegram-token"),
-		Streaming: config.StreamingConfig{
-			Enabled:         enabled,
-			ThrottleSeconds: 1,
-			MinGrowthChars:  40,
-		},
-	}
-	raw, err := json.Marshal(settings)
-	if err != nil {
-		t.Fatalf("Marshal settings error = %v", err)
-	}
-	return &config.Channel{
-		Type:     config.ChannelTelegram,
-		Enabled:  true,
-		Settings: config.RawNode(raw),
-	}
 }
 
 func newConfiguredStreamingWebChatChannel(t *testing.T, enabled bool) *config.Channel {
@@ -1152,7 +933,6 @@ func configuredStreamingProcessOptions(channel string) processOptions {
 		EnableSummary:              false,
 		SendResponse:               false,
 		AllowInterimWebChatPublish: true,
-		NoHistory:                  true,
 	}
 }
 

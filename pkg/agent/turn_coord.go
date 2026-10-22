@@ -26,7 +26,6 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 
 	// Inject turnState and AgentLoop into context so tools (e.g. spawn) can retrieve them.
 	turnCtx = withTurnState(turnCtx, ts)
-	turnCtx = WithAgentLoop(turnCtx, al)
 
 	al.registerActiveTurn(ts)
 	defer al.clearActiveTurn(ts)
@@ -123,37 +122,6 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 			}
 		}
 
-		// Check if parent turn has ended (SubTurn support from HEAD)
-		if ts.parentTurnState != nil && ts.IsParentEnded() {
-			if !ts.critical {
-				logger.InfoCF("agent", "Parent turn ended, non-critical SubTurn exiting gracefully", map[string]any{
-					"agent_id":  ts.agentID,
-					"iteration": iteration,
-					"turn_id":   ts.turnID,
-				})
-				break
-			}
-			logger.InfoCF("agent", "Parent turn ended, critical SubTurn continues running", map[string]any{
-				"agent_id":  ts.agentID,
-				"iteration": iteration,
-				"turn_id":   ts.turnID,
-			})
-		}
-
-		// Poll for pending SubTurn results (from HEAD)
-		if ts.pendingResults != nil {
-			select {
-			case result, ok := <-ts.pendingResults:
-				if ok && result != nil && result.ForLLM != "" {
-					content := al.cfg.FilterSensitiveData(result.ForLLM)
-					msg := subTurnResultPromptMessage(content)
-					pendingMessages = append(pendingMessages, msg)
-				}
-			default:
-				// No results available
-			}
-		}
-
 		// Inject pending steering messages
 		if len(pendingMessages) > 0 {
 			resolvedPending := resolveMediaRefs(pendingMessages, al.mediaStore, maxMediaSize, 0)
@@ -161,11 +129,9 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 			for i, pm := range pendingMessages {
 				messages = append(messages, resolvedPending[i])
 				totalContentLen += len(pm.Content)
-				if !ts.opts.NoHistory {
-					ts.agent.Sessions.AddFullMessage(ts.sessionKey, pm)
-					ts.recordPersistedMessage(pm)
-					ts.ingestMessage(turnCtx, al, pm)
-				}
+				ts.agent.Sessions.AddFullMessage(ts.sessionKey, pm)
+				ts.recordPersistedMessage(pm)
+				ts.ingestMessage(turnCtx, al, pm)
 				logger.InfoCF("agent", "Injected steering message into context",
 					map[string]any{
 						"agent_id":    ts.agent.ID,
@@ -216,11 +182,6 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 				turnStatus = TurnEndStatusAborted
 				return al.abortTurn(ts)
 			}
-			// Hook abort (HookActionAbortTurn): sets TurnEndStatusError, returns error
-			if exec.abortedByHook {
-				turnStatus = TurnEndStatusError
-				return turnResult{}, fmt.Errorf("hook requested turn abort")
-			}
 			// Ensure empty response falls back to DefaultResponse
 			if finalContent == "" {
 				finalContent = ts.opts.DefaultResponse
@@ -244,11 +205,6 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 				if exec.abortedByHardAbort {
 					turnStatus = TurnEndStatusAborted
 					return al.abortTurn(ts)
-				}
-				// Hook abort (HookActionAbortTurn): sets TurnEndStatusError, returns error
-				if exec.abortedByHook {
-					turnStatus = TurnEndStatusError
-					return turnResult{}, fmt.Errorf("hook requested turn abort")
 				}
 				// ExecuteTools returned ControlBreak:
 				// - allResponsesHandled=true: finalize without DefaultResponse (exec.finalContent empty)
@@ -293,50 +249,26 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 
 func (al *AgentLoop) abortTurn(ts *turnState) (turnResult, error) {
 	ts.setPhase(TurnPhaseAborted)
-	if !ts.opts.NoHistory {
-		if err := ts.restoreSession(ts.agent); err != nil {
-			al.emitEvent(
-				runtimeevents.KindAgentError,
-				ts.eventMeta("abortTurn", "turn.error"),
-				ErrorPayload{
-					Stage:   "session_restore",
-					Message: err.Error(),
-				},
-			)
-			return turnResult{}, err
-		}
+	if err := ts.restoreSession(ts.agent); err != nil {
+		al.emitEvent(
+			runtimeevents.KindAgentError,
+			ts.eventMeta("abortTurn", "turn.error"),
+			ErrorPayload{
+				Stage:   "session_restore",
+				Message: err.Error(),
+			},
+		)
+		return turnResult{}, err
 	}
 	return turnResult{status: TurnEndStatusAborted}, nil
 }
 
 func (al *AgentLoop) selectCandidates(
 	agent *AgentInstance,
-	userMsg string,
-	history []providers.Message,
-) (candidates []providers.FallbackCandidate, model string, usedLight bool) {
-	if agent.Router == nil || len(agent.LightCandidates) == 0 {
-		return agent.Candidates, resolvedCandidateModel(agent.Candidates, agent.Model), false
-	}
-
-	_, usedLight, score := agent.Router.SelectModel(userMsg, history, agent.Model)
-	if !usedLight {
-		logger.DebugCF("agent", "Model routing: primary model selected",
-			map[string]any{
-				"agent_id":  agent.ID,
-				"score":     score,
-				"threshold": agent.Router.Threshold(),
-			})
-		return agent.Candidates, resolvedCandidateModel(agent.Candidates, agent.Model), false
-	}
-
-	logger.InfoCF("agent", "Model routing: light model selected",
-		map[string]any{
-			"agent_id":    agent.ID,
-			"light_model": agent.Router.LightModel(),
-			"score":       score,
-			"threshold":   agent.Router.Threshold(),
-		})
-	return agent.LightCandidates, resolvedCandidateModel(agent.LightCandidates, agent.Router.LightModel()), true
+	_ string,
+	_ []providers.Message,
+) (candidates []providers.FallbackCandidate, model string) {
+	return agent.Candidates, resolvedCandidateModel(agent.Candidates, agent.Model)
 }
 
 func (al *AgentLoop) resolveContextManager() *sessionContextManager {
@@ -363,11 +295,6 @@ func (al *AgentLoop) askSideQuestion(
 
 	if opts != nil {
 		normalizeProcessOptionsInPlace(opts)
-		resolved, err := resolveTurnProfileOptions(al.GetConfig(), *opts)
-		if err != nil {
-			return "", err
-		}
-		*opts = resolved
 	}
 
 	var media []string
@@ -383,7 +310,7 @@ func (al *AgentLoop) askSideQuestion(
 	// Build messages with context but WITHOUT adding to session history
 	var history []providers.Message
 	var summary string
-	if opts != nil && !opts.NoHistory {
+	if opts != nil {
 		if resp, err := al.contextManager.Assemble(ctx, &AssembleRequest{
 			SessionKey: opts.SessionKey,
 			Budget:     agent.ContextWindow,
@@ -427,8 +354,7 @@ func (al *AgentLoop) askSideQuestion(
 	}
 	messages = resolveMediaRefs(messages, al.mediaStore, maxMediaSize, currentTurnStart)
 
-	activeCandidates, activeModel, usedLight := al.selectCandidates(agent, question, messages)
-	selectedModelName := sideQuestionModelName(agent, usedLight)
+	activeCandidates, _ := al.selectCandidates(agent, question, messages)
 
 	llmOpts := map[string]any{
 		"max_tokens":       agent.MaxTokens,
@@ -436,19 +362,13 @@ func (al *AgentLoop) askSideQuestion(
 		"prompt_cache_key": agent.ID + ":btw",
 	}
 
-	hookModelChanged := false
 	sideSuppressReasoning := false
 	callProvider := func(
 		ctx context.Context,
 		candidate providers.FallbackCandidate,
-		model string,
-		forceModel bool,
 		callMessages []providers.Message,
 	) (*providers.LLMResponse, error) {
-		baseModelName := selectedModelName
-		if forceModel && strings.TrimSpace(model) != "" {
-			baseModelName = model
-		}
+		baseModelName := agent.Model
 		provider, providerModel, modelCfg, cleanup, err := al.isolatedSideQuestionProvider(
 			agent,
 			baseModelName,
@@ -458,9 +378,6 @@ func (al *AgentLoop) askSideQuestion(
 			return nil, err
 		}
 		defer cleanup()
-		if !forceModel || strings.TrimSpace(model) == "" {
-			model = providerModel
-		}
 		callOpts := llmOpts
 		settings := thinkingSettingsFromModelConfig(modelCfg)
 		sideSuppressReasoning = shouldSuppressReasoningFor(settings)
@@ -470,67 +387,20 @@ func (al *AgentLoop) askSideQuestion(
 				applyThinkingOption(callOpts, provider, settings, false, agent.ID)
 			}
 		}
-		return provider.Chat(ctx, callMessages, nil, model, callOpts)
+		return provider.Chat(ctx, callMessages, nil, providerModel, callOpts)
 	}
 
 	turnCtx := newTurnContext(nil, nil, nil)
 	if opts != nil {
 		turnCtx = newTurnContext(opts.Dispatch.InboundContext, opts.Dispatch.RouteResult, opts.Dispatch.SessionScope)
 	}
-	llmModel := activeModel
-	if al.hooks != nil {
-		llmReq, decision := al.hooks.BeforeLLM(ctx, &LLMHookRequest{
-			Meta: HookMeta{
-				Source:      "askSideQuestion",
-				TracePath:   "turn.llm.request",
-				turnContext: cloneTurnContext(turnCtx),
-			},
-			Context:          cloneTurnContext(turnCtx),
-			Model:            llmModel,
-			Messages:         messages,
-			Tools:            nil,
-			Options:          llmOpts,
-			GracefulTerminal: false,
-		})
-		switch decision.normalizedAction() {
-		case HookActionContinue, HookActionModify:
-			if llmReq != nil {
-				if strings.TrimSpace(llmReq.Model) != "" && llmReq.Model != llmModel {
-					hookModelChanged = true
-				}
-				llmModel = llmReq.Model
-				messages = llmReq.Messages
-				llmOpts = llmReq.Options
-				delete(llmOpts, "native_search")
-			}
-		case HookActionAbortTurn:
-			reason := decision.Reason
-			if reason == "" {
-				reason = "hook requested turn abort"
-			}
-			return "", fmt.Errorf("hook aborted turn during before_llm: %s", reason)
-		case HookActionHardAbort:
-			reason := decision.Reason
-			if reason == "" {
-				reason = "hook requested turn abort"
-			}
-			return "", fmt.Errorf("hook aborted turn during before_llm: %s", reason)
-		}
-	}
-	if hookModelChanged {
-		// Hook-selected models must not continue through the pre-hook fallback
-		// candidate list, otherwise fallback execution would call the original
-		// candidate model and silently ignore the hook decision.
-		activeCandidates = nil
-	}
-
 	callSideLLM := func(callMessages []providers.Message) (*providers.LLMResponse, error) {
 		if len(activeCandidates) > 1 && al.fallback != nil {
 			fbResult, err := al.fallback.ExecuteCandidate(
 				ctx,
 				activeCandidates,
 				func(ctx context.Context, candidate providers.FallbackCandidate) (*providers.LLMResponse, error) {
-					return callProvider(ctx, candidate, candidate.Model, false, callMessages)
+					return callProvider(ctx, candidate, callMessages)
 				},
 			)
 			if err != nil {
@@ -543,7 +413,7 @@ func (al *AgentLoop) askSideQuestion(
 		if len(activeCandidates) > 0 {
 			candidate = activeCandidates[0]
 		}
-		return callProvider(ctx, candidate, llmModel, hookModelChanged, callMessages)
+		return callProvider(ctx, candidate, callMessages)
 	}
 
 	// Retry without media if vision is unsupported
@@ -555,7 +425,7 @@ func (al *AgentLoop) askSideQuestion(
 	if err != nil && hasMediaRefs(messages) && isVisionUnsupportedError(err) {
 		al.emitEvent(
 			runtimeevents.KindAgentLLMRetry,
-			HookMeta{
+			EventMeta{
 				Source:      "askSideQuestion",
 				TracePath:   "turn.llm.retry",
 				turnContext: cloneTurnContext(turnCtx),
@@ -578,31 +448,6 @@ func (al *AgentLoop) askSideQuestion(
 		return "", nil
 	}
 
-	// Apply after_llm hooks
-	if al.hooks != nil {
-		llmResp, decision := al.hooks.AfterLLM(ctx, &LLMHookResponse{
-			Meta: HookMeta{
-				Source:      "askSideQuestion",
-				TracePath:   "turn.llm.response",
-				turnContext: cloneTurnContext(turnCtx),
-			},
-			Context:  cloneTurnContext(turnCtx),
-			Model:    llmModel,
-			Response: resp,
-		})
-		switch decision.normalizedAction() {
-		case HookActionContinue, HookActionModify:
-			if llmResp != nil && llmResp.Response != nil {
-				resp = llmResp.Response
-			}
-		case HookActionAbortTurn, HookActionHardAbort:
-			reason := decision.Reason
-			if reason == "" {
-				reason = "hook requested turn abort"
-			}
-			return "", fmt.Errorf("hook aborted turn during after_llm: %s", reason)
-		}
-	}
 	if sideSuppressReasoning {
 		resp.Reasoning = ""
 		resp.ReasoningContent = ""

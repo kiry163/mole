@@ -55,17 +55,15 @@ type webSearchProviderConfig struct {
 type webSearchConfigResponse struct {
 	Provider       string                             `json:"provider"`
 	CurrentService string                             `json:"current_service"`
-	PreferNative   bool                               `json:"prefer_native"`
 	Proxy          string                             `json:"proxy,omitempty"`
 	Providers      []webSearchProviderOption          `json:"providers"`
 	Settings       map[string]webSearchProviderConfig `json:"settings"`
 }
 
 type webSearchConfigRequest struct {
-	Provider     string                             `json:"provider"`
-	PreferNative bool                               `json:"prefer_native"`
-	Proxy        string                             `json:"proxy"`
-	Settings     map[string]webSearchProviderConfig `json:"settings"`
+	Provider string                             `json:"provider"`
+	Proxy    string                             `json:"proxy"`
+	Settings map[string]webSearchProviderConfig `json:"settings"`
 }
 
 var toolCatalog = []toolCatalogEntry{
@@ -128,30 +126,6 @@ var toolCatalog = []toolCatalogEntry{
 		Description: "Send an outbound file or media attachment to the active chat.",
 		Category:    "communication",
 		ConfigKey:   "send_file",
-	},
-	{
-		Name:        "find_skills",
-		Description: "Search external skill registries for installable skills.",
-		Category:    "skills",
-		ConfigKey:   "find_skills",
-	},
-	{
-		Name:        "install_skill",
-		Description: "Install a skill into the current workspace from a registry.",
-		Category:    "skills",
-		ConfigKey:   "install_skill",
-	},
-	{
-		Name:        "spawn",
-		Description: "Launch a background subagent for long-running or delegated work.",
-		Category:    "agents",
-		ConfigKey:   "spawn",
-	},
-	{
-		Name:        "spawn_status",
-		Description: "Query the status of spawned subagents.",
-		Category:    "agents",
-		ConfigKey:   "spawn_status",
 	},
 	{
 		Name:        "tool_search_tool_regex",
@@ -221,24 +195,6 @@ func buildToolSupport(cfg *config.Config) []toolSupportItem {
 		reasonCode := ""
 
 		switch entry.Name {
-		case "find_skills", "install_skill":
-			if cfg.Tools.IsToolEnabled(entry.ConfigKey) {
-				if cfg.Tools.IsToolEnabled("skills") {
-					status = "enabled"
-				} else {
-					status = "blocked"
-					reasonCode = "requires_skills"
-				}
-			}
-		case "spawn", "spawn_status":
-			if cfg.Tools.IsToolEnabled(entry.ConfigKey) {
-				if cfg.Tools.IsToolEnabled("subagent") {
-					status = "enabled"
-				} else {
-					status = "blocked"
-					reasonCode = "requires_subagent"
-				}
-			}
 		case "tool_search_tool_regex":
 			status, reasonCode = resolveDiscoveryToolSupport(cfg, cfg.Tools.MCP.Discovery.UseRegex)
 		case "tool_search_tool_bm25":
@@ -305,27 +261,6 @@ func applyToolState(cfg *config.Config, toolName string, enabled bool) error {
 		cfg.Tools.Message.Enabled = enabled
 	case "send_file":
 		cfg.Tools.SendFile.Enabled = enabled
-	case "find_skills":
-		cfg.Tools.FindSkills.Enabled = enabled
-		if enabled {
-			cfg.Tools.Skills.Enabled = true
-		}
-	case "install_skill":
-		cfg.Tools.InstallSkill.Enabled = enabled
-		if enabled {
-			cfg.Tools.Skills.Enabled = true
-		}
-	case "spawn":
-		cfg.Tools.Spawn.Enabled = enabled
-		if enabled {
-			cfg.Tools.Subagent.Enabled = true
-		}
-	case "spawn_status":
-		cfg.Tools.SpawnStatus.Enabled = enabled
-		if enabled {
-			cfg.Tools.Spawn.Enabled = true
-			cfg.Tools.Subagent.Enabled = true
-		}
 	case "tool_search_tool_regex":
 		cfg.Tools.MCP.Discovery.UseRegex = enabled
 		if enabled {
@@ -377,7 +312,6 @@ func (h *Handler) handleUpdateWebSearchConfig(w http.ResponseWriter, r *http.Req
 	}
 
 	cfg.Tools.Web.Provider = provider
-	cfg.Tools.Web.PreferNative = req.PreferNative
 	cfg.Tools.Web.Proxy = strings.TrimSpace(req.Proxy)
 
 	if settings, ok := req.Settings["sogou"]; ok {
@@ -488,7 +422,6 @@ func buildWebSearchConfigResponse(cfg *config.Config) webSearchConfigResponse {
 	return webSearchConfigResponse{
 		Provider:       provider,
 		CurrentService: current,
-		PreferNative:   cfg.Tools.Web.PreferNative,
 		Proxy:          cfg.Tools.Web.Proxy,
 		Providers:      providers,
 		Settings:       settings,

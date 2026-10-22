@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kiry163/mole/pkg/approval"
 	"github.com/kiry163/mole/pkg/config"
 )
 
@@ -27,9 +26,6 @@ type Runtime struct {
 	PID int
 	// Channels lists the enabled channel names.
 	Channels []string
-	// Approvals returns the process-wide approval store, or nil when the console
-	// runs without one.
-	Approvals func() *approval.Store
 	// Reload asks the host for an in-place configuration reload. It may be nil
 	// when the host has no reload plumbing, in which case reload requests are
 	// dropped.
@@ -51,16 +47,6 @@ func (h *Handler) currentRuntime() *Runtime {
 	h.runtimeMu.RLock()
 	defer h.runtimeMu.RUnlock()
 	return h.runtime
-}
-
-// approvalStore returns the process-wide approval store, or nil when the console
-// runs without one, so the approval endpoints can answer 503.
-func (h *Handler) approvalStore() *approval.Store {
-	runtime := h.currentRuntime()
-	if runtime == nil || runtime.Approvals == nil {
-		return nil
-	}
-	return runtime.Approvals()
 }
 
 // requestReload asks the host to reload configuration in place. Handlers call it

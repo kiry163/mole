@@ -12,264 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAgentModelConfig_UnmarshalString(t *testing.T) {
-	var m AgentModelConfig
-	if err := json.Unmarshal([]byte(`"gpt-4"`), &m); err != nil {
-		t.Fatalf("unmarshal string: %v", err)
-	}
-	if m.Primary != "gpt-4" {
-		t.Errorf("Primary = %q, want 'gpt-4'", m.Primary)
-	}
-	if m.Fallbacks != nil {
-		t.Errorf("Fallbacks = %v, want nil", m.Fallbacks)
-	}
-}
-
-func TestAgentModelConfig_UnmarshalObject(t *testing.T) {
-	var m AgentModelConfig
-	data := `{"primary": "claude-opus", "fallbacks": ["gpt-4o-mini", "haiku"]}`
-	if err := json.Unmarshal([]byte(data), &m); err != nil {
-		t.Fatalf("unmarshal object: %v", err)
-	}
-	if m.Primary != "claude-opus" {
-		t.Errorf("Primary = %q, want 'claude-opus'", m.Primary)
-	}
-	if len(m.Fallbacks) != 2 {
-		t.Fatalf("Fallbacks len = %d, want 2", len(m.Fallbacks))
-	}
-	if m.Fallbacks[0] != "gpt-4o-mini" || m.Fallbacks[1] != "haiku" {
-		t.Errorf("Fallbacks = %v", m.Fallbacks)
-	}
-}
-
-func TestAgentModelConfig_MarshalString(t *testing.T) {
-	m := AgentModelConfig{Primary: "gpt-4"}
-	data, err := json.Marshal(m)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	if string(data) != `"gpt-4"` {
-		t.Errorf("marshal = %s, want '\"gpt-4\"'", string(data))
-	}
-}
-
-func TestAgentModelConfig_MarshalObject(t *testing.T) {
-	m := AgentModelConfig{Primary: "claude-opus", Fallbacks: []string{"haiku"}}
-	data, err := json.Marshal(m)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	var result map[string]any
-	json.Unmarshal(data, &result)
-	if result["primary"] != "claude-opus" {
-		t.Errorf("primary = %v", result["primary"])
-	}
-}
-
-func TestAgentConfig_FullParse(t *testing.T) {
-	jsonData := `{
-		"agents": {
-			"defaults": {
-				"workspace": "~/.mole/workspace",
-				"model": "glm-4.7",
-				"max_tokens": 8192,
-				"max_tool_iterations": 20
-			},
-			"list": [
-				{
-					"id": "sales",
-					"default": true,
-					"name": "Sales Bot",
-					"model": "gpt-4"
-				},
-			{
-				"id": "support",
-				"name": "Support Bot",
-				"model": {
-					"primary": "claude-opus",
-					"fallbacks": ["haiku"]
-				},
-				"subagents": {
-					"allow_agents": ["sales"]
-				}
-			}
-			]
-		},
-		"session": {
-			"dimensions": ["sender"],
-			"identity_links": {
-				"john": ["telegram:123", "discord:john#1234"]
-			}
-		}
-	}`
-
-	cfg := DefaultConfig()
-	if err := json.Unmarshal([]byte(jsonData), cfg); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-
-	if len(cfg.Agents.List) != 2 {
-		t.Fatalf("agents.list len = %d, want 2", len(cfg.Agents.List))
-	}
-
-	sales := cfg.Agents.List[0]
-	if sales.ID != "sales" || !sales.Default || sales.Name != "Sales Bot" {
-		t.Errorf("sales = %+v", sales)
-	}
-	if sales.Model == nil || sales.Model.Primary != "gpt-4" {
-		t.Errorf("sales.Model = %+v", sales.Model)
-	}
-
-	support := cfg.Agents.List[1]
-	if support.ID != "support" || support.Name != "Support Bot" {
-		t.Errorf("support = %+v", support)
-	}
-	if support.Model == nil || support.Model.Primary != "claude-opus" {
-		t.Errorf("support.Model = %+v", support.Model)
-	}
-	if len(support.Model.Fallbacks) != 1 || support.Model.Fallbacks[0] != "haiku" {
-		t.Errorf("support.Model.Fallbacks = %v", support.Model.Fallbacks)
-	}
-	if support.Subagents == nil || len(support.Subagents.AllowAgents) != 1 {
-		t.Errorf("support.Subagents = %+v", support.Subagents)
-	}
-
-	if len(cfg.Session.Dimensions) != 1 || cfg.Session.Dimensions[0] != "sender" {
-		t.Errorf("Session.Dimensions = %v", cfg.Session.Dimensions)
-	}
-	if len(cfg.Session.IdentityLinks) != 1 {
-		t.Errorf("Session.IdentityLinks = %v", cfg.Session.IdentityLinks)
-	}
-	links := cfg.Session.IdentityLinks["john"]
-	if len(links) != 2 {
-		t.Errorf("john links = %v", links)
-	}
-}
-
-func TestTurnProfileConfig_ParseAndResolve(t *testing.T) {
-	jsonData := `{
-		"agents": {
-			"defaults": {
-				"turn_profile": {
-					"enabled": true,
-					"history": {"mode": "off"},
-					"system_prompt": {"mode": "off"},
-					"skills": {"mode": "off"},
-					"tools": {
-						"mode": "custom",
-						"allow": ["web_search", "web_fetch"]
-					}
-				}
-			}
-		}
-	}`
-
-	cfg := DefaultConfig()
-	if err := json.Unmarshal([]byte(jsonData), cfg); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if err := cfg.ValidateTurnProfile(); err != nil {
-		t.Fatalf("ValidateTurnProfile() error = %v", err)
-	}
-
-	profile, ok, err := cfg.Agents.Defaults.ResolveTurnProfile()
-	if err != nil {
-		t.Fatalf("ResolveTurnProfile() error = %v", err)
-	}
-	if !ok {
-		t.Fatal("ResolveTurnProfile() ok = false, want true")
-	}
-	if profile.HistoryMode != TurnProfileModeOff ||
-		profile.SystemPromptMode != TurnProfileModeOff ||
-		profile.SkillsMode != TurnProfileModeOff ||
-		profile.ToolsMode != TurnProfileModeCustom {
-		t.Fatalf("resolved clean_web modes = %+v", profile)
-	}
-	assert.Equal(t, []string{"web_search", "web_fetch"}, profile.AllowedTools)
-}
-
-func TestTurnProfileConfig_DisabledOrMissingIsNoop(t *testing.T) {
-	cfg := DefaultConfig()
-
-	profile, ok, err := cfg.Agents.Defaults.ResolveTurnProfile()
-	if err != nil {
-		t.Fatalf("ResolveTurnProfile(missing) error = %v", err)
-	}
-	if ok {
-		t.Fatal("ResolveTurnProfile(missing) ok = true, want false")
-	}
-	if profile.Enabled {
-		t.Fatalf("ResolveTurnProfile(missing) profile.Enabled = true, want false")
-	}
-
-	cfg.Agents.Defaults.TurnProfile = TurnProfileConfig{
-		Enabled: false,
-		History: TurnProfileBlock{
-			Mode: TurnProfileModeOff,
-		},
-	}
-	profile, ok, err = cfg.Agents.Defaults.ResolveTurnProfile()
-	if err != nil {
-		t.Fatalf("ResolveTurnProfile(disabled) error = %v", err)
-	}
-	if ok || profile.Enabled {
-		t.Fatalf("disabled profile = (%+v, %v), want no-op", profile, ok)
-	}
-
-	cfg.Agents.Defaults.TurnProfile = TurnProfileConfig{
-		Enabled: false,
-		History: TurnProfileBlock{
-			Mode: TurnProfileModeCustom,
-		},
-		Tools: TurnProfileBlock{
-			Mode: TurnProfileMode("sometimes"),
-		},
-	}
-	if err := cfg.ValidateTurnProfile(); err != nil {
-		t.Fatalf("ValidateTurnProfile(disabled unsupported modes) error = %v, want nil", err)
-	}
-}
-
-func TestTurnProfileConfig_ValidationRejectsUnsupportedModes(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  string
-		want string
-	}{
-		{
-			name: "history custom unsupported",
-			raw:  `{"agents":{"defaults":{"turn_profile":{"enabled":true,"history":{"mode":"custom"}}}}}`,
-			want: "history.mode",
-		},
-		{
-			name: "system prompt custom unsupported",
-			raw:  `{"agents":{"defaults":{"turn_profile":{"enabled":true,"system_prompt":{"mode":"custom"}}}}}`,
-			want: "system_prompt.mode",
-		},
-		{
-			name: "unknown mode",
-			raw:  `{"agents":{"defaults":{"turn_profile":{"enabled":true,"tools":{"mode":"sometimes"}}}}}`,
-			want: "unsupported mode",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := DefaultConfig()
-			if err := json.Unmarshal([]byte(tt.raw), cfg); err != nil {
-				t.Fatalf("unmarshal: %v", err)
-			}
-			err := cfg.ValidateTurnProfile()
-			if err == nil {
-				t.Fatal("ValidateTurnProfile() error = nil, want error")
-			}
-			if !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("ValidateTurnProfile() error = %v, want containing %q", err, tt.want)
-			}
-		})
-	}
-}
-
 func TestDefaultConfig_MCPMaxInlineTextChars(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.Tools.MCP.GetMaxInlineTextChars() != DefaultMCPMaxInlineTextChars {
@@ -306,83 +48,6 @@ func TestLoadConfig_MCPMaxInlineTextChars(t *testing.T) {
 	}
 }
 
-func TestConfig_BackwardCompat_NoAgentsList(t *testing.T) {
-	jsonData := `{
-		"agents": {
-			"defaults": {
-				"workspace": "~/.mole/workspace",
-				"model": "glm-4.7",
-				"max_tokens": 8192,
-				"max_tool_iterations": 20
-			}
-		}
-	}`
-
-	cfg := DefaultConfig()
-	if err := json.Unmarshal([]byte(jsonData), cfg); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-
-	if len(cfg.Agents.List) != 0 {
-		t.Errorf("agents.list should be empty for backward compat, got %d", len(cfg.Agents.List))
-	}
-}
-
-func TestAgentConfig_ParsesDispatchRules(t *testing.T) {
-	jsonData := `{
-		"agents": {
-			"defaults": {
-				"workspace": "~/.mole/workspace",
-				"model": "glm-4.7"
-			},
-			"list": [
-				{ "id": "main", "default": true },
-				{ "id": "support" }
-			],
-			"dispatch": {
-				"rules": [
-					{
-						"name": "support-vip",
-						"agent": "support",
-						"when": {
-							"channel": "telegram",
-							"chat": "group:-100123",
-							"sender": "12345",
-							"mentioned": true
-						},
-						"session_dimensions": ["chat", "sender"]
-					}
-				]
-			}
-		}
-	}`
-
-	cfg := DefaultConfig()
-	if err := json.Unmarshal([]byte(jsonData), cfg); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if cfg.Agents.Dispatch == nil {
-		t.Fatal("Agents.Dispatch should not be nil")
-	}
-	if len(cfg.Agents.Dispatch.Rules) != 1 {
-		t.Fatalf("Dispatch.Rules len = %d, want 1", len(cfg.Agents.Dispatch.Rules))
-	}
-	rule := cfg.Agents.Dispatch.Rules[0]
-	if rule.Name != "support-vip" || rule.Agent != "support" {
-		t.Fatalf("rule = %+v", rule)
-	}
-	if rule.When.Channel != "telegram" || rule.When.Chat != "group:-100123" || rule.When.Sender != "12345" {
-		t.Fatalf("rule.When = %+v", rule.When)
-	}
-	if rule.When.Mentioned == nil || !*rule.When.Mentioned {
-		t.Fatalf("rule.When.Mentioned = %+v, want true", rule.When.Mentioned)
-	}
-	if got := rule.SessionDimensions; len(got) != 2 || got[0] != "chat" || got[1] != "sender" {
-		t.Fatalf("rule.SessionDimensions = %v, want [chat sender]", got)
-	}
-}
-
-// TestDefaultConfig_WorkspacePath verifies workspace path is correctly set
 func TestDefaultConfig_WorkspacePath(t *testing.T) {
 	cfg := DefaultConfig()
 
@@ -447,33 +112,17 @@ func TestDefaultConfig_Channels(t *testing.T) {
 func TestDefaultConfig_ChannelStreamingDisabled(t *testing.T) {
 	cfg := DefaultConfig()
 
-	telegram := cfg.Channels.Get(ChannelTelegram)
-	if telegram == nil {
-		t.Fatal("DefaultConfig() missing telegram channel")
-	}
-	decoded, err := telegram.GetDecoded()
-	if err != nil {
-		t.Fatalf("telegram GetDecoded() error = %v", err)
-	}
-	settings, ok := decoded.(*TelegramSettings)
-	if !ok {
-		t.Fatalf("telegram settings type = %T, want *TelegramSettings", decoded)
-	}
-	if settings.Streaming.Enabled {
-		t.Fatal("DefaultConfig().telegram.settings.streaming.enabled should be false")
-	}
-
 	webchat := cfg.Channels.Get(ChannelWebChat)
 	if webchat == nil {
 		t.Fatal("DefaultConfig() missing webchat channel")
 	}
-	decoded, err = webchat.GetDecoded()
+	webchatDecoded, err := webchat.GetDecoded()
 	if err != nil {
 		t.Fatalf("webchat GetDecoded() error = %v", err)
 	}
-	webchatSettings, ok := decoded.(*WebChatSettings)
+	webchatSettings, ok := webchatDecoded.(*WebChatSettings)
 	if !ok {
-		t.Fatalf("webchat settings type = %T, want *WebChatSettings", decoded)
+		t.Fatalf("webchat settings type = %T, want *WebChatSettings", webchatDecoded)
 	}
 	if !webchatSettings.Streaming.Enabled {
 		t.Fatal("DefaultConfig().webchat.settings.streaming.enabled should be true")
@@ -512,17 +161,6 @@ func TestValidateSingletonChannels_IgnoresDisabledInstances(t *testing.T) {
 	err := validateSingletonChannels(channels)
 	if err != nil {
 		t.Fatalf("expected no error when only one webchat channel is enabled, got: %v", err)
-	}
-}
-
-func TestValidateSingletonChannels_AllowsMultiInstanceTypes(t *testing.T) {
-	channels := ChannelsConfig{
-		"tg1": &Channel{Enabled: true, Type: ChannelTelegram},
-		"tg2": &Channel{Enabled: true, Type: ChannelTelegram},
-	}
-	err := validateSingletonChannels(channels)
-	if err != nil {
-		t.Fatalf("telegram should allow multiple instances, got error: %v", err)
 	}
 }
 
@@ -582,40 +220,6 @@ func TestSaveConfig_IncludesEmptyLegacyModelField(t *testing.T) {
 
 	if !strings.Contains(string(data), `"model_name": ""`) {
 		t.Fatalf("saved config should include empty legacy model_name field, got: %s", string(data))
-	}
-}
-
-func TestSaveConfig_PreservesDisabledTelegramPlaceholder(t *testing.T) {
-	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, "config.json")
-
-	cfg := DefaultConfig()
-	if bc := cfg.Channels.Get("telegram"); bc != nil {
-		bc.Placeholder.Enabled = false
-	}
-
-	if err := SaveConfig(path, cfg); err != nil {
-		t.Fatalf("SaveConfig failed: %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile failed: %v", err)
-	}
-	if !strings.Contains(string(data), `"placeholder": {`) {
-		t.Fatalf("saved config should include telegram placeholder config, got: %s", string(data))
-	}
-	if !strings.Contains(string(data), `"enabled": false`) {
-		t.Fatalf("saved config should persist placeholder.enabled=false, got: %s", string(data))
-	}
-
-	loaded, err := LoadConfig(path)
-	if err != nil {
-		t.Fatalf("LoadConfig failed: %v", err)
-	}
-	bc := loaded.Channels.Get("telegram")
-	if bc != nil && bc.Placeholder.Enabled {
-		t.Fatal("telegram placeholder should remain disabled after SaveConfig/LoadConfig round-trip")
 	}
 }
 
@@ -748,13 +352,6 @@ func TestConfig_Complete(t *testing.T) {
 	}
 }
 
-func TestDefaultConfig_WebPreferNativeEnabled(t *testing.T) {
-	cfg := DefaultConfig()
-	if !cfg.Tools.Web.PreferNative {
-		t.Fatal("DefaultConfig().Tools.Web.PreferNative should be true")
-	}
-}
-
 func TestDefaultConfig_WebProviderIsAuto(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.Tools.Web.Provider != "auto" {
@@ -769,7 +366,6 @@ func setExampleConfigEnv(t *testing.T) {
 	t.Helper()
 	for name, value := range map[string]string{
 		"DASHBOARD_TOKEN":   "example-dashboard-token",
-		"TELEGRAM_TOKEN":    "123456:example",
 		"DEEPSEEK_BASE_URL": "https://api.deepseek.com/v1",
 		"DEEPSEEK_API_KEY":  "sk-example",
 		"OPENAI_API_KEY":    "sk-openai-example",
@@ -827,38 +423,6 @@ func TestLoadConfig_ToolFeedbackDefaultsFalseWhenUnset(t *testing.T) {
 	}
 	if cfg.Agents.Defaults.ToolFeedback.SeparateMessages {
 		t.Fatal("agents.defaults.tool_feedback.separate_messages should remain false when unset in config file")
-	}
-}
-
-func TestLoadConfig_WebPreferNativeDefaultsTrueWhenUnset(t *testing.T) {
-	dir := t.TempDir()
-	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version": 4,"tools":{"web":{"enabled":true}}}`), 0o600); err != nil {
-		t.Fatalf("WriteFile() error: %v", err)
-	}
-
-	cfg, err := LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error: %v", err)
-	}
-	if !cfg.Tools.Web.PreferNative {
-		t.Fatal("PreferNative should remain true when unset in config file")
-	}
-}
-
-func TestLoadConfig_WebPreferNativeCanBeDisabled(t *testing.T) {
-	dir := t.TempDir()
-	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version":4,"tools":{"web":{"prefer_native":false}}}`), 0o600); err != nil {
-		t.Fatalf("WriteFile() error: %v", err)
-	}
-
-	cfg, err := LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error: %v", err)
-	}
-	if cfg.Tools.Web.PreferNative {
-		t.Fatal("PreferNative should be false when disabled in config file")
 	}
 }
 
@@ -1009,22 +573,6 @@ func TestToolsConfig_GetFilterMinLength(t *testing.T) {
 	}
 }
 
-func TestDefaultConfig_HooksDefaults(t *testing.T) {
-	cfg := DefaultConfig()
-	if !cfg.Hooks.Enabled {
-		t.Fatal("DefaultConfig().Hooks.Enabled should be true")
-	}
-	if cfg.Hooks.Defaults.ObserverTimeoutMS != 500 {
-		t.Fatalf("ObserverTimeoutMS = %d, want 500", cfg.Hooks.Defaults.ObserverTimeoutMS)
-	}
-	if cfg.Hooks.Defaults.InterceptorTimeoutMS != 5000 {
-		t.Fatalf("InterceptorTimeoutMS = %d, want 5000", cfg.Hooks.Defaults.InterceptorTimeoutMS)
-	}
-	if cfg.Hooks.Defaults.ApprovalTimeoutMS != 60000 {
-		t.Fatalf("ApprovalTimeoutMS = %d, want 60000", cfg.Hooks.Defaults.ApprovalTimeoutMS)
-	}
-}
-
 func TestDefaultConfig_LogLevel(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.Gateway.LogLevel != "warn" {
@@ -1071,91 +619,6 @@ func TestLoadConfig_WebToolsProxy(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_HooksProcessConfig(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.json")
-	configJSON := `{
-  "version": 4,
-  "hooks": {
-    "processes": {
-      "review-gate": {
-        "enabled": true,
-        "transport": "stdio",
-        "command": ["uvx", "mole-hook-reviewer"],
-        "dir": "/tmp/hooks",
-        "env": {
-          "HOOK_MODE": "rewrite"
-        },
-        "observe": ["turn_start", "turn_end"],
-        "intercept": ["before_tool", "approve_tool"]
-      }
-    },
-    "builtins": {
-      "audit": {
-        "enabled": true,
-        "priority": 5,
-        "config": {
-          "label": "audit"
-        }
-      }
-    }
-  }
-}`
-	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
-		t.Fatalf("os.WriteFile() error: %v", err)
-	}
-
-	cfg, err := LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error: %v", err)
-	}
-
-	processCfg, ok := cfg.Hooks.Processes["review-gate"]
-	if !ok {
-		t.Fatal("expected review-gate process hook")
-	}
-	if !processCfg.Enabled {
-		t.Fatal("expected review-gate process hook to be enabled")
-	}
-	if processCfg.Transport != "stdio" {
-		t.Fatalf("Transport = %q, want stdio", processCfg.Transport)
-	}
-	if len(processCfg.Command) != 2 || processCfg.Command[0] != "uvx" {
-		t.Fatalf("Command = %v", processCfg.Command)
-	}
-	if processCfg.Dir != "/tmp/hooks" {
-		t.Fatalf("Dir = %q, want /tmp/hooks", processCfg.Dir)
-	}
-	if processCfg.Env["HOOK_MODE"] != "rewrite" {
-		t.Fatalf("HOOK_MODE = %q, want rewrite", processCfg.Env["HOOK_MODE"])
-	}
-	if len(processCfg.Observe) != 2 || processCfg.Observe[1] != "turn_end" {
-		t.Fatalf("Observe = %v", processCfg.Observe)
-	}
-	if len(processCfg.Intercept) != 2 || processCfg.Intercept[1] != "approve_tool" {
-		t.Fatalf("Intercept = %v", processCfg.Intercept)
-	}
-
-	builtinCfg, ok := cfg.Hooks.Builtins["audit"]
-	if !ok {
-		t.Fatal("expected audit builtin hook")
-	}
-	if !builtinCfg.Enabled {
-		t.Fatal("expected audit builtin hook to be enabled")
-	}
-	if builtinCfg.Priority != 5 {
-		t.Fatalf("Priority = %d, want 5", builtinCfg.Priority)
-	}
-	if !strings.Contains(string(builtinCfg.Config), `"audit"`) {
-		t.Fatalf("Config = %s", string(builtinCfg.Config))
-	}
-	if cfg.Hooks.Defaults.ApprovalTimeoutMS != 60000 {
-		t.Fatalf("ApprovalTimeoutMS = %d, want 60000", cfg.Hooks.Defaults.ApprovalTimeoutMS)
-	}
-}
-
-// TestDefaultConfig_SessionDimensions verifies the default session dimensions
-// TestDefaultConfig_SummarizationThresholds verifies summarization defaults
 func TestDefaultConfig_SummarizationThresholds(t *testing.T) {
 	cfg := DefaultConfig()
 
@@ -1497,43 +960,6 @@ func TestFlexibleStringSlice_UnmarshalJSON(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_TelegramPlaceholderTextAcceptsSingleString(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.json")
-	data := `{
-		"version": 4,
-		"agents": { "defaults": { "workspace": "", "model_name": "", "max_tokens": 0, "max_tool_iterations": 0 } },
-		"session": {},
-		"channel_list": {
-			"telegram": {
-				"enabled": true,
-				"type": "telegram",
-				"allow_from": [],
-				"placeholder": {
-					"enabled": true,
-					"text": "Thinking..."
-				},
-				"settings": {"token": ""}
-			}
-		},
-		"model_list": [],
-		"gateway": {},
-		"tools": {}
-	}`
-	if err := os.WriteFile(cfgPath, []byte(data), 0o600); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	cfg, err := LoadConfig(cfgPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	bc := cfg.Channels.Get("telegram")
-	if got := []string(bc.Placeholder.Text); len(got) != 1 || got[0] != "Thinking..." {
-		t.Fatalf("placeholder.text = %#v, want [\"Thinking...\"]", got)
-	}
-}
-
 // TestLoadConfig_FileRefNotSealed verifies that file:// api_key references are
 // resolved from disk and preserved verbatim in config.json.
 func TestLoadConfig_FileRefNotSealed(t *testing.T) {
@@ -1793,13 +1219,6 @@ func TestFilterSensitiveData_AllTokenTypes(t *testing.T) {
 					APIKeys: SecureStrings{NewSecureString("tavily-api-key")},
 				},
 			},
-			// Skills tokens
-			Skills: SkillsToolsConfig{
-				Registries: SkillsRegistriesConfig{
-					&SkillRegistryConfig{Name: "clawhub", AuthToken: *NewSecureString("clawhub-auth-token")},
-					&SkillRegistryConfig{Name: "github", AuthToken: *NewSecureString("github-token-xyz")},
-				},
-			},
 		},
 	}
 
@@ -1814,11 +1233,6 @@ func TestFilterSensitiveData_AllTokenTypes(t *testing.T) {
 			want:    "Using model with key [FILTERED]",
 		},
 		{
-			name:    "telegram_token",
-			content: "Telegram token: telegram-bot-token-abcdef",
-			want:    "Telegram token: [FILTERED]",
-		},
-		{
 			name:    "qq_app_secret",
 			content: "QQ app secret: qq-app-secret-abc",
 			want:    "QQ app secret: [FILTERED]",
@@ -1829,14 +1243,9 @@ func TestFilterSensitiveData_AllTokenTypes(t *testing.T) {
 			want:    "Tavily key: [FILTERED]",
 		},
 		{
-			name:    "github_token",
-			content: "GitHub token: github-token-xyz",
-			want:    "GitHub token: [FILTERED]",
-		},
-		{
 			name:    "mixed_content",
-			content: "Model key sk-model-key-12345 and Telegram token telegram-bot-token-abcdef",
-			want:    "Model key [FILTERED] and Telegram token [FILTERED]",
+			content: "Model key sk-model-key-12345 and QQ secret qq-app-secret-abc",
+			want:    "Model key [FILTERED] and QQ secret [FILTERED]",
 		},
 		{
 			name:    "short_key_not_filtered",
@@ -2021,14 +1430,6 @@ func testChannelsConfigWithTokens() ChannelsConfig {
 		cfg  any
 	}
 	defs := []chDef{
-		{"telegram", TelegramSettings{Token: *NewSecureString("telegram-bot-token-abcdef")}},
-		{
-			"feishu",
-			FeishuSettings{
-				AppSecret:  *NewSecureString("feishu-app-secret-123"),
-				EncryptKey: *NewSecureString("feishu-encrypt-key"),
-			},
-		},
 		{"qq", QQSettings{AppSecret: *NewSecureString("qq-app-secret-abc")}},
 		{"webchat", WebChatSettings{Token: *NewSecureString("webchat-token-abc123")}},
 	}
@@ -2097,42 +1498,6 @@ func TestLoadConfig_RejectsUnknownVersion(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unsupported config version") {
 		t.Fatalf("error should name the version, got: %v", err)
-	}
-}
-
-func TestDefaultConfig_EnablesWebUIApproval(t *testing.T) {
-	cfg := DefaultConfig()
-	spec, ok := cfg.Hooks.Builtins["webui_approval"]
-	if !ok || !spec.Enabled {
-		t.Fatalf("hooks.builtins.webui_approval = %+v, want enabled by default", spec)
-	}
-}
-
-func TestDefaultConfig_ToolsApprovalDefaults(t *testing.T) {
-	cfg := DefaultConfig()
-	if len(cfg.Tools.Approval.Rules) != 0 || len(cfg.Tools.Approval.AlwaysAllow) != 0 {
-		t.Fatalf("tools.approval should start empty, got %+v", cfg.Tools.Approval)
-	}
-}
-
-func TestLoadConfig_ToolsApprovalRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.json")
-	raw := `{"version":` + fmt.Sprint(CurrentVersion) + `,"tools":{"approval":{` +
-		`"rules":[{"category":"write","action":"allow"},{"tool":"exec","action":"deny"}],` +
-		`"always_allow":[{"tool":"exec","arg":"command","value":"git status"}]}}}`
-	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-	cfg, err := LoadConfig(path)
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	if len(cfg.Tools.Approval.Rules) != 2 || cfg.Tools.Approval.Rules[1].Tool != "exec" || cfg.Tools.Approval.Rules[1].Action != "deny" {
-		t.Fatalf("rules = %+v", cfg.Tools.Approval.Rules)
-	}
-	if len(cfg.Tools.Approval.AlwaysAllow) != 1 || cfg.Tools.Approval.AlwaysAllow[0].Value != "git status" {
-		t.Fatalf("always_allow = %+v", cfg.Tools.Approval.AlwaysAllow)
 	}
 }
 

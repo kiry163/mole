@@ -41,22 +41,11 @@ type AgentInstance struct {
 	ContextBuilder            *ContextBuilder
 	Tools                     *tools.ToolRegistry
 	Definition                AgentContextDefinition
-	Subagents                 *config.SubagentsConfig
 	SkillsFilter              []string
 	MCPServerAllowlist        map[string]struct{}
 	Candidates                []providers.FallbackCandidate
 	ImageCandidates           []providers.FallbackCandidate
 
-	// Router is non-nil when model routing is configured and the light model
-	// was successfully resolved. It scores each incoming message and decides
-	// whether to route to LightCandidates or stay with Candidates.
-	Router *routing.Router
-	// LightCandidates holds the resolved provider candidates for the light model.
-	// Pre-computed at agent creation to avoid repeated model_list lookups at runtime.
-	LightCandidates []providers.FallbackCandidate
-	// LightProvider is the concrete provider instance for the configured light model.
-	// It is only used when routing selects the light tier for a turn.
-	LightProvider providers.LLMProvider
 	// CandidateProviders maps candidate identity keys to per-candidate LLMProvider
 	// instances. Config-index keys preserve duplicate model_list entries while
 	// provider/model keys remain available for callers without a config identity.
@@ -88,18 +77,17 @@ func (p *unavailableLLMProvider) GetDefaultModel() string { return p.model }
 
 // NewAgentInstance creates an agent instance from config.
 func NewAgentInstance(
-	agentCfg *config.AgentConfig,
 	defaults *config.AgentDefaults,
 	cfg *config.Config,
 	provider providers.LLMProvider,
 ) *AgentInstance {
-	workspace := resolveAgentWorkspace(agentCfg, defaults)
+	workspace := expandHome(defaults.Workspace)
 	os.MkdirAll(workspace, 0o755)
 
 	definition := loadAgentDefinition(workspace)
 
-	model := resolveAgentModel(agentCfg, defaults, definition)
-	fallbacks := resolveAgentFallbacks(agentCfg, defaults)
+	model := resolveAgentModel(defaults, definition)
+	fallbacks := append([]string(nil), defaults.ModelFallbacks...)
 
 	restrict := defaults.RestrictToWorkspace
 	readRestrict := restrict && !defaults.AllowReadOutsideWorkspace
@@ -168,18 +156,10 @@ func NewAgentInstance(
 
 	agentID := routing.DefaultAgentID
 	agentName := ""
-	var subagents *config.SubagentsConfig
-	var skillsFilter []string
-
-	if agentCfg != nil {
-		agentID = routing.NormalizeAgentID(agentCfg.ID)
-		agentName = agentCfg.Name
-		if definition.Agent != nil && strings.TrimSpace(definition.Agent.Frontmatter.Name) != "" {
-			agentName = strings.TrimSpace(definition.Agent.Frontmatter.Name)
-		}
-		subagents = agentCfg.Subagents
-		skillsFilter = resolveAgentSkillsFilter(agentCfg, definition)
+	if definition.Agent != nil {
+		agentName = strings.TrimSpace(definition.Agent.Frontmatter.Name)
 	}
+	skillsFilter := resolveAgentSkillsFilter(definition)
 	warnOnUnknownAgentMCPServerDeclarations(agentID, workspace, cfg, definition)
 
 	maxIter := defaults.MaxToolIterations
@@ -269,46 +249,6 @@ func NewAgentInstance(
 		populateCandidateProvidersFromCandidates(cfg, imageCandidates, candidateProviders)
 	}
 
-	// Model routing setup: pre-resolve light model candidates at creation time
-	// to avoid repeated model_list lookups on every incoming message.
-	var router *routing.Router
-	var lightCandidates []providers.FallbackCandidate
-	var lightProvider providers.LLMProvider
-	if rc := defaults.Routing; rc != nil && rc.Enabled && rc.LightModel != "" {
-		resolved := resolveModelCandidates(cfg, rc.LightModel, nil)
-		if len(resolved) > 0 {
-			lightModelCfg, err := resolvedCandidateModelConfig(cfg, resolved[0])
-			if err != nil {
-				logger.WarnCF(
-					"agent",
-					"Routing light model config invalid; routing disabled",
-					map[string]any{
-						"light_model": rc.LightModel,
-						"agent_id":    agentID,
-						"error":       err.Error(),
-					},
-				)
-			} else {
-				lp, _, err := providers.CreateProviderFromConfig(lightModelCfg)
-				if err != nil {
-					logger.WarnCF("agent", "Routing light model provider init failed; routing disabled",
-						map[string]any{"light_model": rc.LightModel, "agent_id": agentID, "error": err.Error()})
-				} else {
-					router = routing.New(routing.RouterConfig{
-						LightModel: rc.LightModel,
-						Threshold:  rc.Threshold,
-					})
-					lightCandidates = resolved
-					lightProvider = lp
-					populateCandidateProvidersFromCandidates(cfg, resolved, candidateProviders)
-				}
-			}
-		} else {
-			logger.WarnCF("agent", "Routing light model not found; routing disabled",
-				map[string]any{"light_model": rc.LightModel, "agent_id": agentID})
-		}
-	}
-
 	return &AgentInstance{
 		modelMu:                   &sync.RWMutex{},
 		ID:                        agentID,
@@ -329,14 +269,10 @@ func NewAgentInstance(
 		ContextBuilder:            contextBuilder,
 		Tools:                     toolsRegistry,
 		Definition:                definition,
-		Subagents:                 subagents,
 		SkillsFilter:              skillsFilter,
 		MCPServerAllowlist:        agentMCPServerAllowlist,
 		Candidates:                candidates,
 		ImageCandidates:           imageCandidates,
-		Router:                    router,
-		LightCandidates:           lightCandidates,
-		LightProvider:             lightProvider,
 		CandidateProviders:        candidateProviders,
 	}
 }
@@ -535,55 +471,19 @@ func resolvePrimaryProviderForCandidate(
 	return resolvedProvider
 }
 
-// resolveAgentWorkspace determines the workspace directory for an agent.
-func resolveAgentWorkspace(agentCfg *config.AgentConfig, defaults *config.AgentDefaults) string {
-	if agentCfg != nil && strings.TrimSpace(agentCfg.Workspace) != "" {
-		return expandHome(strings.TrimSpace(agentCfg.Workspace))
-	}
-	// Use the configured default workspace (respects MOLE_HOME)
-	if agentCfg == nil || agentCfg.Default || agentCfg.ID == "" ||
-		routing.NormalizeAgentID(agentCfg.ID) == "main" {
-		return expandHome(defaults.Workspace)
-	}
-	// For named agents without explicit workspace, use default workspace with agent ID suffix
-	id := routing.NormalizeAgentID(agentCfg.ID)
-	return filepath.Join(expandHome(defaults.Workspace), "..", "workspace-"+id)
-}
-
 // resolveAgentModel resolves the primary model for an agent.
-func resolveAgentModel(
-	agentCfg *config.AgentConfig,
-	defaults *config.AgentDefaults,
-	definition AgentContextDefinition,
-) string {
+func resolveAgentModel(defaults *config.AgentDefaults, definition AgentContextDefinition) string {
 	if definition.Agent != nil && strings.TrimSpace(definition.Agent.Frontmatter.Model) != "" {
 		return strings.TrimSpace(definition.Agent.Frontmatter.Model)
-	}
-	if agentCfg != nil && agentCfg.Model != nil && strings.TrimSpace(agentCfg.Model.Primary) != "" {
-		return strings.TrimSpace(agentCfg.Model.Primary)
 	}
 	return defaults.GetModelName()
 }
 
-// resolveAgentFallbacks resolves the fallback models for an agent.
-func resolveAgentFallbacks(agentCfg *config.AgentConfig, defaults *config.AgentDefaults) []string {
-	if agentCfg != nil && agentCfg.Model != nil && agentCfg.Model.Fallbacks != nil {
-		return agentCfg.Model.Fallbacks
-	}
-	return defaults.ModelFallbacks
-}
-
-func resolveAgentSkillsFilter(
-	agentCfg *config.AgentConfig,
-	definition AgentContextDefinition,
-) []string {
+func resolveAgentSkillsFilter(definition AgentContextDefinition) []string {
 	if definition.Agent != nil && definition.Agent.Frontmatter.Skills != nil {
 		return append([]string(nil), definition.Agent.Frontmatter.Skills...)
 	}
-	if agentCfg == nil || agentCfg.Skills == nil {
-		return nil
-	}
-	return append([]string(nil), agentCfg.Skills...)
+	return nil
 }
 
 func (a *AgentInstance) AllowsMCPServer(serverName string) bool {
@@ -638,7 +538,7 @@ func (a *AgentInstance) Close() error {
 	modelMu.Lock()
 	defer modelMu.Unlock()
 	providerList := make([]providers.LLMProvider, 0, 2+len(a.CandidateProviders))
-	providerList = append(providerList, a.Provider, a.LightProvider)
+	providerList = append(providerList, a.Provider)
 	for _, provider := range a.CandidateProviders {
 		providerList = append(providerList, provider)
 	}

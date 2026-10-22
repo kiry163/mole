@@ -9,8 +9,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/kiry163/mole/pkg/agent"
-	"github.com/kiry163/mole/pkg/approval"
 	"github.com/kiry163/mole/pkg/config"
 	"github.com/kiry163/mole/pkg/logger"
 )
@@ -353,20 +351,6 @@ func validateConfig(cfg *config.Config) []string {
 		errs = append(errs, err.Error())
 	}
 
-	if err := cfg.ValidateTurnProfile(); err != nil {
-		errs = append(errs, err.Error())
-	}
-
-	// A hooks section that cannot mount breaks every later turn, so the save
-	// path applies the same rules the mount does.
-	errs = append(errs, agent.ValidateHooksConfig(cfg.Hooks)...)
-
-	// tools.approval is validated here so a typo cannot disarm the approver.
-	errs = append(errs, approval.ValidatePolicy(
-		cfg.Tools.Approval.Rules,
-		cfg.Tools.Approval.AlwaysAllow,
-	)...)
-
 	// Gateway port range
 	if cfg.Gateway.Port != 0 && (cfg.Gateway.Port < 1 || cfg.Gateway.Port > 65535) {
 		errs = append(errs, fmt.Sprintf("gateway.port %d is out of valid range (1-65535)", cfg.Gateway.Port))
@@ -401,18 +385,6 @@ func validateConfig(cfg *config.Config) []string {
 			if decoded, err := bc.GetDecoded(); err == nil && decoded != nil {
 				if c, ok := decoded.(*config.WebChatSettings); ok && c.Token.String() == "" {
 					errs = append(errs, "channels.webchat.token is required when webchat channel is enabled")
-				}
-			}
-		}
-	}
-
-	// Telegram: token required when enabled
-	{
-		bc := cfg.Channels.GetByType(config.ChannelTelegram)
-		if bc != nil && bc.Enabled {
-			if decoded, err := bc.GetDecoded(); err == nil && decoded != nil {
-				if c, ok := decoded.(*config.TelegramSettings); ok && c.Token.String() == "" {
-					errs = append(errs, "channels.telegram.token is required when telegram channel is enabled")
 				}
 			}
 		}
@@ -649,24 +621,6 @@ func normalizeStringArrayItems(items []string, options stringArrayParserOptions)
 	return result
 }
 
-func getSecretString(m map[string]any, key string) (string, bool) {
-	// The console submits the shadow/rotation field when the real value is
-	// redacted; it wins over the (possibly stale) public field.
-	if raw, exists := m["_"+key]; exists {
-		s, isString := raw.(string)
-		if isString {
-			return s, true
-		}
-	}
-	if raw, exists := m[key]; exists {
-		s, isString := raw.(string)
-		if isString {
-			return s, true
-		}
-	}
-	return "", false
-}
-
 func applyConfigSecretsFromMap(cfg *config.Config, raw map[string]any) {
 	channelsMap, hasChannels := asMapField(raw, "channel_list")
 	if hasChannels {
@@ -699,56 +653,8 @@ func applyConfigSecretsFromMap(cfg *config.Config, raw map[string]any) {
 		}
 	}
 
-	// Handle tools secrets. This must run even when channel_list is absent:
-	// a registry-only PATCH still carries auth_token.
-	tools, hasTools := asMapField(raw, "tools")
-	if !hasTools {
-		return
-	}
-	skills, hasSkills := asMapField(tools, "skills")
-	if !hasSkills {
-		return
-	}
-	if registries, hasRegistries := asMapField(skills, "registries"); hasRegistries {
-		for registryName, rawRegistry := range registries {
-			registryMap, ok := rawRegistry.(map[string]any)
-			if !ok {
-				continue
-			}
-			if authToken, hasAuthToken := getSecretString(registryMap, "auth_token"); hasAuthToken {
-				registryCfg, _ := cfg.Tools.Skills.Registries.Get(registryName)
-				// Assign the SecureString rather than Set: Set clears raw, which
-				// would turn a "$VAR" reference into literal plaintext.
-				registryCfg.AuthToken = *config.NewSecureString(authToken)
-				cfg.Tools.Skills.Registries.Set(registryName, registryCfg)
-			}
-		}
-		return
-	}
-
-	registriesList, hasRegistries := skills["registries"].([]any)
-	if !hasRegistries {
-		return
-	}
-	for _, rawRegistry := range registriesList {
-		registryMap, ok := rawRegistry.(map[string]any)
-		if !ok {
-			continue
-		}
-		name, _ := registryMap["name"].(string)
-		if name == "" {
-			continue
-		}
-		if authToken, hasAuthToken := getSecretString(registryMap, "auth_token"); hasAuthToken {
-			registryCfg, _ := cfg.Tools.Skills.Registries.Get(name)
-			registryCfg.AuthToken = *config.NewSecureString(authToken)
-			cfg.Tools.Skills.Registries.Set(name, registryCfg)
-		}
-	}
 }
 
-// applySecureStringsToStruct walks a struct and applies SecureString fields
-// from the matching keys in rawMap. It recurses into nested maps and slices.
 func applySecureStringsToStruct(rv reflect.Value, rawMap map[string]any) {
 	rt := rv.Type()
 	for jsonKey, rawVal := range rawMap {
@@ -766,7 +672,6 @@ func applySecureStringsToStruct(rv reflect.Value, rawMap map[string]any) {
 			if !sf.CanSet() {
 				continue
 			}
-			// Direct SecureString field
 			if s, ok := rawVal.(string); ok {
 				if f.Type == reflect.TypeOf(config.SecureString{}) {
 					sf.Set(reflect.ValueOf(*config.NewSecureString(s)))
@@ -775,14 +680,12 @@ func applySecureStringsToStruct(rv reflect.Value, rawMap map[string]any) {
 				}
 				continue
 			}
-			// Recurse into nested struct
 			if sf.Kind() == reflect.Struct {
 				if nested, ok := rawVal.(map[string]any); ok {
 					applySecureStringsToStruct(sf, nested)
 				}
 				continue
 			}
-			// Recurse into map fields (e.g., map[string]SomeStruct)
 			if sf.Kind() == reflect.Map && sf.Type().Elem().Kind() == reflect.Struct {
 				if nestedMap, ok := rawVal.(map[string]any); ok {
 					for mapKey, mapVal := range nestedMap {
@@ -791,7 +694,6 @@ func applySecureStringsToStruct(rv reflect.Value, rawMap map[string]any) {
 							continue
 						}
 						elemType := sf.Type().Elem()
-						// Get existing element or create a new zero value
 						var elem reflect.Value
 						existing := sf.MapIndex(reflect.ValueOf(mapKey))
 						if existing.IsValid() {
@@ -815,7 +717,6 @@ func applySecureStringsToStruct(rv reflect.Value, rawMap map[string]any) {
 				}
 				continue
 			}
-			// Recurse into slice elements that are structs
 			if sf.Kind() == reflect.Slice && sf.Type().Elem().Kind() == reflect.Struct {
 				if sliceRaw, ok := rawVal.([]any); ok {
 					for idx, elemRaw := range sliceRaw {

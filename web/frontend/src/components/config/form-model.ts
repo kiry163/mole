@@ -18,7 +18,6 @@ export interface CoreConfigForm {
   maxToolIterations: string
   summarizeMessageThreshold: string
   summarizeTokenPercent: string
-  turnProfile: TurnProfileForm
   dmScope: string
   mcpEnabled: boolean
   mcpDiscoveryEnabled: boolean
@@ -27,27 +26,9 @@ export interface CoreConfigForm {
   mcpDiscoveryUseBM25: boolean
   mcpDiscoveryUseRegex: boolean
   mcpServers: MCPServerForm[]
-  hooksEnabled: boolean
-  hooksObserverTimeoutMs: string
-  hooksInterceptorTimeoutMs: string
-  hooksApprovalTimeoutMs: string
-  hookProcesses: HookProcessForm[]
-  hookBuiltins: HookBuiltinForm[]
 }
 
 export type MCPServerType = "http" | "sse" | "stdio"
-
-export type TurnProfileMode = "default" | "off" | "custom"
-
-export interface TurnProfileForm {
-  enabled: boolean
-  historyMode: Exclude<TurnProfileMode, "custom">
-  systemPromptMode: Exclude<TurnProfileMode, "custom">
-  skillsMode: TurnProfileMode
-  skillsAllowText: string
-  toolsMode: TurnProfileMode
-  toolsAllowText: string
-}
 
 export interface MCPServerForm {
   id: string
@@ -61,31 +42,6 @@ export interface MCPServerForm {
   envText: string
   envFile: string
   headersText: string
-}
-
-export interface HookProcessForm {
-  id: string
-  name: string
-  enabled: boolean
-  priority: string
-  /** Executable, argv[0]. */
-  command: string
-  /** Remaining argv, space separated (mirrors MCPServerForm.argsText). */
-  argsText: string
-  dir: string
-  /** JSON object text, e.g. {"HOOK_MODE":"rewrite"} (mirrors MCPServerForm.envText). */
-  envText: string
-  /** One event kind per line. */
-  observeText: string
-  /** One intercept mode per line. */
-  interceptText: string
-}
-
-interface HookBuiltinForm {
-  id: string
-  name: string
-  enabled: boolean
-  priority: string
 }
 
 export interface DashboardPasswordForm {
@@ -142,15 +98,6 @@ export const EMPTY_FORM: CoreConfigForm = {
   maxToolIterations: "50",
   summarizeMessageThreshold: "20",
   summarizeTokenPercent: "75",
-  turnProfile: {
-    enabled: false,
-    historyMode: "default",
-    systemPromptMode: "default",
-    skillsMode: "default",
-    skillsAllowText: "",
-    toolsMode: "default",
-    toolsAllowText: "",
-  },
   dmScope: "per-channel-peer",
   mcpEnabled: false,
   mcpDiscoveryEnabled: false,
@@ -159,12 +106,6 @@ export const EMPTY_FORM: CoreConfigForm = {
   mcpDiscoveryUseBM25: true,
   mcpDiscoveryUseRegex: false,
   mcpServers: [],
-  hooksEnabled: true,
-  hooksObserverTimeoutMs: "500",
-  hooksInterceptorTimeoutMs: "5000",
-  hooksApprovalTimeoutMs: "60000",
-  hookProcesses: [],
-  hookBuiltins: [],
 }
 
 export const EMPTY_DASHBOARD_PASSWORD_FORM: DashboardPasswordForm = {
@@ -249,82 +190,6 @@ function mapMCPServers(value: unknown): MCPServerForm[] {
   })
 }
 
-function mapHookProcesses(value: unknown): HookProcessForm[] {
-  const processes = asRecord(value)
-  return Object.entries(processes).map(([name, raw], index) => {
-    const spec = asRecord(raw)
-    const command = Array.isArray(spec.command) ? spec.command.map((part) => asString(part)) : []
-    const env = asRecord(spec.env)
-    const observe = Array.isArray(spec.observe) ? spec.observe.map((v) => asString(v)) : []
-    const intercept = Array.isArray(spec.intercept) ? spec.intercept.map((v) => asString(v)) : []
-    return {
-      id: `hook-process-${index}-${name}`,
-      name,
-      enabled: asBool(spec.enabled),
-      priority: asNumberString(spec.priority, "0"),
-      command: command[0] ?? "",
-      argsText: command.slice(1).join(" "),
-      dir: asString(spec.dir),
-      envText: Object.keys(env).length > 0 ? JSON.stringify(env, null, 2) : "{}",
-      observeText: observe.join("\n"),
-      interceptText: intercept.join("\n"),
-    }
-  })
-}
-
-function mapHookBuiltins(value: unknown): HookBuiltinForm[] {
-  const builtins = asRecord(value)
-  return Object.entries(builtins).map(([name, raw], index) => {
-    const spec = asRecord(raw)
-    return {
-      id: `hook-builtin-${index}-${name}`,
-      name,
-      enabled: asBool(spec.enabled),
-      priority: asNumberString(spec.priority, "0"),
-    }
-  })
-}
-
-function toTurnProfileMode(value: unknown): TurnProfileMode {
-  if (value === "off" || value === "custom") {
-    return value
-  }
-  return "default"
-}
-
-function toBasicTurnProfileMode(
-  value: unknown,
-): Exclude<TurnProfileMode, "custom"> {
-  return value === "off" ? "off" : "default"
-}
-
-function allowListText(value: unknown): string {
-  if (!Array.isArray(value)) {
-    return ""
-  }
-  return value
-    .filter((item): item is string => typeof item === "string")
-    .join("\n")
-}
-
-function mapTurnProfile(value: unknown): TurnProfileForm {
-  const profile = asRecord(value)
-  const history = asRecord(profile.history)
-  const systemPrompt = asRecord(profile.system_prompt)
-  const skills = asRecord(profile.skills)
-  const tools = asRecord(profile.tools)
-
-  return {
-    enabled: asBool(profile.enabled),
-    historyMode: toBasicTurnProfileMode(history.mode),
-    systemPromptMode: toBasicTurnProfileMode(systemPrompt.mode),
-    skillsMode: toTurnProfileMode(skills.mode),
-    skillsAllowText: allowListText(skills.allow),
-    toolsMode: toTurnProfileMode(tools.mode),
-    toolsAllowText: allowListText(tools.allow),
-  }
-}
-
 export function buildFormFromConfig(config: unknown): CoreConfigForm {
   const root = asRecord(config)
   const agents = asRecord(root.agents)
@@ -335,8 +200,6 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
   const mcpDiscovery = asRecord(mcp.discovery)
   const exec = asRecord(tools.exec)
   const toolFeedback = asRecord(defaults.tool_feedback)
-  const hooks = asRecord(root.hooks)
-  const hookDefaults = asRecord(hooks.defaults)
 
   return {
     workspace: asString(defaults.workspace) || EMPTY_FORM.workspace,
@@ -403,7 +266,6 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
       defaults.summarize_token_percent,
       EMPTY_FORM.summarizeTokenPercent,
     ),
-    turnProfile: mapTurnProfile(defaults.turn_profile),
     dmScope: asString(session.dm_scope) || EMPTY_FORM.dmScope,
     mcpEnabled:
       mcp.enabled === undefined ? EMPTY_FORM.mcpEnabled : asBool(mcp.enabled),
@@ -428,21 +290,6 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
         ? EMPTY_FORM.mcpDiscoveryUseRegex
         : asBool(mcpDiscovery.use_regex),
     mcpServers: mapMCPServers(mcp.servers),
-    hooksEnabled: hooks.enabled === undefined ? EMPTY_FORM.hooksEnabled : asBool(hooks.enabled),
-    hooksObserverTimeoutMs: asNumberString(
-      hookDefaults.observer_timeout_ms,
-      EMPTY_FORM.hooksObserverTimeoutMs,
-    ),
-    hooksInterceptorTimeoutMs: asNumberString(
-      hookDefaults.interceptor_timeout_ms,
-      EMPTY_FORM.hooksInterceptorTimeoutMs,
-    ),
-    hooksApprovalTimeoutMs: asNumberString(
-      hookDefaults.approval_timeout_ms,
-      EMPTY_FORM.hooksApprovalTimeoutMs,
-    ),
-    hookProcesses: mapHookProcesses(hooks.processes),
-    hookBuiltins: mapHookBuiltins(hooks.builtins),
   }
 }
 

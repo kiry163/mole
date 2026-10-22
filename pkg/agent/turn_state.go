@@ -15,7 +15,6 @@ import (
 	"github.com/kiry163/mole/pkg/logger"
 	"github.com/kiry163/mole/pkg/providers"
 	"github.com/kiry163/mole/pkg/session"
-	"github.com/kiry163/mole/pkg/tools"
 )
 
 // =============================================================================
@@ -79,18 +78,15 @@ type turnResult struct {
 // =============================================================================
 
 type ActiveTurnInfo struct {
-	TurnID       string
-	AgentID      string
-	SessionKey   string
-	Channel      string
-	ChatID       string
-	UserMessage  string
-	Phase        TurnPhase
-	Iteration    int
-	StartedAt    time.Time
-	Depth        int
-	ParentTurnID string
-	ChildTurnIDs []string
+	TurnID      string
+	AgentID     string
+	SessionKey  string
+	Channel     string
+	ChatID      string
+	UserMessage string
+	Phase       TurnPhase
+	Iteration   int
+	StartedAt   time.Time
 }
 
 // =============================================================================
@@ -116,7 +112,6 @@ type turnExecution struct {
 	activeModel       string
 	activeModelConfig *config.ModelConfig
 	activeProvider    providers.LLMProvider
-	usedLight         bool
 
 	// LLM call per-iteration state
 	response            *providers.LLMResponse
@@ -131,12 +126,10 @@ type turnExecution struct {
 	llmModelName        string
 	llmOpts             map[string]any
 	gracefulTerminal    bool
-	useNativeSearch     bool
 	ownedProviders      []providers.LLMProvider
 
 	// Abort signaling for coordinator (set by Pipeline methods)
 	abortedByHardAbort bool // true when hard abort triggered during LLM/tools
-	abortedByHook      bool // true when HookActionAbortTurn triggered
 }
 
 func (exec *turnExecution) closeOwnedProviders() {
@@ -172,10 +165,9 @@ func newTurnExecution(
 type turnState struct {
 	mu sync.RWMutex
 
-	agent   *AgentInstance
-	opts    processOptions
-	profile config.EffectiveTurnProfile
-	scope   turnEventScope
+	agent *AgentInstance
+	opts  processOptions
+	scope turnEventScope
 
 	turnID            string
 	agentID           string
@@ -211,31 +203,12 @@ type turnState struct {
 	restorePointSummary string
 	persistedMessages   []providers.Message
 
-	// SubTurn support (from HEAD)
-	depth                int                    // SubTurn depth (0 for root turn)
-	parentTurnID         string                 // Parent turn ID (empty for root turn)
-	childTurnIDs         []string               // Child turn IDs
-	pendingResults       chan *tools.ToolResult // Channel for SubTurn results
-	concurrencySem       chan struct{}          // Semaphore for limiting concurrent SubTurns
-	isFinished           atomic.Bool            // Whether this turn has finished
-	session              session.SessionStore   // Session store reference
-	initialHistoryLength int                    // Snapshot of history length at turn start
+	isFinished           atomic.Bool          // Whether this turn has finished
+	session              session.SessionStore // Session store reference
+	initialHistoryLength int                  // Snapshot of history length at turn start
+	cancelFunc           context.CancelFunc   // Cancel function for this turn's context
+	lastUsage            *providers.UsageInfo // Last LLM usage info
 
-	// Additional SubTurn fields
-	ctx             context.Context    // Context for this turn
-	cancelFunc      context.CancelFunc // Cancel function for this turn's context
-	critical        bool               // Whether this SubTurn should continue after parent ends
-	parentTurnState *turnState         // Reference to parent turnState
-	parentEnded     atomic.Bool        // Whether parent has ended
-	closeOnce       sync.Once          // Ensures pendingResults channel is closed once
-	finishedChan    chan struct{}      // Closed when turn finishes
-
-	// Token budget tracking
-	tokenBudget *atomic.Int64        // Shared token budget counter
-	lastUsage   *providers.UsageInfo // Last LLM usage info
-
-	// Back-reference to the owning AgentLoop (set for SubTurns only, used for hard abort cascade)
-	al *AgentLoop
 }
 
 // =============================================================================
@@ -246,7 +219,6 @@ func newTurnState(agent *AgentInstance, opts processOptions, scope turnEventScop
 	ts := &turnState{
 		agent:        agent,
 		opts:         opts,
-		profile:      opts.TurnProfile,
 		scope:        scope,
 		turnID:       scope.turnID,
 		agentID:      agent.ID,
@@ -352,18 +324,15 @@ func (ts *turnState) snapshot() ActiveTurnInfo {
 	defer ts.mu.RUnlock()
 
 	return ActiveTurnInfo{
-		TurnID:       ts.turnID,
-		AgentID:      ts.agentID,
-		SessionKey:   ts.sessionKey,
-		Channel:      ts.channel,
-		ChatID:       ts.chatID,
-		UserMessage:  ts.userMessage,
-		Phase:        ts.phase,
-		Iteration:    ts.iteration,
-		StartedAt:    ts.startedAt,
-		Depth:        ts.depth,
-		ParentTurnID: ts.parentTurnID,
-		ChildTurnIDs: append([]string(nil), ts.childTurnIDs...),
+		TurnID:      ts.turnID,
+		AgentID:     ts.agentID,
+		SessionKey:  ts.sessionKey,
+		Channel:     ts.channel,
+		ChatID:      ts.chatID,
+		UserMessage: ts.userMessage,
+		Phase:       ts.phase,
+		Iteration:   ts.iteration,
+		StartedAt:   ts.startedAt,
 	}
 }
 
@@ -618,9 +587,9 @@ func (ts *turnState) hardAbortRequested() bool {
 	return ts.hardAbort
 }
 
-func (ts *turnState) eventMeta(source, tracePath string) HookMeta {
+func (ts *turnState) eventMeta(source, tracePath string) EventMeta {
 	snap := ts.snapshot()
-	return HookMeta{
+	return EventMeta{
 		AgentID:     snap.AgentID,
 		TurnID:      snap.TurnID,
 		SessionKey:  snap.SessionKey,
@@ -774,69 +743,12 @@ func (ts *turnState) interruptHintMessage() providers.Message {
 	return interruptPromptMessage(content)
 }
 
-// =============================================================================
-// SubTurn-related methods
-// =============================================================================
-
-// Finish marks the turn as finished and closes the pendingResults channel
-func (ts *turnState) Finish(isHardAbort bool) {
+// Finish marks the turn as finished and cancels its context.
+func (ts *turnState) Finish(_ bool) {
 	ts.isFinished.Store(true)
-
-	// Close pendingResults channel exactly once
-	ts.closeOnce.Do(func() {
-		if ts.pendingResults != nil {
-			close(ts.pendingResults)
-		}
-		ts.mu.Lock()
-		if ts.finishedChan == nil {
-			ts.finishedChan = make(chan struct{})
-		}
-		close(ts.finishedChan)
-		ts.mu.Unlock()
-	})
-
-	// Any graceful finish must signal direct children so nested SubTurns can
-	// observe parent completion and decide whether to stop or continue.
-	if !isHardAbort {
-		ts.parentEnded.Store(true)
-	}
-
-	// Cancel the turn context
 	if ts.cancelFunc != nil {
 		ts.cancelFunc()
 	}
-
-	// Hard abort cascades to all child turns
-	if isHardAbort && ts.al != nil {
-		ts.mu.RLock()
-		children := append([]string(nil), ts.childTurnIDs...)
-		ts.mu.RUnlock()
-		for _, childID := range children {
-			if val, ok := ts.al.activeTurnStates.Load(childID); ok {
-				if child, ok := val.(*turnState); ok {
-					child.Finish(true)
-				}
-			}
-		}
-	}
-}
-
-// Finished returns whether the turn has finished
-func (ts *turnState) Finished() chan struct{} {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	if ts.finishedChan == nil {
-		ts.finishedChan = make(chan struct{})
-	}
-	return ts.finishedChan
-}
-
-// IsParentEnded checks if the parent turn has ended
-func (ts *turnState) IsParentEnded() bool {
-	if ts.parentTurnState == nil {
-		return false
-	}
-	return ts.parentTurnState.parentEnded.Load()
 }
 
 // GetLastUsage returns the last LLM usage info
@@ -863,9 +775,4 @@ var turnStateKey = turnStateKeyType{}
 
 func withTurnState(ctx context.Context, ts *turnState) context.Context {
 	return context.WithValue(ctx, turnStateKey, ts)
-}
-
-func turnStateFromContext(ctx context.Context) *turnState {
-	ts, _ := ctx.Value(turnStateKey).(*turnState)
-	return ts
 }

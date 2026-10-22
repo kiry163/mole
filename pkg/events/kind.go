@@ -8,8 +8,6 @@ const (
 
 	// KindAgentLLMRequest is emitted before an LLM request.
 	KindAgentLLMRequest Kind = "agent.llm.request"
-	// KindAgentLLMDelta is emitted for streaming LLM deltas.
-	KindAgentLLMDelta Kind = "agent.llm.delta"
 	// KindAgentLLMResponse is emitted after an LLM response.
 	KindAgentLLMResponse Kind = "agent.llm.response"
 	// KindAgentLLMRetry is emitted before retrying an LLM request.
@@ -26,26 +24,12 @@ const (
 	KindAgentToolExecEnd Kind = "agent.tool.exec_end"
 	// KindAgentToolExecSkipped is emitted when a tool call is skipped.
 	KindAgentToolExecSkipped Kind = "agent.tool.exec_skipped"
-	// KindAgentToolApprovalRequested is emitted when a tool call waits for a human.
-	KindAgentToolApprovalRequested Kind = "agent.tool.approval_requested"
-	// KindAgentToolApprovalDecided is emitted when such a request ends.
-	KindAgentToolApprovalDecided Kind = "agent.tool.approval_decided"
 
 	// KindAgentSteeringInjected is emitted when steering is injected into context.
 	KindAgentSteeringInjected Kind = "agent.steering.injected"
-	// KindAgentFollowUpQueued is emitted when async follow-up input is queued.
-	KindAgentFollowUpQueued Kind = "agent.follow_up.queued"
 	// KindAgentInterruptReceived is emitted when a turn interrupt is accepted.
 	KindAgentInterruptReceived Kind = "agent.interrupt.received"
 
-	// KindAgentSubTurnSpawn is emitted when a sub-turn is spawned.
-	KindAgentSubTurnSpawn Kind = "agent.subturn.spawn"
-	// KindAgentSubTurnEnd is emitted when a sub-turn ends.
-	KindAgentSubTurnEnd Kind = "agent.subturn.end"
-	// KindAgentSubTurnResultDelivered is emitted when a sub-turn result is delivered.
-	KindAgentSubTurnResultDelivered Kind = "agent.subturn.result_delivered"
-	// KindAgentSubTurnOrphan is emitted when a sub-turn result cannot be delivered.
-	KindAgentSubTurnOrphan Kind = "agent.subturn.orphan"
 	// KindAgentError is emitted when agent execution reports an error.
 	KindAgentError Kind = "agent.error"
 
@@ -108,59 +92,3 @@ const (
 	// KindMCPToolCallEnd is emitted when an MCP tool call ends.
 	KindMCPToolCallEnd Kind = "mcp.tool.call.end"
 )
-
-var knownKinds = []Kind{
-	KindAgentTurnStart,
-	KindAgentTurnEnd,
-	KindAgentLLMRequest,
-	KindAgentLLMDelta,
-	KindAgentLLMResponse,
-	KindAgentLLMRetry,
-	KindAgentContextCompress,
-	KindAgentSessionSummarize,
-	KindAgentToolExecStart,
-	KindAgentToolExecEnd,
-	KindAgentToolExecSkipped,
-	KindAgentToolApprovalRequested,
-	KindAgentToolApprovalDecided,
-	KindAgentSteeringInjected,
-	KindAgentFollowUpQueued,
-	KindAgentInterruptReceived,
-	KindAgentSubTurnSpawn,
-	KindAgentSubTurnEnd,
-	KindAgentSubTurnResultDelivered,
-	KindAgentSubTurnOrphan,
-	KindAgentError,
-	KindChannelLifecycleStarted,
-	KindChannelLifecycleInitialized,
-	KindChannelLifecycleStartFailed,
-	KindChannelLifecycleStopped,
-	KindChannelWebhookRegistered,
-	KindChannelWebhookUnregistered,
-	KindChannelMessageOutboundQueued,
-	KindChannelMessageOutboundSent,
-	KindChannelMessageOutboundFailed,
-	KindChannelRateLimited,
-	KindBusPublishFailed,
-	KindBusMessageDropped,
-	KindBusCloseStarted,
-	KindBusCloseCompleted,
-	KindBusCloseDrained,
-	KindGatewayStart,
-	KindGatewayReady,
-	KindGatewayShutdown,
-	KindGatewayReloadStarted,
-	KindGatewayReloadCompleted,
-	KindGatewayReloadFailed,
-	KindMCPServerConnected,
-	KindMCPServerConnecting,
-	KindMCPServerFailed,
-	KindMCPToolDiscovered,
-	KindMCPToolCallStart,
-	KindMCPToolCallEnd,
-}
-
-// KnownKinds returns the runtime event kinds declared by this package.
-func KnownKinds() []Kind {
-	return append([]Kind(nil), knownKinds...)
-}

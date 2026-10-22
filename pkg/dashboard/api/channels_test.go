@@ -18,15 +18,15 @@ func TestHandleGetChannelConfig_ReturnsSecretPresenceWithoutLeakingSecrets(t *te
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	bc := cfg.Channels[config.ChannelFeishu]
+	bc := cfg.Channels[config.ChannelQQ]
 	bc.Enabled = true
 	decoded, err := bc.GetDecoded()
 	if err != nil {
 		t.Fatalf("GetDecoded() error = %v", err)
 	}
-	bcfg := decoded.(*config.FeishuSettings)
+	bcfg := decoded.(*config.QQSettings)
 	bcfg.AppID = "cli_test_app"
-	bcfg.AppSecret = *config.NewSecureString("feishu-secret-from-security")
+	bcfg.AppSecret = *config.NewSecureString("qq-secret-from-security")
 	bc.AllowFrom = config.FlexibleStringSlice{"ou_test_user"}
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
@@ -36,19 +36,19 @@ func TestHandleGetChannelConfig_ReturnsSecretPresenceWithoutLeakingSecrets(t *te
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/channels/feishu/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/channels/qq/config", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf(
-			"GET /api/channels/feishu/config status = %d, want %d, body=%s",
+			"GET /api/channels/qq/config status = %d, want %d, body=%s",
 			rec.Code,
 			http.StatusOK,
 			rec.Body.String(),
 		)
 	}
-	if strings.Contains(rec.Body.String(), "feishu-secret-from-security") {
+	if strings.Contains(rec.Body.String(), "qq-secret-from-security") {
 		t.Fatalf("response leaked secret value: %s", rec.Body.String())
 	}
 
@@ -62,8 +62,8 @@ func TestHandleGetChannelConfig_ReturnsSecretPresenceWithoutLeakingSecrets(t *te
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
 
-	if got := resp.ConfigKey; got != "feishu" {
-		t.Fatalf("config_key = %q, want %q", got, "feishu")
+	if got := resp.ConfigKey; got != "qq" {
+		t.Fatalf("config_key = %q, want %q", got, "qq")
 	}
 	if got := resp.Config["app_id"]; got != "cli_test_app" {
 		t.Fatalf("config.app_id = %#v, want %q", got, "cli_test_app")
@@ -108,7 +108,7 @@ func TestHandleGetChannelConfig_ReturnsCommonFieldsWhenSettingsEmpty(t *testing.
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	bc := cfg.Channels[config.ChannelFeishu]
+	bc := cfg.Channels[config.ChannelQQ]
 	bc.Enabled = true
 	bc.AllowFrom = config.FlexibleStringSlice{"ou_common_user"}
 	if err := config.SaveConfig(configPath, cfg); err != nil {
@@ -119,13 +119,13 @@ func TestHandleGetChannelConfig_ReturnsCommonFieldsWhenSettingsEmpty(t *testing.
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/channels/feishu/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/channels/qq/config", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf(
-			"GET /api/channels/feishu/config status = %d, want %d, body=%s",
+			"GET /api/channels/qq/config status = %d, want %d, body=%s",
 			rec.Code,
 			http.StatusOK,
 			rec.Body.String(),
@@ -155,13 +155,13 @@ func TestHandleGetChannelConfig_OmitsUnconfiguredStreaming(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/channels/telegram/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/channels/qq/config", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf(
-			"GET /api/channels/telegram/config status = %d, want %d, body=%s",
+			"GET /api/channels/qq/config status = %d, want %d, body=%s",
 			rec.Code,
 			http.StatusOK,
 			rec.Body.String(),

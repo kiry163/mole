@@ -98,10 +98,6 @@ func (al *AgentLoop) drainQueuedSteeringContinuations(
 }
 
 func (al *AgentLoop) resolveSteeringTarget(msg bus.InboundMessage) (string, string, bool) {
-	if msg.Channel == "system" {
-		return "", "", false
-	}
-
 	route, agent, err := al.resolveMessageRoute(msg)
 	if err != nil || agent == nil {
 		return "", "", false

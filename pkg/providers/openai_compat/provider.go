@@ -126,25 +126,8 @@ func (p *Provider) buildRequestBody(
 		"messages": common.SerializeMessages(p.prepareMessagesForRequest(messages)),
 	}
 
-	// When fallback uses a different provider (e.g. DeepSeek), that provider must not inject web_search_preview.
-	nativeSearch, ok := options["native_search"].(bool)
-	if !ok {
-		// If the option is present but not a bool, log a warning and
-		// treat it as false — web_search_preview must not be injected
-		// when the caller cannot express a well-typed intent.
-		if _, present := options["native_search"]; present {
-			logger.WarnCF(
-				"provider.openai_compat",
-				"native_search option has unexpected type, ignoring",
-				map[string]any{
-					"type": fmt.Sprintf("%T", options["native_search"]),
-				},
-			)
-		}
-	}
-	nativeSearch = nativeSearch && isNativeSearchHost(p.apiBase)
-	if len(tools) > 0 || nativeSearch {
-		requestBody["tools"] = buildToolsList(tools, nativeSearch)
+	if len(tools) > 0 {
+		requestBody["tools"] = buildToolsList(tools)
 		requestBody["tool_choice"] = "auto"
 	}
 
@@ -803,22 +786,12 @@ func normalizeModel(model, apiBase string) string {
 	return model
 }
 
-func buildToolsList(tools []ToolDefinition, nativeSearch bool) []any {
-	result := make([]any, 0, len(tools)+1)
+func buildToolsList(tools []ToolDefinition) []any {
+	result := make([]any, 0, len(tools))
 	for _, t := range tools {
-		if nativeSearch && strings.EqualFold(t.Function.Name, "web_search") {
-			continue
-		}
 		result = append(result, t)
 	}
-	if nativeSearch {
-		result = append(result, map[string]any{"type": "web_search_preview"})
-	}
 	return result
-}
-
-func (p *Provider) SupportsNativeSearch() bool {
-	return isNativeSearchHost(p.apiBase)
 }
 
 // isNativeOpenAIOrAzureEndpoint reports whether the given API base points to
@@ -830,10 +803,6 @@ func isNativeOpenAIOrAzureEndpoint(apiBase string) bool {
 	}
 	host := u.Hostname()
 	return host == "api.openai.com" || strings.HasSuffix(host, ".openai.azure.com")
-}
-
-func isNativeSearchHost(apiBase string) bool {
-	return isNativeOpenAIOrAzureEndpoint(apiBase)
 }
 
 // supportsPromptCacheKey reports whether the given API base is known to
